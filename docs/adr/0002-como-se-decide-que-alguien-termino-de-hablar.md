@@ -1,7 +1,8 @@
 # ADR 0002 — Cómo se decide que alguien terminó de hablar
 
 - **Fecha:** 2026-09-19
-- **Estado:** abierta. El primer intento de medirlo falló y aquí queda por qué.
+- **Estado:** medida. La detección por silencio sola no cabe en el presupuesto,
+  y el dato está abajo.
 - **Contexto:** es el término más grande del presupuesto del turno y el único
   que sigue sin medir.
 
@@ -57,6 +58,74 @@ consigo misma perfectamente.
    de una intervención, avisa de que el audio es de lectura y no da conclusión.
    Un aviso impreso vale más que un comentario en el código que nadie lee
    cuando vuelve a ejecutar esto dentro de un mes.
+
+## El resultado, ya con habla espontánea
+
+Tres grabaciones propias contestando a un agente, sin leer. Pausas internas:
+
+```
+libre-bloqueo:  1.50
+libre-cobro:    0.16  0.19  0.54
+libre-datos:    0.16  0.22  0.93
+```
+
+Otra población distinta de la anterior: la mayoría por debajo de un segundo, y
+ninguna de dos o tres segundos. El umbral que separa "lectura" de
+"conversación" se subió de 1,5 a 2,0 s **con las grabaciones delante**, no por
+conveniencia: la única pausa de 1,50 s cae entre dos frases completas.
+
+Lo que hay en cada pausa, transcrito:
+
+```
+bloqueo:  "...no funciona desde el día de ayer."  [1.50 s]  "Nadie me avisó nada..."
+datos:    "...mi cédula es 1070234567"            [0.93 s]  "mi nombre completo es Juan Diego..."
+cobro:    "...me apareció la compra de la nada"   [0.54 s]  "pero yo no la hice"
+```
+
+Las tres son distintas y por eso importan:
+
+- La de **bloqueo** viene después de una frase acabada. Cortar ahí es
+  defendible: gramaticalmente el turno podía haber terminado.
+- La de **datos** está **a mitad de una respuesta**: la persona ha dicho el
+  documento y va a decir el nombre. Cortar ahí es cortarle mientras se
+  identifica, en la parte más delicada de la llamada.
+- La de **cobro** es un respiro corto, 540 ms, y ninguna ventana razonable la
+  toca.
+
+## La decisión
+
+**Para no cortar a nadie dentro de su turno hace falta una ventana de 1600 ms.**
+Eso es el 188% del presupuesto de 800 ms del turno entero, antes de transcribir,
+pensar o sintetizar nada.
+
+O sea: **el objetivo de 800 ms es inalcanzable con detección por silencio
+sola.** No es cuestión de afinar el umbral; no hay umbral que valga. Cualquier
+valor que quepa en el presupuesto corta a la gente, y cualquier valor que no
+corte se come el presupuesto.
+
+Lo que se hace en su lugar es **decidir el fin de turno también por el
+contenido**: preguntar si lo dicho hasta ahora está acabado. "Mi cédula es
+1070234567" está claramente a medias cuando el agente pidió documento **y**
+nombre; "no funciona desde el día de ayer" no lo está. Esa diferencia la sabe
+el texto, no el silencio.
+
+Con eso la ventana de silencio baja a unos 300 ms en el caso normal y solo se
+alarga cuando la frase parece incompleta. El coste se paga donde hace falta en
+vez de en todos los turnos.
+
+## Lo que se descarta, y por qué
+
+**Descartado: subir la ventana a 1600 ms y aceptarlo.** Es lo honrado si no
+hubiera alternativa, pero convierte cada turno en dos segundos largos de espera
+y el producto deja de parecerse a una conversación. Es preferible un sistema
+que ocasionalmente se pise a uno que siempre se hace esperar.
+
+**Descartado: bajar la ventana a 300 ms sin más.** Corta en las tres
+grabaciones, y una de ellas es alguien identificándose. Un agente que corta a
+quien está dando su documento no es solo molesto: pierde el dato.
+
+**Descartado: afinar el umbral de Silero en vez de la ventana.** Mueve dónde
+empieza y acaba el habla, no cuánto se espera después. No ataca el problema.
 
 ## La duda que esta medición ya dejó planteada
 

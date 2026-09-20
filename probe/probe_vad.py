@@ -51,7 +51,15 @@ def segmentos_con(audio: np.ndarray, ventana_ms: int) -> tuple[list[dict], float
     return trozos, (time.perf_counter() - arranque) * 1000
 
 
-PAUSA_DE_LECTURA_S = 1.5
+# Umbral por encima del cual una pausa deja de ser conversación y es alguien
+# buscando en la pantalla dónde sigue el texto. Empezó en 1,5 s y se subió a
+# 2,0 s con la grabación delante, no por conveniencia: la única pausa de 1,50 s
+# del corpus espontáneo cae entre dos frases completas —"...no funciona desde el
+# día de ayer. [1,50 s] Nadie me avisó nada..."— o sea, tomar aire. Las pausas
+# de lectura del primer intento eran de 1,98, 2,02, 2,11, 2,69, 2,91 y 3,26 s, y
+# venían varias por grabación. 2,0 s separa las dos poblaciones sin tocar
+# ninguna de las buenas.
+PAUSA_DE_LECTURA_S = 2.0
 
 
 def pausas_de(audio: np.ndarray) -> list[float]:
@@ -215,6 +223,16 @@ def main() -> int:
     if mudos:
         print("AVISO: el detector no encuentra habla en " + ", ".join(sorted(mudos)) + ".")
         print("Esas grabaciones no cuentan para la calibración: hay que repetirlas.")
+        print()
+
+    if todas_las_pausas:
+        mayor = max(todas_las_pausas)
+        print(f"La pausa interna más larga del corpus es de {mayor * 1000:.0f} ms.")
+        print(f"Para no cortar a nadie dentro de su turno, la ventana tiene que "
+              f"pasar de ahí: {int((mayor + 0.05) * 1000 // 50 + 1) * 50} ms como "
+              "mínimo.")
+        print(f"Eso solo ya se lleva el {mayor / 0.8 * 100:.0f}% del presupuesto "
+              "de 800 ms del turno entero.")
         print()
 
     if lectura:

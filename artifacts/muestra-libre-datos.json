@@ -1,0 +1,10 @@
+{
+  "fichero": "muestra-libre-datos.wav",
+  "frase": "libre-datos",
+  "tipo": "espontanea",
+  "segundos": 17.6,
+  "frecuencia_hz": 16000,
+  "pico": 4384,
+  "dispositivo": "[1] Varios micrófonos (2- Realtek(R",
+  "pregunta": "SIGUE LA MISMA LLAMADA. El agente te dice:\n\n   — Claro que sí, le ayudo enseguida. Para poder mirarlo\n     necesito verificar quién es. ¿Me regala su número de\n     documento y su nombre completo?\n\nTUS DATOS:\n   · documento 1070234567\n   · Juan Diego Ossa\n\nCONTÉSTALE COMO SE LO DIRÍAS A UNA PERSONA."
+}
