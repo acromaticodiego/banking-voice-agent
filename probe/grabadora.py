@@ -58,6 +58,7 @@ class Grabadora(tk.Tk):
         self.nivel = 0.0
 
         self._construir()
+        self._pintar_pendientes()
         self._refrescar_medidor()
 
     # ---------------------------------------------------------------- interfaz
@@ -87,6 +88,10 @@ class Grabadora(tk.Tk):
         self.combo_frase.current(0)
         self.combo_frase.bind("<<ComboboxSelected>>", lambda _e: self._mostrar_frase())
         self.combo_frase.pack(anchor="w")
+
+        self.pendientes = tk.StringVar(value="")
+        ttk.Label(marco, textvariable=self.pendientes, foreground="#444",
+                  font=("Segoe UI", 10)).pack(anchor="w", pady=(4, 0))
 
         self.texto = tk.Text(marco, height=5, wrap="word", font=("Segoe UI", 13),
                              relief="solid", borderwidth=1, padx=10, pady=10)
@@ -257,9 +262,40 @@ class Grabadora(tk.Tk):
                 "transcripcion_verdadera": FRASES[nombre],
             }, indent=2, ensure_ascii=False), encoding="utf-8")
 
-        self.estado.set(f"Guardada en artifacts/{destino.name}. "
-                        f"Elige otra frase en el desplegable y repite.")
         self.boton_guardar.config(state="disabled")
+
+        # Pasar solo a la frase siguiente. Sin esto, quien graba las tres
+        # seguidas sin tocar el desplegable las guarda las tres encima de la
+        # misma, y no se entera hasta que mira los ficheros. Pasó.
+        siguiente = (self.combo_frase.current() + 1) % len(FRASES)
+        self.combo_frase.current(siguiente)
+        self._mostrar_frase()
+        self._pintar_pendientes()
+        self.estado.set(f"Guardada en artifacts/{destino.name}. "
+                        f"Ya está puesta la siguiente frase: {self.combo_frase.get()}.")
+
+    def _pintar_pendientes(self) -> None:
+        """Dice cuáles hay grabadas ya Y cuáles sirven.
+
+        Se mira el pico del fichero, no si el fichero existe: una toma mala
+        ocupa lo mismo que una buena y marcarla como hecha es justo el error
+        que hay que evitar.
+        """
+        estados = []
+        for nombre in FRASES:
+            ruta = ARTEFACTOS / f"muestra-{nombre}.wav"
+            if not ruta.exists():
+                estados.append(f"· {nombre}")
+                continue
+            try:
+                with wave.open(str(ruta), "rb") as w:
+                    datos = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+                pico = int(np.abs(datos).max()) if datos.size else 0
+            except (OSError, wave.Error):
+                pico = 0
+            estados.append(f"{'✓' if pico >= PICO_MINIMO else '✗'} {nombre}")
+        self.pendientes.set("Muestras:   " + "    ".join(estados)
+                            + "     (✗ = grabada pero demasiado baja, repítela)")
 
 
 if __name__ == "__main__":

@@ -96,21 +96,42 @@ ESCENARIOS = {
 }
 
 
-def medir(cliente, modelo: str, escenario: str, repeticiones: int) -> tuple[Medicion, Medicion]:
+def medir(cliente, modelo: str, esfuerzo: str | None, escenario: str,
+          repeticiones: int) -> list[Medicion]:
+    """Mide un modelo en un escenario.
+
+    Distingue tres instantes, y la distinción no es académica: los `gpt-oss`
+    razonan antes de contestar, y esos tokens de razonamiento **no se pueden
+    pronunciar**. El TTS no puede empezar con ellos. Si midiera el primer token
+    a secas estaría contando como "ya hay algo que decir" un tramo en el que no
+    hay nada que decir, y el presupuesto saldría falseado a la baja.
+
+      · primer trozo    — llega cualquier cosa, razonamiento incluido.
+      · primer hablable — llega texto para la persona, o una llamada a
+                          herramienta. **Este es el que entra en el presupuesto.**
+      · total           — última pieza. Dato secundario: se solapa con la síntesis.
+    """
     config = ESCENARIOS[escenario]
-    ttft = Medicion(
-        etapa="llm",
-        implementacion=f"groq {modelo} [{escenario}]",
-        que_mide="desde que se envía la petición hasta el primer token recibido",
+    etiqueta = f"{modelo}" + (f" esfuerzo={esfuerzo}" if esfuerzo else "")
+
+    primero = Medicion(
+        etapa="llm", implementacion=f"groq {etiqueta} [{escenario}] (primer trozo)",
+        que_mide="desde que se envía la petición hasta el primer trozo de cualquier tipo",
+        notas="Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+    )
+    hablable = Medicion(
+        etapa="llm", implementacion=f"groq {etiqueta} [{escenario}]",
+        que_mide="desde que se envía la petición hasta el primer contenido hablable "
+                 "o la primera llamada a herramienta",
     )
     total = Medicion(
-        etapa="llm",
-        implementacion=f"groq {modelo} [{escenario}] (total)",
-        que_mide="desde que se envía la petición hasta el último token (dato secundario)",
+        etapa="llm", implementacion=f"groq {etiqueta} [{escenario}] (total)",
+        que_mide="desde que se envía la petición hasta el último trozo (dato secundario)",
         notas="No entra en el presupuesto del turno: se solapa con la síntesis.",
     )
+    mediciones = [hablable, primero, total]
 
-    tokens_salida = []
+    razonamientos = []
     # Una primera llamada que se descarta: paga el TLS y el calentamiento de la
     # conexión, y no representa lo que pasa en mitad de una llamada telefónica.
     for i in range(repeticiones + 1):
@@ -118,55 +139,67 @@ def medir(cliente, modelo: str, escenario: str, repeticiones: int) -> tuple[Medi
             "model": modelo,
             "messages": config["mensajes"],
             "stream": True,
-            "max_tokens": 120,
+            "max_tokens": 400,
             "temperature": 0.2,
         }
+        if esfuerzo:
+            argumentos["reasoning_effort"] = esfuerzo
         if config["herramientas"]:
             argumentos["tools"] = config["herramientas"]
             argumentos["tool_choice"] = "auto"
 
         arranque = time.perf_counter()
-        primer_token = None
-        piezas = 0
+        t_primero = t_hablable = None
+        trozos_razonamiento = 0
         try:
-            flujo = cliente.chat.completions.create(**argumentos)
-            for trozo in flujo:
+            for trozo in cliente.chat.completions.create(**argumentos):
                 delta = trozo.choices[0].delta if trozo.choices else None
-                hay_contenido = delta is not None and (
-                    getattr(delta, "content", None) or getattr(delta, "tool_calls", None)
-                )
-                if hay_contenido and primer_token is None:
-                    primer_token = time.perf_counter()
-                if hay_contenido:
-                    piezas += 1
+                if delta is None:
+                    continue
+                razona = getattr(delta, "reasoning", None)
+                dice = getattr(delta, "content", None) or getattr(delta, "tool_calls", None)
+                if (razona or dice) and t_primero is None:
+                    t_primero = time.perf_counter()
+                if razona and not dice:
+                    trozos_razonamiento += 1
+                if dice and t_hablable is None:
+                    t_hablable = time.perf_counter()
             fin = time.perf_counter()
         except Exception as exc:  # noqa: BLE001 - queremos el motivo literal en el informe
-            ttft.error = f"{type(exc).__name__}: {exc}"
-            total.error = ttft.error
-            return ttft, total
+            for m in mediciones:
+                m.error = f"{type(exc).__name__}: {exc}"
+            return mediciones
 
         if i == 0:
             continue  # descartada
-        if primer_token is None:
-            ttft.notas += " Una respuesta llegó vacía. "
+        if t_hablable is None:
+            hablable.notas += " Una respuesta no llegó a decir nada pronunciable. "
             continue
-        ttft.muestras_ms.append((primer_token - arranque) * 1000)
+        primero.muestras_ms.append((t_primero - arranque) * 1000)
+        hablable.muestras_ms.append((t_hablable - arranque) * 1000)
         total.muestras_ms.append((fin - arranque) * 1000)
-        tokens_salida.append(piezas)
+        razonamientos.append(trozos_razonamiento)
         print(f"    {escenario} {i}/{repeticiones}: "
-              f"primer token {ttft.muestras_ms[-1]:.0f} ms, "
-              f"completa {total.muestras_ms[-1]:.0f} ms, {piezas} trozos")
+              f"primer trozo {primero.muestras_ms[-1]:.0f} ms, "
+              f"hablable {hablable.muestras_ms[-1]:.0f} ms, "
+              f"total {total.muestras_ms[-1]:.0f} ms, "
+              f"{trozos_razonamiento} trozos de razonamiento")
 
-    if tokens_salida:
-        media = sum(tokens_salida) / len(tokens_salida)
-        total.notas += f" Media de {media:.0f} trozos de streaming por respuesta."
-    return ttft, total
+    if razonamientos:
+        media = sum(razonamientos) / len(razonamientos)
+        hablable.notas += (f" Media de {media:.0f} trozos de razonamiento antes de "
+                           f"decir nada pronunciable.")
+    return mediciones
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repeticiones", type=int, default=10,
                         help="muestras por escenario, sin contar la de calentamiento")
+    parser.add_argument("--modelos", nargs="+", default=None,
+                        help="uno o varios; por defecto los candidatos al bucle")
+    parser.add_argument("--esfuerzos", nargs="+", default=["low", "medium"],
+                        help="reasoning_effort a probar en los modelos que razonan")
     args = parser.parse_args()
 
     entorno = cargar_env()
@@ -185,16 +218,32 @@ def main() -> int:
         return 2
 
     cliente = Groq(api_key=clave)
-    print(f"Midiendo Groq con el modelo {modelo}, {args.repeticiones} muestras por escenario.")
+
+    # El reparto del CLAUDE.md: el bucle en el pequeño, el razonamiento difícil
+    # en el grande y una sola vez. Se miden los dos para saber cuánto cuesta
+    # esa salida al grande antes de decidir cuándo se permite.
+    combinaciones = []
+    for nombre in (args.modelos or [modelo, "openai/gpt-oss-120b"]):
+        if "gpt-oss" in nombre:
+            combinaciones.extend((nombre, e) for e in args.esfuerzos)
+        else:
+            combinaciones.append((nombre, None))
+
+    print(f"Midiendo {len(combinaciones)} configuraciones, "
+          f"{args.repeticiones} muestras por escenario.")
     print("Se descarta la primera llamada de cada escenario (calentamiento de conexión).\n")
 
     mediciones: list[Medicion] = []
-    for escenario in ESCENARIOS:
-        print(f"  escenario: {escenario}")
-        mediciones.extend(medir(cliente, modelo, escenario, args.repeticiones))
-        print()
+    for nombre, esfuerzo in combinaciones:
+        etiqueta = nombre + (f" (esfuerzo {esfuerzo})" if esfuerzo else "")
+        print(f"--- {etiqueta}")
+        for escenario in ESCENARIOS:
+            print(f"  escenario: {escenario}")
+            mediciones.extend(medir(cliente, nombre, esfuerzo, escenario,
+                                    args.repeticiones))
+            print()
 
-    print("Resultado:")
+    print("Resultado (la línea sin paréntesis es la que entra en el presupuesto):")
     for m in mediciones:
         print(m.linea())
 
