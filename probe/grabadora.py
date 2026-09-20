@@ -42,12 +42,10 @@ from record_sample import FRASES, FRECUENCIA  # noqa: E402
 # este proyecto, el habla quedó en el 2,7% de las muestras y no había con qué
 # medir nada.
 PICO_MINIMO = 4000
-PROPORCION_MINIMA = 0.15  # fracción de muestras con señal que se espera al hablar
-# Silencio que tiene que quedar DESPUÉS de la frase. No es cosmético: la sonda
-# del fin de habla mide cuánto tarda en notarse que alguien calló, y para eso
-# hace falta que calle dentro de la grabación. Un segundo más que la ventana
-# más larga que se barre (1000 ms), para poder probarla entera.
-COLA_MINIMA_S = 2.0
+# El resto del criterio —cuánta habla hay y cuánto silencio queda al final—
+# no vive aquí: lo decide `probe_vad.por_que_no_sirve`, que es el mismo juez
+# que aceptará o rechazará la grabación cuando se mida. Tener dos criterios
+# para la misma pregunta es la forma segura de perder una tarde.
 
 
 class Grabadora(tk.Tk):
@@ -211,41 +209,48 @@ class Grabadora(tk.Tk):
         self._juzgar()
 
     def _juzgar(self) -> None:
-        """Dice si la muestra sirve, con los mismos números del diagnóstico."""
+        """Dice si la muestra sirve, **con la misma regla que la sonda**.
+
+        El primer intento juzgaba por densidad de muestras fuertes, y era un
+        mal criterio: la onda de la voz cruza el cero constantemente, así que
+        una frase bien dicha se queda igualmente en torno al 15%. Daba avisos
+        de "hay mucho silencio" sobre grabaciones correctas.
+
+        Ahora pregunta al mismo detector que usará `probe_vad.py`. Si la
+        grabadora dice que sirve, la sonda la acepta; si dice que no, explica
+        el mismo motivo. Dos jueces distintos para la misma pregunta es una
+        forma segura de perder una tarde.
+        """
+        from probe_vad import por_que_no_sirve, segmentos_con
+
         datos = self.grabado
         duracion = len(datos) / FRECUENCIA
         pico = int(np.abs(datos).max())
-        con_señal = float((np.abs(datos) > 500).mean())
 
-        # Silencio final: sin él, la muestra no sirve para medir el fin de
-        # habla, porque no contiene ningún momento en que alguien calle. Es el
-        # defecto que invalidó las tres primeras grabaciones de este proyecto.
-        fuertes = np.flatnonzero(np.abs(datos) > 500)
-        cola_s = (len(datos) - fuertes[-1]) / FRECUENCIA if fuertes.size else 0.0
+        flotante = datos.astype(np.float32) / 32768.0
+        trozos, _ = segmentos_con(flotante, 300)
+        habla = sum(t["end"] - t["start"] for t in trozos) / FRECUENCIA
+        cola_s = duracion - (trozos[-1]["end"] / FRECUENCIA) if trozos else duracion
 
         self.estado.set(
             f"{duracion:.1f} s grabados. Pico {pico}/32767. "
-            f"Habla en el {con_señal * 100:.0f}% de las muestras. "
+            f"Habla {habla:.1f} s ({habla / duracion * 100:.0f}% del clip). "
             f"Silencio final: {cola_s:.1f} s.")
 
         if pico < PICO_MINIMO:
             self.veredicto.set("DEMASIADO BAJO. Acércate al micrófono o cambia de "
                                "dispositivo, y repite: así el voz a texto no mide nada.")
             self.etiqueta_veredicto.config(foreground="#b03030")
-        elif con_señal < PROPORCION_MINIMA:
-            self.veredicto.set("Hay mucho silencio para lo que dura. ¿Paraste tarde, o "
-                               "te dejaste media frase? Repítela si no la dijiste entera.")
-            self.etiqueta_veredicto.config(foreground="#c08a2e")
-        elif pico > 32000:
+            return
+        if pico > 32000:
             self.veredicto.set("SATURANDO. Sepárate un poco: lo que se recorta arriba "
                                "no se recupera.")
             self.etiqueta_veredicto.config(foreground="#b03030")
-        elif cola_s < COLA_MINIMA_S:
-            self.veredicto.set(
-                f"FALTA SILENCIO AL FINAL: solo {cola_s:.1f} s. Repítela y, al acabar "
-                f"la frase, quédate callado {COLA_MINIMA_S:.0f} segundos antes de dar a "
-                "Parar. Sin ese silencio no se puede medir cuánto tarda el sistema en "
-                "darse cuenta de que has terminado de hablar.")
+            return
+
+        motivo = por_que_no_sirve(flotante, duracion)
+        if motivo:
+            self.veredicto.set(f"NO SIRVE: {motivo}. Repítela.")
             self.etiqueta_veredicto.config(foreground="#b03030")
         else:
             self.veredicto.set("Sirve. Escúchala si quieres y guárdala.")
@@ -309,14 +314,18 @@ class Grabadora(tk.Tk):
                 estados.append(f"· {nombre}")
                 continue
             try:
+                from probe_vad import por_que_no_sirve
                 with wave.open(str(ruta), "rb") as w:
                     datos = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
-                pico = int(np.abs(datos).max()) if datos.size else 0
-            except (OSError, wave.Error):
-                pico = 0
-            estados.append(f"{'✓' if pico >= PICO_MINIMO else '✗'} {nombre}")
+                    duracion = w.getnframes() / w.getframerate()
+                flotante = datos.astype(np.float32) / 32768.0
+                sirve = (int(np.abs(datos).max()) >= PICO_MINIMO
+                         and por_que_no_sirve(flotante, duracion) is None)
+            except (OSError, wave.Error, ValueError):
+                sirve = False
+            estados.append(f"{'✓' if sirve else '✗'} {nombre}")
         self.pendientes.set("Muestras:   " + "    ".join(estados)
-                            + "     (✗ = grabada pero demasiado baja, repítela)")
+                            + "     (✗ = grabada pero no sirve, repítela)")
 
 
 if __name__ == "__main__":
