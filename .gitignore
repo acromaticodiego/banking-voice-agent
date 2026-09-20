@@ -1,0 +1,19 @@
+# Secretos: la clave de Groq y las de Deepgram viven aquí y no se suben nunca.
+.env
+
+# Entorno virtual de la sonda
+.venv/
+__pycache__/
+*.pyc
+
+# Audio crudo. Regla del proyecto: no se guarda voz en el repositorio.
+# Las muestras de medición son locales y desechables.
+artifacts/*.wav
+artifacts/*.mp3
+artifacts/*.raw
+
+# Binarios y voces de Piper: pesan y se descargan, no se versionan.
+vendor/
+
+# Modelos descargados de faster-whisper (caché de Hugging Face local al proyecto)
+models/
