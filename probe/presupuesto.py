@@ -58,6 +58,8 @@ def main() -> int:
                         help="suposición declarada, no medida: cuánto tarda el detector "
                              "de fin de habla en decidir que la persona calló")
     parser.add_argument("--voz", default="es_MX-claude-high")
+    parser.add_argument("--llm", default="prompt=corto",
+                        help="qué configuración del modelo entra en el presupuesto")
     parser.add_argument("--modelo-asr", default="small")
     args = parser.parse_args()
 
@@ -80,7 +82,11 @@ def main() -> int:
     else:
         faltan.append("voz a texto: ejecuta probe/probe_whisper_local.py")
 
-    llm = elegir(ultimo("groq"), "[herramienta]")
+    # Se pide la configuración por su nombre completo: desde que se miden
+    # varias a la vez, coger "la primera que encaje" dependía del orden del
+    # fichero y podía meter en el presupuesto una que no se eligió.
+    informe_llm = ultimo("groq")
+    llm = elegir(informe_llm, f"{args.llm} [herramienta]")
     if llm:
         etapas.append({"etapa": "modelo (primer token)", "fuente": llm["implementacion"],
                        "p50": llm["resumen"]["p50"], "p95": llm["resumen"]["p95"],
