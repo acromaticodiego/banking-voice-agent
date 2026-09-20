@@ -52,7 +52,7 @@ class Grabadora(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Grabadora de muestras")
-        self.geometry("760x560")
+        self.geometry("820x740")
 
         self.cola: queue.Queue[np.ndarray] = queue.Queue()
         self.trozos: list[np.ndarray] = []
@@ -96,7 +96,7 @@ class Grabadora(tk.Tk):
         ttk.Label(marco, textvariable=self.pendientes, foreground="#444",
                   font=("Segoe UI", 10)).pack(anchor="w", pady=(4, 0))
 
-        self.texto = tk.Text(marco, height=5, wrap="word", font=("Segoe UI", 13),
+        self.texto = tk.Text(marco, height=13, wrap="word", font=("Segoe UI", 12),
                              relief="solid", borderwidth=1, padx=10, pady=10)
         self.texto.pack(fill="x", pady=8)
         self._mostrar_frase()
@@ -141,10 +141,15 @@ class Grabadora(tk.Tk):
 
     def _mostrar_frase(self) -> None:
         guion = GUIONES[self.combo_frase.get()]
-        cabecera = ("LEE ESTO EN VOZ ALTA:" if guion["tipo"] == "lectura"
-                    else "CONTESTA ESTO CON TUS PALABRAS, SIN LEER NADA:")
         self.texto.delete("1.0", "end")
-        self.texto.insert("1.0", cabecera + "\n\n" + guion["texto"])
+        if guion["tipo"] == "lectura":
+            # Las lecturas son una frase suelta y necesitan que se diga qué
+            # hacer con ella. Los diálogos ya traen su propio encabezado, y
+            # añadirle otro encima solo da más texto que mirar, que es
+            # justamente lo que aquí hay que evitar.
+            self.texto.insert("1.0", "LEE ESTO EN VOZ ALTA:\n\n" + guion["texto"])
+        else:
+            self.texto.insert("1.0", guion["texto"])
 
     def _refrescar_medidor(self) -> None:
         ancho = self.lienzo.winfo_width() or 1

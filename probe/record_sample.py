@@ -58,7 +58,7 @@ FRASES = {
 FRASE = FRASES["documento"]  # la de por defecto, por compatibilidad
 
 
-# Preguntas, no frases. Aquí no se lee: se contesta con las propias palabras.
+# Diálogos, no frases. Aquí no se lee: el agente dice algo y se le contesta.
 #
 # Hacen falta porque leer en voz alta y hablar son dos cosas distintas, y la
 # diferencia no es de matiz. Leyendo, estas mismas tres frases produjeron
@@ -68,19 +68,55 @@ FRASE = FRASES["documento"]  # la de por defecto, por compatibilidad
 #
 # Quien llama a un banco no lee. Duda, se corrige, se queda a medias. Esas
 # pausas son de otro tamaño y son las únicas que sirven para calibrar.
+#
+# Por eso lo que se enseña en pantalla es la frase DEL AGENTE y los datos
+# sueltos en forma de lista: dan de qué hablar sin dar qué leer. Una lista de
+# hechos se mira de un vistazo; un párrafo hay que seguirlo con los ojos, y
+# ahí es donde aparecían las pausas de tres segundos.
+#
+# Las tres encadenan UNA sola llamada, y en ese orden: saludo, verificación de
+# identidad y motivo. Es la conversación que el agente tendrá que sostener.
 PREGUNTAS = {
-    "libre-bloqueo": (
-        "Cuéntame, como si llamaras al banco de verdad: te han bloqueado la "
-        "tarjeta y no sabes por qué. ¿Qué dirías? Habla treinta segundos."
-    ),
-    "libre-cobro": (
-        "Te aparece un cobro que no reconoces. Explícalo con tus palabras: qué "
-        "es, cuándo fue, qué quieres que hagan. Sin leer nada."
-    ),
-    "libre-datos": (
-        "El agente te pide que te identifiques. Contesta dándole tu documento y "
-        "tu nombre, como se lo dirías a una persona por teléfono."
-    ),
+    "libre-bloqueo": "\n".join([
+        "LA LLAMADA ACABA DE EMPEZAR. El agente contesta:",
+        "",
+        "   — Banco Andino, buenas tardes, le habla Marcela.",
+        "     ¿En qué le puedo ayudar?",
+        "",
+        "TU SITUACIÓN:",
+        "   · tu tarjeta débito no funciona desde ayer",
+        "   · nadie te avisó de nada",
+        "   · estás molesto pero no grosero",
+        "",
+        "CONTÉSTALE EN VOZ ALTA. No leas esto: cuéntalo.",
+    ]),
+    "libre-datos": "\n".join([
+        "SIGUE LA MISMA LLAMADA. El agente te dice:",
+        "",
+        "   — Claro que sí, le ayudo enseguida. Para poder mirarlo",
+        "     necesito verificar quién es. ¿Me regala su número de",
+        "     documento y su nombre completo?",
+        "",
+        "TUS DATOS:",
+        "   · documento 1070234567",
+        "   · Juan Diego Ossa",
+        "",
+        "CONTÉSTALE COMO SE LO DIRÍAS A UNA PERSONA.",
+    ]),
+    "libre-cobro": "\n".join([
+        "SIGUE LA MISMA LLAMADA. El agente te dice:",
+        "",
+        "   — Gracias, ya lo verifiqué. Veo que la tarjeta se bloqueó",
+        "     por un movimiento raro. ¿Me cuenta qué pasó?",
+        "",
+        "LO QUE SABES:",
+        "   · un cobro de 347.200 pesos",
+        "   · el martes pasado",
+        "   · en un almacén que no conoces",
+        "   · tú no lo hiciste",
+        "",
+        "EXPLÍCASELO CON TUS PALABRAS.",
+    ]),
 }
 
 # Todo lo que se puede grabar, con su tipo. El tipo importa: de una lectura se
