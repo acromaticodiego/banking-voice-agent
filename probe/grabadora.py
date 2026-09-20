@@ -35,7 +35,7 @@ import sounddevice as sd
 
 sys.path.insert(0, str(Path(__file__).parent))
 from common import ARTEFACTOS  # noqa: E402
-from record_sample import FRASES, FRECUENCIA  # noqa: E402
+from record_sample import FRECUENCIA, GUIONES  # noqa: E402
 
 # Por debajo de esto la grabación no sirve y hay que repetirla. El umbral no es
 # caprichoso: con un pico de 3.300 sobre 32.767, medido en el primer intento de
@@ -84,10 +84,10 @@ class Grabadora(tk.Tk):
         self.combo_dispositivo.current(indice)
         self.combo_dispositivo.pack(anchor="w", pady=(0, 10))
 
-        # Frase
-        ttk.Label(marco, text="Frase").pack(anchor="w")
-        self.combo_frase = ttk.Combobox(marco, state="readonly", width=30,
-                                        values=list(FRASES))
+        # Qué se graba
+        ttk.Label(marco, text="Muestra").pack(anchor="w")
+        self.combo_frase = ttk.Combobox(marco, state="readonly", width=40,
+                                        values=list(GUIONES))
         self.combo_frase.current(0)
         self.combo_frase.bind("<<ComboboxSelected>>", lambda _e: self._mostrar_frase())
         self.combo_frase.pack(anchor="w")
@@ -140,8 +140,11 @@ class Grabadora(tk.Tk):
             anchor="w", side="bottom")
 
     def _mostrar_frase(self) -> None:
+        guion = GUIONES[self.combo_frase.get()]
+        cabecera = ("LEE ESTO EN VOZ ALTA:" if guion["tipo"] == "lectura"
+                    else "CONTESTA ESTO CON TUS PALABRAS, SIN LEER NADA:")
         self.texto.delete("1.0", "end")
-        self.texto.insert("1.0", FRASES[self.combo_frase.get()])
+        self.texto.insert("1.0", cabecera + "\n\n" + guion["texto"])
 
     def _refrescar_medidor(self) -> None:
         ancho = self.lienzo.winfo_width() or 1
@@ -281,11 +284,16 @@ class Grabadora(tk.Tk):
             json.dumps({
                 "fichero": destino.name,
                 "frase": nombre,
+                "tipo": GUIONES[nombre]["tipo"],
                 "segundos": round(len(self.grabado) / FRECUENCIA, 2),
                 "frecuencia_hz": FRECUENCIA,
                 "pico": int(np.abs(self.grabado).max()),
                 "dispositivo": self.combo_dispositivo.get(),
-                "transcripcion_verdadera": FRASES[nombre],
+                # Solo las lecturas llevan verdad escrita. En una espontánea se
+                # guarda la pregunta, que no es lo que se dijo: usarla como
+                # referencia para la tasa de error daría un número sin sentido.
+                ("transcripcion_verdadera" if GUIONES[nombre]["tipo"] == "lectura"
+                 else "pregunta"): GUIONES[nombre]["texto"],
             }, indent=2, ensure_ascii=False), encoding="utf-8")
 
         self.boton_guardar.config(state="disabled")
@@ -293,7 +301,7 @@ class Grabadora(tk.Tk):
         # Pasar solo a la frase siguiente. Sin esto, quien graba las tres
         # seguidas sin tocar el desplegable las guarda las tres encima de la
         # misma, y no se entera hasta que mira los ficheros. Pasó.
-        siguiente = (self.combo_frase.current() + 1) % len(FRASES)
+        siguiente = (self.combo_frase.current() + 1) % len(GUIONES)
         self.combo_frase.current(siguiente)
         self._mostrar_frase()
         self._pintar_pendientes()
@@ -308,7 +316,7 @@ class Grabadora(tk.Tk):
         que hay que evitar.
         """
         estados = []
-        for nombre in FRASES:
+        for nombre in GUIONES:
             ruta = ARTEFACTOS / f"muestra-{nombre}.wav"
             if not ruta.exists():
                 estados.append(f"· {nombre}")

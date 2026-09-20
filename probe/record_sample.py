@@ -58,6 +58,41 @@ FRASES = {
 FRASE = FRASES["documento"]  # la de por defecto, por compatibilidad
 
 
+# Preguntas, no frases. Aquí no se lee: se contesta con las propias palabras.
+#
+# Hacen falta porque leer en voz alta y hablar son dos cosas distintas, y la
+# diferencia no es de matiz. Leyendo, estas mismas tres frases produjeron
+# pausas de hasta 3,26 s —parar a buscar dónde sigue el texto en la pantalla—
+# y con pausas así no se puede elegir la ventana del fin de habla: cualquier
+# detector razonable da el turno por terminado y hace bien.
+#
+# Quien llama a un banco no lee. Duda, se corrige, se queda a medias. Esas
+# pausas son de otro tamaño y son las únicas que sirven para calibrar.
+PREGUNTAS = {
+    "libre-bloqueo": (
+        "Cuéntame, como si llamaras al banco de verdad: te han bloqueado la "
+        "tarjeta y no sabes por qué. ¿Qué dirías? Habla treinta segundos."
+    ),
+    "libre-cobro": (
+        "Te aparece un cobro que no reconoces. Explícalo con tus palabras: qué "
+        "es, cuándo fue, qué quieres que hagan. Sin leer nada."
+    ),
+    "libre-datos": (
+        "El agente te pide que te identifiques. Contesta dándole tu documento y "
+        "tu nombre, como se lo dirías a una persona por teléfono."
+    ),
+}
+
+# Todo lo que se puede grabar, con su tipo. El tipo importa: de una lectura se
+# saca la tasa de error de transcripción, porque hay verdad escrita contra la
+# que comparar; de una espontánea se saca el fin de habla, porque las pausas
+# son reales. Cada una sirve para una cosa y no para la otra.
+GUIONES = {
+    **{n: {"tipo": "lectura", "texto": t} for n, t in FRASES.items()},
+    **{n: {"tipo": "espontanea", "texto": t} for n, t in PREGUNTAS.items()},
+}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--segundos", type=float, default=10.0)

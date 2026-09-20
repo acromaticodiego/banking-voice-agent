@@ -51,6 +51,20 @@ def segmentos_con(audio: np.ndarray, ventana_ms: int) -> tuple[list[dict], float
     return trozos, (time.perf_counter() - arranque) * 1000
 
 
+PAUSA_DE_LECTURA_S = 1.5
+
+
+def pausas_de(audio: np.ndarray) -> list[float]:
+    """Silencios que hay DENTRO de la intervención, en segundos.
+
+    Se miden con la ventana más fina del barrido para no fundir pausas
+    contiguas. Es el dato del que sale la ventana de fin de habla: cualquier
+    ventana más corta que una pausa interna corta a la persona ahí.
+    """
+    trozos, _ = segmentos_con(audio, min(VENTANAS_MS))
+    return [(b["start"] - a["end"]) / 16000 for a, b in zip(trozos, trozos[1:])]
+
+
 def por_que_no_sirve(audio: np.ndarray, duracion: float) -> str | None:
     """Filtra las grabaciones con las que esta medición no se puede hacer.
 
@@ -86,7 +100,10 @@ def por_que_no_sirve(audio: np.ndarray, duracion: float) -> str | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--audio", default="muestra-*.wav")
+    # Por defecto solo las espontáneas. Las lecturas están grabadas para medir
+    # la tasa de error de transcripción, no el fin de habla, y meterlas aquí
+    # fue justamente lo que invalidó el primer barrido.
+    parser.add_argument("--audio", default="muestra-libre-*.wav")
     args = parser.parse_args()
 
     rutas = sorted(ARTEFACTOS.glob(args.audio))
@@ -115,6 +132,43 @@ def main() -> int:
         print("No queda ninguna grabación utilizable. Vuelve a grabar con "
               "probe/grabadora.py.", file=sys.stderr)
         return 2
+
+    # Antes del barrido: ¿de qué tamaño son las pausas que hay dentro de cada
+    # intervención? De ahí sale la ventana, y de ahí sale también si estas
+    # grabaciones sirven para elegirla.
+    print("Pausas dentro de cada intervención:")
+    todas_las_pausas = []
+    lectura = False
+    for nombre, audio, _duracion in clips:
+        pausas = pausas_de(audio)
+        todas_las_pausas.extend(pausas)
+        if pausas:
+            largas = [p for p in pausas if p >= PAUSA_DE_LECTURA_S]
+            lectura = lectura or bool(largas)
+            print(f"  {nombre}: " + ", ".join(f"{p:.2f}" for p in sorted(pausas))
+                  + f"  (máxima {max(pausas):.2f} s)")
+        else:
+            print(f"  {nombre}: ninguna, habla de corrido")
+    print()
+
+    if lectura:
+        print("=" * 72)
+        print("ESTA MEDICIÓN NO VALE, Y NO ES CULPA DEL DETECTOR.")
+        print("=" * 72)
+        print(f"Hay pausas de más de {PAUSA_DE_LECTURA_S:.1f} s dentro de lo que debería")
+        print("ser una sola intervención. Eso no es titubear: es leer de una pantalla y")
+        print("parar a buscar dónde sigue. Si una persona se calla tres segundos, dar el")
+        print("turno por terminado es la decisión CORRECTA, así que contar eso como un")
+        print("corte castiga al detector por acertar.")
+        print()
+        print("Con este audio no se puede elegir la ventana. Hace falta habla espontánea:")
+        print("alguien contestando una pregunta con sus propias palabras, no leyendo.")
+        print("Las pausas de quien habla de corrido son de otro tamaño, y son las que")
+        print("de verdad va a ver el agente por teléfono.")
+        print()
+        print("El barrido sigue abajo para que se vea el dato, pero no se usa para")
+        print("decidir nada.")
+        print()
 
     print(f"Barriendo la ventana de silencio sobre {len(clips)} grabaciones.")
     print("Verdad de referencia: cada grabación es UNA sola intervención.\n")
@@ -163,17 +217,22 @@ def main() -> int:
         print("Esas grabaciones no cuentan para la calibración: hay que repetirlas.")
         print()
 
-    if sin_cortes:
-        elegida = min(sin_cortes)
+    if lectura:
+        print("Sin conclusión: el audio es de lectura, no de conversación "
+              "(ver el aviso de arriba).")
+    elif sin_cortes:
         print(f"La ventana más corta que no parte ninguna de las {len(clips)} "
-              f"grabaciones es {elegida} ms.")
-        print(f"Ese es el retraso de fin de habla que entra en el presupuesto, "
-              f"no los 400 ms supuestos.")
+              f"grabaciones es {min(sin_cortes)} ms.")
+        print("Ese es el retraso de fin de habla que entra en el presupuesto, "
+              "no los 400 ms supuestos.")
     else:
-        elegida = None
-        print("NINGUNA ventana del barrido evita los cortes. O el detector no vale "
-              "para este audio, o hay que subir por encima de "
-              f"{max(VENTANAS_MS)} ms y asumir el coste.")
+        print("NINGUNA ventana del barrido evita los cortes, y las pausas no son "
+              "de lectura.")
+        print("O el detector por silencio no basta para este habla —y entonces hace "
+              "falta")
+        print("decidir el fin de turno también por el contenido, no solo por el "
+              "silencio—")
+        print(f"o hay que subir por encima de {max(VENTANAS_MS)} ms y asumir el coste.")
 
     print()
     print("Coste de cómputo del detector:")

@@ -1,7 +1,9 @@
 {
   "fichero": "muestra-titubeos.wav",
   "frase": "titubeos",
-  "segundos": 10.0,
+  "segundos": 22.46,
   "frecuencia_hz": 16000,
+  "pico": 7189,
+  "dispositivo": "[1] Varios micrófonos (2- Realtek(R",
   "transcripcion_verdadera": "Sí, eh... mire, es que la tarjeta, o sea, la de crédito no, la débito, la que termina en cuatro cinco ocho dos, esa es la que no me está sirviendo desde ayer."
 }

@@ -1,7 +1,9 @@
 {
   "fichero": "muestra-monto.wav",
   "frase": "monto",
-  "segundos": 10.0,
+  "segundos": 22.98,
   "frecuencia_hz": 16000,
+  "pico": 6032,
+  "dispositivo": "[1] Varios micrófonos (2- Realtek(R",
   "transcripcion_verdadera": "Es que me apareció un cobro de trescientos cuarenta y siete mil doscientos pesos el martes pasado, en un almacén que yo no conozco, y quiero que me lo revisen."
 }
