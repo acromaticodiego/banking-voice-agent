@@ -42,12 +42,20 @@ def leer_wav(ruta: Path) -> tuple["object", int, float]:
 def cargar_modelo(nombre: str):
     """Intenta GPU y cae a CPU sin mentir sobre cuál acabó usando.
 
-    En Windows, CTranslate2 necesita las bibliotecas de cuDNN para CUDA y no
-    siempre están; si falla, un número de CPU declarado como tal vale más que
-    un número de GPU que no se ejecutó.
+    En Windows, CTranslate2 necesita cuBLAS y cuDNN para CUDA y no siempre
+    están; si falla, un número de CPU declarado como tal vale más que un número
+    de GPU que no se ejecutó.
+
+    Importante: **no basta con que el modelo cargue**. Con las DLL de cuBLAS
+    ausentes, `WhisperModel(device="cuda")` construye el objeto sin quejarse y
+    revienta más tarde, en la primera inferencia. Por eso aquí se transcribe
+    medio segundo de ruido antes de dar el dispositivo por bueno: una carga que
+    no falla no demuestra nada.
     """
+    import numpy as np
     from faster_whisper import WhisperModel
 
+    ruido = (np.random.randn(8000) * 0.01).astype(np.float32)
     intentos = [("cuda", "float16"), ("cpu", "int8")]
     errores = []
     for dispositivo, precision in intentos:
@@ -55,6 +63,8 @@ def cargar_modelo(nombre: str):
             arranque = time.perf_counter()
             modelo = WhisperModel(nombre, device=dispositivo, compute_type=precision,
                                   download_root=str(Path(__file__).parent.parent / "models"))
+            segmentos, _ = modelo.transcribe(ruido, language="es", beam_size=1)
+            list(segmentos)  # el generador es perezoso: aquí se ejecuta de verdad
             carga_ms = (time.perf_counter() - arranque) * 1000
             return modelo, f"{dispositivo}/{precision}", carga_ms, errores
         except Exception as exc:  # noqa: BLE001

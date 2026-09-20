@@ -7,3 +7,8 @@ faster-whisper==1.2.0    # voz->texto local, para desarrollar sin gastar crédit
 sounddevice==0.5.2       # grabar 10 s del micrófono
 numpy==2.2.6             # sounddevice devuelve arrays
 requests==2.32.5         # faster-whisper 1.2.0 lo importa pero no lo declara
+
+# Solo para la GPU. CTranslate2 no trae las bibliotecas de CUDA y sin estas
+# faster-whisper carga en "cuda" y revienta en la primera inferencia.
+nvidia-cublas-cu12==12.8.4.1
+nvidia-cudnn-cu12==9.10.2.21

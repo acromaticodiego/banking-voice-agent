@@ -21,6 +21,39 @@ RAIZ = Path(__file__).resolve().parent.parent
 ARTEFACTOS = RAIZ / "artifacts"
 
 
+def preparar_cuda() -> list[str]:
+    """Pone las DLL de cuBLAS y cuDNN al alcance de CTranslate2.
+
+    En Windows, CTranslate2 no busca en `site-packages/nvidia/*/bin`, así que
+    sin esto el modelo *carga* en CUDA y luego revienta al inferir con
+    `Library cublas64_12.dll is not found`. Se registran aquí en vez de tocar
+    el PATH del sistema para que el proyecto no dependa del estado de la
+    máquina de nadie.
+    """
+    registrados = []
+    base = RAIZ / ".venv" / "Lib" / "site-packages" / "nvidia"
+    if not base.exists():
+        return registrados
+    for carpeta in sorted(base.glob("*/bin")):
+        if not any(carpeta.glob("*.dll")):
+            continue
+        try:
+            os.add_dll_directory(str(carpeta))
+        except OSError:
+            pass
+        # `add_dll_directory` no basta: CTranslate2 resuelve sus dependencias
+        # por PATH, así que comprobado en esta máquina hay que anteponerlas ahí
+        # también. Con solo lo primero, sigue fallando en la inferencia.
+        os.environ["PATH"] = str(carpeta) + os.pathsep + os.environ.get("PATH", "")
+        registrados.append(str(carpeta))
+    return registrados
+
+
+# Se ejecuta al importar: cualquier sonda que use `common` hereda las DLL sin
+# tener que acordarse de llamarlo.
+DLL_CUDA = preparar_cuda()
+
+
 def percentil(muestras: list[float], p: float) -> float:
     """Percentil por interpolación lineal.
 
