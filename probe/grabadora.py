@@ -43,6 +43,11 @@ from record_sample import FRASES, FRECUENCIA  # noqa: E402
 # medir nada.
 PICO_MINIMO = 4000
 PROPORCION_MINIMA = 0.15  # fracción de muestras con señal que se espera al hablar
+# Silencio que tiene que quedar DESPUÉS de la frase. No es cosmético: la sonda
+# del fin de habla mide cuánto tarda en notarse que alguien calló, y para eso
+# hace falta que calle dentro de la grabación. Un segundo más que la ventana
+# más larga que se barre (1000 ms), para poder probarla entera.
+COLA_MINIMA_S = 2.0
 
 
 class Grabadora(tk.Tk):
@@ -180,7 +185,8 @@ class Grabadora(tk.Tk):
         except Exception as exc:  # noqa: BLE001
             self.estado.set(f"No se pudo abrir el micrófono: {exc}")
             return
-        self.estado.set("GRABANDO. Lee la frase y dale a Parar cuando termines.")
+        self.estado.set("GRABANDO. Lee la frase y, al terminar, ESPERA DOS SEGUNDOS "
+                        "EN SILENCIO antes de darle a Parar.")
         self.boton_grabar.config(state="disabled")
         self.boton_parar.config(state="normal")
         self.boton_oir.config(state="disabled")
@@ -210,9 +216,17 @@ class Grabadora(tk.Tk):
         duracion = len(datos) / FRECUENCIA
         pico = int(np.abs(datos).max())
         con_señal = float((np.abs(datos) > 500).mean())
+
+        # Silencio final: sin él, la muestra no sirve para medir el fin de
+        # habla, porque no contiene ningún momento en que alguien calle. Es el
+        # defecto que invalidó las tres primeras grabaciones de este proyecto.
+        fuertes = np.flatnonzero(np.abs(datos) > 500)
+        cola_s = (len(datos) - fuertes[-1]) / FRECUENCIA if fuertes.size else 0.0
+
         self.estado.set(
             f"{duracion:.1f} s grabados. Pico {pico}/32767. "
-            f"Habla en el {con_señal * 100:.0f}% de las muestras.")
+            f"Habla en el {con_señal * 100:.0f}% de las muestras. "
+            f"Silencio final: {cola_s:.1f} s.")
 
         if pico < PICO_MINIMO:
             self.veredicto.set("DEMASIADO BAJO. Acércate al micrófono o cambia de "
@@ -225,6 +239,13 @@ class Grabadora(tk.Tk):
         elif pico > 32000:
             self.veredicto.set("SATURANDO. Sepárate un poco: lo que se recorta arriba "
                                "no se recupera.")
+            self.etiqueta_veredicto.config(foreground="#b03030")
+        elif cola_s < COLA_MINIMA_S:
+            self.veredicto.set(
+                f"FALTA SILENCIO AL FINAL: solo {cola_s:.1f} s. Repítela y, al acabar "
+                f"la frase, quédate callado {COLA_MINIMA_S:.0f} segundos antes de dar a "
+                "Parar. Sin ese silencio no se puede medir cuánto tarda el sistema en "
+                "darse cuenta de que has terminado de hablar.")
             self.etiqueta_veredicto.config(foreground="#b03030")
         else:
             self.veredicto.set("Sirve. Escúchala si quieres y guárdala.")
