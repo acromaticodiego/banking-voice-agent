@@ -84,20 +84,25 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--modelo", default="small",
                         help="tiny, base, small, medium, large-v3")
-    parser.add_argument("--repeticiones", type=int, default=5)
-    parser.add_argument("--audio", default="muestra-voz.wav")
+    parser.add_argument("--repeticiones", type=int, default=5,
+                        help="pasadas por cada fichero de audio")
+    parser.add_argument("--audio", default="muestra-*.wav",
+                        help="patrón de ficheros dentro de artifacts/")
     args = parser.parse_args()
 
-    ruta = ARTEFACTOS / args.audio
-    if not ruta.exists():
-        print(f"No existe {ruta}. Graba primero: python probe/record_sample.py",
-              file=sys.stderr)
+    rutas = sorted(ARTEFACTOS.glob(args.audio))
+    if not rutas:
+        print(f"No hay ficheros que encajen con {args.audio} en {ARTEFACTOS}. "
+              "Graba primero: python probe/record_sample.py", file=sys.stderr)
         return 2
 
-    audio, frecuencia, duracion = leer_wav(ruta)
-    print(f"Audio: {ruta.name}, {duracion:.1f} s a {frecuencia} Hz")
+    muestras_audio = []
+    for ruta in rutas:
+        audio, frecuencia, duracion = leer_wav(ruta)
+        muestras_audio.append((ruta, audio, frecuencia, duracion))
+        print(f"Audio: {ruta.name}, {duracion:.1f} s a {frecuencia} Hz")
 
-    print(f"Cargando faster-whisper '{args.modelo}' (la primera vez lo descarga)...")
+    print(f"\nCargando faster-whisper '{args.modelo}' (la primera vez lo descarga)...")
     try:
         modelo, dispositivo, carga_ms, errores = cargar_modelo(args.modelo)
     except RuntimeError as exc:
@@ -107,34 +112,47 @@ def main() -> int:
     for e in errores:
         print(f"  (descartado -> {e})")
 
-    cola = audio[-int(2.0 * frecuencia):]
-
+    ficheros = ", ".join(r.name for r, *_ in muestras_audio)
     lote = Medicion(
         etapa="asr", implementacion=f"faster-whisper {args.modelo} ({dispositivo}) [lote]",
-        que_mide=f"transcribir los {duracion:.0f} s completos, de principio a fin",
-        notas="No es la latencia del turno; sirve para el factor de tiempo real.",
+        que_mide="transcribir el clip completo, de principio a fin",
+        notas=f"No es la latencia del turno; sirve para el factor de tiempo real. "
+              f"Ficheros: {ficheros}.",
     )
     tail = Medicion(
         etapa="asr", implementacion=f"faster-whisper {args.modelo} ({dispositivo}) [cola 2s]",
         que_mide="transcribir los últimos 2 s de audio",
-        notas="Aproximación a lo que queda por procesar cuando la persona calla. "
-              "No es un ASR en streaming de verdad.",
+        notas=f"Aproximación a lo que queda por procesar cuando la persona calla. "
+              f"No es un ASR en streaming de verdad. Ficheros: {ficheros}.",
     )
 
-    # Una pasada de calentamiento: la primera transcripción paga la reserva de
-    # memoria del dispositivo y no representa el estado estacionario.
-    texto_calentamiento, _ = transcribir(modelo, audio)
-    print(f"\n  transcripción (calentamiento): {texto_calentamiento}\n")
+    # Una pasada de calentamiento sobre el primer clip: la primera
+    # transcripción paga la reserva de memoria del dispositivo y no representa
+    # el estado estacionario.
+    transcribir(modelo, muestras_audio[0][1])
 
-    for i in range(1, args.repeticiones + 1):
-        _, ms_lote = transcribir(modelo, audio)
-        _, ms_cola = transcribir(modelo, cola)
-        lote.muestras_ms.append(ms_lote)
-        tail.muestras_ms.append(ms_cola)
-        print(f"    {i}/{args.repeticiones}: lote {ms_lote:.0f} ms, cola 2s {ms_cola:.0f} ms")
+    factores = []
+    for ruta, audio, frecuencia, duracion in muestras_audio:
+        print(f"\n  {ruta.name}:")
+        cola = audio[-int(2.0 * frecuencia):]
+        del_fichero = []
+        for i in range(1, args.repeticiones + 1):
+            texto, ms_lote = transcribir(modelo, audio)
+            _, ms_cola = transcribir(modelo, cola)
+            lote.muestras_ms.append(ms_lote)
+            tail.muestras_ms.append(ms_cola)
+            del_fichero.append(ms_lote)
+            print(f"    {i}/{args.repeticiones}: lote {ms_lote:.0f} ms, "
+                  f"cola 2s {ms_cola:.0f} ms")
+            if i == 1:
+                # Se imprime para poder mirarla a ojo. La tasa de error frente
+                # a la transcripción verdadera se mide aparte, no aquí: esta
+                # sonda es de latencia.
+                print(f"      transcripción: {texto}")
+        factores.append((sum(del_fichero) / len(del_fichero)) / (duracion * 1000))
 
-    factor = (sum(lote.muestras_ms) / len(lote.muestras_ms)) / (duracion * 1000)
-    lote.notas += f" Factor de tiempo real: {factor:.2f} s de proceso por s de audio."
+    factor = sum(factores) / len(factores)
+    lote.notas += f" Factor de tiempo real medio: {factor:.2f} s de proceso por s de audio."
 
     print("\nResultado:")
     print(lote.linea())
