@@ -1,0 +1,15 @@
+# Dependencias SOLO de la sonda de medición del día 1.
+# No son las del sistema: el sistema todavía no existe, y no quiero arrastrar
+# librerías elegidas antes de saber si el presupuesto de 800 ms es alcanzable.
+
+groq==0.32.0             # cliente del modelo del bucle
+faster-whisper==1.2.0    # voz->texto local, para desarrollar sin gastar crédito
+sounddevice==0.5.2       # grabar 10 s del micrófono
+numpy==2.2.6             # sounddevice devuelve arrays
+requests==2.32.5         # faster-whisper 1.2.0 lo importa pero no lo declara
+
+# Solo para la GPU. CTranslate2 no trae las bibliotecas de CUDA y sin estas
+# faster-whisper carga en "cuda" y revienta en la primera inferencia.
+nvidia-cublas-cu12==12.8.4.1
+nvidia-cudnn-cu12==9.10.2.21
+piper-tts==1.3.0         # texto->voz local

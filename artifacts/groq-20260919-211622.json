@@ -1,0 +1,371 @@
+{
+  "fecha": "2026-09-19T21:16:22.317523-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [respuesta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [
+        193.25039999966975,
+        400.4505000048084,
+        440.01229999412317,
+        488.0469999916386,
+        260.03099999797996,
+        301.9523999973899,
+        302.7440000005299,
+        221.75839998817537,
+        211.4951999974437,
+        201.49969999329187,
+        207.62699999613687,
+        192.06349999876693
+      ],
+      "unidad": "ms",
+      "notas": " Media de 10 trozos de razonamiento antes de decir nada pronunciable.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 240.9,
+        "p95": 461.6,
+        "min": 192.1,
+        "max": 488.0
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [respuesta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [
+        191.05959999433253,
+        397.4636000057217,
+        438.16929998865817,
+        484.3201999901794,
+        236.7238000006182,
+        292.3134000011487,
+        300.0596000056248,
+        204.9743999959901,
+        205.62939999217633,
+        198.765099994489,
+        205.4972999903839,
+        174.3237000046065
+      ],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 221.2,
+        "p95": 458.9,
+        "min": 174.3,
+        "max": 484.3
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [respuesta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [
+        201.82919999933802,
+        405.42090000235476,
+        542.0429999940097,
+        711.314999993192,
+        266.6107999975793,
+        323.117000007187,
+        306.82379999780096,
+        260.88719999825116,
+        228.14229999494273,
+        206.65089999965858,
+        212.24359999177977,
+        253.09779999952298
+      ],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 263.7,
+        "p95": 618.2,
+        "min": 201.8,
+        "max": 711.3
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [herramienta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [
+        307.858899992425,
+        377.6761999906739,
+        209.96629999717698,
+        227.48819999105763,
+        589.0777000022354,
+        238.90620000020135,
+        435.68160000722855,
+        331.0856000025524,
+        182.38719999499153,
+        387.42090000596363,
+        513.6724000039976,
+        319.35440000961535
+      ],
+      "unidad": "ms",
+      "notas": " Media de 7 trozos de razonamiento antes de decir nada pronunciable.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 325.2,
+        "p95": 547.6,
+        "min": 182.4,
+        "max": 589.1
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [herramienta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [
+        304.4130999915069,
+        366.4810999907786,
+        207.2358000004897,
+        195.19579999905545,
+        376.8359999958193,
+        201.19429999613203,
+        404.39189999597147,
+        235.53210000682157,
+        180.7176000002073,
+        276.87620000506286,
+        503.598499999498,
+        318.2044999994105
+      ],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 290.6,
+        "p95": 449.0,
+        "min": 180.7,
+        "max": 503.6
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [herramienta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [
+        308.4741000056965,
+        378.9356999914162,
+        210.46750000095926,
+        228.74330000195187,
+        589.9464999965858,
+        239.83189999125898,
+        436.55260000377893,
+        331.7154000105802,
+        182.8959999984363,
+        389.3537000112701,
+        514.5148000010522,
+        319.74710000213236
+      ],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 325.7,
+        "p95": 548.5,
+        "min": 182.9,
+        "max": 589.9
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [respuesta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [
+        292.25399999995716,
+        235.6357999960892,
+        280.9320999949705,
+        262.1359000040684,
+        294.2403000051854,
+        373.9817000023322,
+        412.12480000103824,
+        410.7220000005327,
+        316.97780000104103,
+        421.38230000273325,
+        304.7913999907905,
+        413.8651000102982
+      ],
+      "unidad": "ms",
+      "notas": " Media de 12 trozos de razonamiento antes de decir nada pronunciable.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 310.9,
+        "p95": 417.2,
+        "min": 235.6,
+        "max": 421.4
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [respuesta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [
+        290.50510001252405,
+        225.9282000013627,
+        277.40139998786617,
+        260.4127999948105,
+        292.4152000050526,
+        371.2898999947356,
+        408.1261000101222,
+        317.76549998903647,
+        314.374499997939,
+        419.2538000061177,
+        298.29349998908583,
+        409.9234000022989
+      ],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 306.3,
+        "p95": 414.1,
+        "min": 225.9,
+        "max": 419.3
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [respuesta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [
+        707.6511000050232,
+        661.3406999967992,
+        285.56299999763723,
+        272.5838000042131,
+        300.5342000105884,
+        378.18439998955,
+        473.2055000058608,
+        415.9091999899829,
+        509.3127000000095,
+        429.48010000691283,
+        315.0700999976834,
+        422.9431999992812
+      ],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 419.4,
+        "p95": 682.2,
+        "min": 272.6,
+        "max": 707.7
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [herramienta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [
+        313.9303999923868,
+        353.0654000060167,
+        452.1258000022499,
+        671.9589999993332,
+        805.5863000045065,
+        316.1928000045009,
+        261.600499987253,
+        707.6817999914056,
+        313.8515000027837,
+        397.8010999999242,
+        271.24810000532307,
+        296.48859999724664
+      ],
+      "unidad": "ms",
+      "notas": " Media de 7 trozos de razonamiento antes de decir nada pronunciable.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 334.6,
+        "p95": 751.7,
+        "min": 261.6,
+        "max": 805.6
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [herramienta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [
+        312.0932999881916,
+        350.81580000405665,
+        387.1701000025496,
+        621.5169999923091,
+        721.0228000039933,
+        314.57960000261664,
+        243.55179999838583,
+        606.1508999991929,
+        307.8246999939438,
+        395.55850000760984,
+        266.91600000776816,
+        294.35450000164565
+      ],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 332.7,
+        "p95": 666.3,
+        "min": 243.6,
+        "max": 721.0
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [herramienta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [
+        314.52499999431893,
+        353.5944000032032,
+        452.8907999920193,
+        673.101599997608,
+        806.4100999908987,
+        316.7056000092998,
+        263.7316999898758,
+        708.4101999935228,
+        314.4523999944795,
+        398.56510001118295,
+        271.95160000701435,
+        297.0142999984091
+      ],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 12,
+        "p50": 335.2,
+        "p95": 752.5,
+        "min": 263.7,
+        "max": 806.4
+      }
+    }
+  ]
+}

@@ -1,0 +1,209 @@
+{
+  "fecha": "2026-09-19T19:33:53.475097-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low [respuesta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [
+        190.3386999911163,
+        404.8876999877393,
+        498.0725000059465,
+        431.29579999367706,
+        351.5975000045728,
+        280.2001999953063,
+        268.50949999061413,
+        206.0881000070367,
+        274.7114999947371,
+        291.566400002921,
+        267.18049999908544,
+        289.89759999967646,
+        335.32430000195745,
+        632.1421999891754,
+        399.0107999998145
+      ],
+      "unidad": "ms",
+      "notas": " Media de 9 trozos de razonamiento antes de decir nada pronunciable.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 15,
+        "p50": 291.6,
+        "p95": 538.3,
+        "min": 190.3,
+        "max": 632.1
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low [respuesta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [
+        183.92179999500513,
+        402.8047999890987,
+        324.7706000111066,
+        419.52939999464434,
+        249.05320000834763,
+        276.3144999917131,
+        256.07629999285564,
+        199.78280000214,
+        271.7366999859223,
+        254.71880000259262,
+        261.9561000028625,
+        277.6473999983864,
+        318.5704000061378,
+        354.1314999893075,
+        296.9468999945093
+      ],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 15,
+        "p50": 276.3,
+        "p95": 407.8,
+        "min": 183.9,
+        "max": 419.5
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low [respuesta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [
+        285.98849999252707,
+        418.7141000002157,
+        501.4655999984825,
+        461.65189999737777,
+        357.8873000078602,
+        361.60939998808317,
+        353.3970999997109,
+        235.87449999467935,
+        345.6197999912547,
+        337.3714000044856,
+        344.8170000046957,
+        380.2899000002071,
+        383.7446999968961,
+        638.0681000009645,
+        405.6560999888461
+      ],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 15,
+        "p50": 361.6,
+        "p95": 542.4,
+        "min": 235.9,
+        "max": 638.1
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low [herramienta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [
+        600.8863000024576,
+        223.70210000372026,
+        398.7298000138253,
+        617.6769000012428,
+        505.72500000998843,
+        306.1117000033846,
+        503.3899999980349,
+        316.45849999040365,
+        405.5791999999201,
+        206.08299999730662,
+        313.5720999998739,
+        704.5144000003347,
+        375.11609999637585,
+        3293.785799993202,
+        2983.1833000062034
+      ],
+      "unidad": "ms",
+      "notas": " Media de 7 trozos de razonamiento antes de decir nada pronunciable.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 15,
+        "p50": 405.6,
+        "p95": 3076.4,
+        "min": 206.1,
+        "max": 3293.8
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low [herramienta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [
+        397.53850000852253,
+        217.97830000286922,
+        396.58020000206307,
+        615.505599998869,
+        367.10970000422094,
+        302.3397000069963,
+        404.2006000090623,
+        312.86659999750555,
+        299.07619999721646,
+        204.04129999224097,
+        311.4738000003854,
+        432.54609999712557,
+        373.04910000239033,
+        3097.8281999996398,
+        2978.867400001036
+      ],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 15,
+        "p50": 373.0,
+        "p95": 3014.6,
+        "min": 204.0,
+        "max": 3097.8
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low [herramienta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [
+        601.5953000023728,
+        224.49300000153016,
+        399.38960000290535,
+        618.4496999921976,
+        506.46610000694636,
+        306.88519999966957,
+        504.3560000049183,
+        317.4564999935683,
+        406.4501999964705,
+        206.67849999153987,
+        314.15130000095814,
+        705.8380000089528,
+        376.24130000767764,
+        3296.7201999999816,
+        2983.849600001122
+      ],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 15,
+        "p50": 406.5,
+        "p95": 3077.7,
+        "min": 206.7,
+        "max": 3296.7
+      }
+    }
+  ]
+}

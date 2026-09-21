@@ -17,3 +17,6 @@ vendor/
 
 # Modelos descargados de faster-whisper (caché de Hugging Face local al proyecto)
 models/
+
+# Voces de Piper: 60 MB cada una, se descargan con un comando.
+voices/

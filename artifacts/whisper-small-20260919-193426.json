@@ -1,0 +1,67 @@
+{
+  "fecha": "2026-09-19T19:34:26.957522-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "asr",
+      "implementacion": "faster-whisper small (cuda/float16) [lote]",
+      "que_mide": "transcribir el clip completo, de principio a fin",
+      "muestras_ms": [
+        373.5852999961935,
+        361.4655999990646,
+        367.48200000147335,
+        384.6450000128243,
+        404.95199999713805,
+        384.44650000019465,
+        405.5514000065159,
+        383.84120000409894,
+        403.4539999993285,
+        377.2102999937488
+      ],
+      "unidad": "ms",
+      "notas": "No es la latencia del turno; sirve para el factor de tiempo real. Ficheros: muestra-documento.wav. Factor de tiempo real medio: 0.02 s de proceso por s de audio.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 384.1,
+        "p95": 405.3,
+        "min": 361.5,
+        "max": 405.6
+      }
+    },
+    {
+      "etapa": "asr",
+      "implementacion": "faster-whisper small (cuda/float16) [cola 2s]",
+      "que_mide": "transcribir los últimos 2 s de audio",
+      "muestras_ms": [
+        162.3939999990398,
+        154.96040000289213,
+        156.948600008036,
+        161.28339999704622,
+        162.10270000738092,
+        164.84729999501724,
+        164.34149999986403,
+        179.60049999237526,
+        175.97440000099596,
+        161.65409999666736
+      ],
+      "unidad": "ms",
+      "notas": "Aproximación a lo que queda por procesar cuando la persona calla. No es un ASR en streaming de verdad. Ficheros: muestra-documento.wav.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 162.2,
+        "p95": 178.0,
+        "min": 155.0,
+        "max": 179.6
+      }
+    }
+  ]
+}

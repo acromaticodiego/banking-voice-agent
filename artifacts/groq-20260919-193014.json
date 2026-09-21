@@ -1,0 +1,79 @@
+{
+  "fecha": "2026-09-19T19:30:14.022837-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "llm",
+      "implementacion": "groq llama-3.1-8b-instant [respuesta]",
+      "que_mide": "desde que se envía la petición hasta el primer token recibido",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": "NotFoundError: Error code: 404 - {'error': {'message': 'The model `llama-3.1-8b-instant` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'code': 'model_not_found'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq llama-3.1-8b-instant [respuesta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último token (dato secundario)",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": "NotFoundError: Error code: 404 - {'error': {'message': 'The model `llama-3.1-8b-instant` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'code': 'model_not_found'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq llama-3.1-8b-instant [herramienta]",
+      "que_mide": "desde que se envía la petición hasta el primer token recibido",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": "NotFoundError: Error code: 404 - {'error': {'message': 'The model `llama-3.1-8b-instant` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'code': 'model_not_found'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq llama-3.1-8b-instant [herramienta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último token (dato secundario)",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": "NotFoundError: Error code: 404 - {'error': {'message': 'The model `llama-3.1-8b-instant` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'code': 'model_not_found'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    }
+  ]
+}

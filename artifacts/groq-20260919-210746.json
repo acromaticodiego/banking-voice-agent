@@ -1,0 +1,551 @@
+{
+  "fecha": "2026-09-19T21:07:46.737980-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=corto [respuesta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=corto [respuesta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=corto [respuesta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=corto [herramienta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=corto [herramienta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=corto [herramienta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [respuesta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [
+        161.16419999161735,
+        280.31539999938104,
+        388.65809999697376,
+        304.38560000038706,
+        347.8155000047991,
+        292.0090999978129,
+        505.1829000003636,
+        607.3336000117706,
+        404.7911999950884,
+        248.21559998963494
+      ],
+      "unidad": "ms",
+      "notas": " Media de 10 trozos de razonamiento antes de decir nada pronunciable.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 326.1,
+        "p95": 561.4,
+        "min": 161.2,
+        "max": 607.3
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [respuesta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [
+        144.0191000001505,
+        277.05730000161566,
+        324.4278999918606,
+        301.7921999999089,
+        235.14649999560788,
+        290.16020000563003,
+        503.5797999880742,
+        605.8115000050748,
+        400.44339999440126,
+        246.31219998991583
+      ],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 296.0,
+        "p95": 559.8,
+        "min": 144.0,
+        "max": 605.8
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [respuesta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [
+        202.02519999293145,
+        292.87039999326225,
+        392.2368999919854,
+        307.98240000149235,
+        354.7866000008071,
+        300.47930000000633,
+        507.8388999972958,
+        618.1359000038356,
+        437.996499997098,
+        312.05039999622386
+      ],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 333.4,
+        "p95": 568.5,
+        "min": 202.0,
+        "max": 618.1
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [herramienta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [
+        315.9338000114076,
+        205.96320000186097,
+        221.86219999275636,
+        283.92750000057276,
+        321.40719999733847,
+        366.72779999207705,
+        323.84909999382216,
+        409.2982000001939,
+        324.4868000037968,
+        434.4753000041237
+      ],
+      "unidad": "ms",
+      "notas": " Media de 7 trozos de razonamiento antes de decir nada pronunciable.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 322.6,
+        "p95": 423.1,
+        "min": 206.0,
+        "max": 434.5
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [herramienta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [
+        314.32290001248475,
+        195.75739999709185,
+        203.93599999079015,
+        275.8485000085784,
+        308.3820000028936,
+        309.39339999167714,
+        216.8664000055287,
+        308.32339999324176,
+        322.7455000014743,
+        420.28920000302605
+      ],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 308.4,
+        "p95": 376.4,
+        "min": 195.8,
+        "max": 420.3
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=corto [herramienta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [
+        316.4175000129035,
+        206.75420000043232,
+        224.0101999923354,
+        284.541300003184,
+        322.2752000001492,
+        367.70989999058656,
+        324.7367000003578,
+        410.209899986512,
+        324.9853000015719,
+        434.9385999958031
+      ],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 323.5,
+        "p95": 423.8,
+        "min": 206.8,
+        "max": 434.9
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=largo [respuesta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=largo [respuesta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=largo [respuesta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=largo [herramienta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=largo [herramienta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=none prompt=largo [herramienta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": "BadRequestError: Error code: 400 - {'error': {'message': '`reasoning_effort` must be one of `low`, `medium`, or `high`', 'type': 'invalid_request_error'}}",
+      "resumen": {
+        "n": 0,
+        "p50": null,
+        "p95": null,
+        "min": null,
+        "max": null
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [respuesta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [
+        279.25399999367073,
+        276.22680000786204,
+        500.99699999555014,
+        207.95360000920482,
+        291.62299999734387,
+        168.58830000273883,
+        418.8640999927884,
+        2483.5008999943966,
+        2955.264400006854,
+        2648.784200006048
+      ],
+      "unidad": "ms",
+      "notas": " Media de 9 trozos de razonamiento antes de decir nada pronunciable.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 355.2,
+        "p95": 2817.3,
+        "min": 168.6,
+        "max": 2955.3
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [respuesta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [
+        189.6963000035612,
+        260.09690000500996,
+        323.08349999948405,
+        197.4841000046581,
+        284.12899999239016,
+        154.85910000279546,
+        384.5740999968257,
+        2478.915400002734,
+        2850.774000005913,
+        2645.020099997055
+      ],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 303.6,
+        "p95": 2758.2,
+        "min": 154.9,
+        "max": 2850.8
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [respuesta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [
+        289.0765000047395,
+        310.82310000783764,
+        506.8821000022581,
+        238.10930000036024,
+        318.34640000306536,
+        193.456300010439,
+        451.89769999706186,
+        2494.881599996006,
+        2982.0579000079306,
+        2657.071800000267
+      ],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 385.1,
+        "p95": 2835.8,
+        "min": 193.5,
+        "max": 2982.1
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [herramienta]",
+      "que_mide": "desde que se envía la petición hasta el primer contenido hablable o la primera llamada a herramienta",
+      "muestras_ms": [
+        2630.6206000008387,
+        2812.6115999912145,
+        2660.7657999993535,
+        2581.945600002655,
+        2735.9296000067843,
+        2825.9420000104,
+        2602.1463999932166,
+        2627.4492999946233,
+        3074.6021999948425,
+        3005.750199998147
+      ],
+      "unidad": "ms",
+      "notas": " Media de 7 trozos de razonamiento antes de decir nada pronunciable.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 2698.3,
+        "p95": 3043.6,
+        "min": 2581.9,
+        "max": 3074.6
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [herramienta] (primer trozo)",
+      "que_mide": "desde que se envía la petición hasta el primer trozo de cualquier tipo",
+      "muestras_ms": [
+        2579.8865999968257,
+        2764.4033999968087,
+        2657.156200002646,
+        2576.5897999954177,
+        2636.0145000071498,
+        2766.7044999980135,
+        2600.127600002452,
+        2610.963700004504,
+        3040.0198999996064,
+        3003.3875000081025
+      ],
+      "unidad": "ms",
+      "notas": "Incluye razonamiento, que no se puede pronunciar. Dato secundario.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 2646.6,
+        "p95": 3023.5,
+        "min": 2576.6,
+        "max": 3040.0
+      }
+    },
+    {
+      "etapa": "llm",
+      "implementacion": "groq openai/gpt-oss-20b esfuerzo=low prompt=largo [herramienta] (total)",
+      "que_mide": "desde que se envía la petición hasta el último trozo (dato secundario)",
+      "muestras_ms": [
+        2631.4861999999266,
+        2813.4340999968117,
+        2661.4070999930846,
+        2582.6367999979993,
+        2737.04930000531,
+        2827.258900011657,
+        2603.5427000024356,
+        2628.3427000016673,
+        3075.458499995875,
+        3006.5082000073744
+      ],
+      "unidad": "ms",
+      "notas": "No entra en el presupuesto del turno: se solapa con la síntesis.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 10,
+        "p50": 2699.2,
+        "p95": 3044.4,
+        "min": 2582.6,
+        "max": 3075.5
+      }
+    }
+  ]
+}

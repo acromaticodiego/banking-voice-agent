@@ -1,0 +1,10 @@
+{
+  "fichero": "muestra-libre-bloqueo.wav",
+  "frase": "libre-bloqueo",
+  "tipo": "espontanea",
+  "segundos": 26.88,
+  "frecuencia_hz": 16000,
+  "pico": 5576,
+  "dispositivo": "[1] Varios micrófonos (2- Realtek(R",
+  "pregunta": "LA LLAMADA ACABA DE EMPEZAR. El agente contesta:\n\n   — Banco Andino, buenas tardes, le habla Marcela.\n     ¿En qué le puedo ayudar?\n\nTU SITUACIÓN:\n   · tu tarjeta débito no funciona desde ayer\n   · nadie te avisó de nada\n   · estás molesto pero no grosero\n\nCONTÉSTALE EN VOZ ALTA. No leas esto: cuéntalo."
+}

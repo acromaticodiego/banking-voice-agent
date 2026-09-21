@@ -1,0 +1,56 @@
+{
+  "fecha": "2026-09-19T19:39:35.594554-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "vad",
+      "implementacion": "silero (el que trae faster-whisper)",
+      "que_mide": "cómputo de recorrer el clip entero buscando habla",
+      "muestras_ms": [
+        267.97390000137966,
+        56.742500004475005,
+        51.29879999731202,
+        98.1008000089787,
+        64.88079999689944,
+        40.67500001110602,
+        80.66469999903347,
+        40.83929999615066,
+        45.286599997780286,
+        68.70210000488441,
+        52.23729999852367,
+        44.25150000315625,
+        72.20260000030976,
+        36.62769999937154,
+        39.99679999833461,
+        63.66419998812489,
+        38.57259999495,
+        43.60560000350233,
+        75.24529998772778,
+        38.190499995835125,
+        48.87280000548344,
+        76.06680000026245,
+        38.40710000076797,
+        36.85119999863673,
+        68.67829999828245,
+        38.82539999904111,
+        47.99079999793321
+      ],
+      "unidad": "ms",
+      "notas": "Se reparte entre todo el audio; por turno es una fracción. No es el retraso del fin de habla: ese es la ventana.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 27,
+        "p50": 48.9,
+        "p95": 92.9,
+        "min": 36.6,
+        "max": 268.0
+      }
+    }
+  ]
+}
