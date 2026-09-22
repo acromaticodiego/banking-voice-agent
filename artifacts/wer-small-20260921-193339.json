@@ -1,0 +1,53 @@
+{
+  "fecha": "2026-09-21T19:33:39.224394-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "wer",
+      "implementacion": "faster-whisper small (cuda/float16) [normalizado]",
+      "que_mide": "lo mismo, con los números pasados a cifras en los dos lados",
+      "muestras_ms": [
+        0.0,
+        0.0,
+        10.0
+      ],
+      "unidad": "%",
+      "notas": "3 grabaciones, un solo hablante, sin ruido. Números recuperados exactos: 3/3.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 0.0,
+        "p95": 9.0,
+        "min": 0.0,
+        "max": 10.0
+      }
+    },
+    {
+      "etapa": "wer",
+      "implementacion": "faster-whisper small (cuda/float16) [literal]",
+      "que_mide": "errores de palabra sobre palabras de la referencia, sin tocar los números",
+      "muestras_ms": [
+        32.25806451612903,
+        16.666666666666664,
+        12.121212121212121
+      ],
+      "unidad": "%",
+      "notas": "Castiga escribir 1070234567 donde la referencia dice las cifras en letra.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 16.7,
+        "p95": 30.7,
+        "min": 12.1,
+        "max": 32.3
+      }
+    }
+  ]
+}
