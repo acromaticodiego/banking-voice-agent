@@ -34,6 +34,8 @@ from pathlib import Path
 
 import numpy as np
 
+from app.fin_de_turno import parece_incompleto
+
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ / "probe"))
 
@@ -63,6 +65,10 @@ class TurnoCompleto:
     contestado: str = ""
     puente: str = ""
     adelantos_usados: int = 0
+    # Cada vez que el sistema decidió NO contestar todavía porque la frase
+    # estaba a medias, con el motivo. Es lo que hay que poder enseñar para
+    # defender que la espera extra estuvo justificada.
+    reanudaciones: list = field(default_factory=list)
     muestras_audio: int = 0
     rastro: list = field(default_factory=list)
 
@@ -87,7 +93,9 @@ class Tuberia:
     """Alimenta audio en tiempo real y produce la respuesta hablada."""
 
     def __init__(self, modelo_asr, voz_tts, agente, ventana_silencio_ms: int = 300,
-                 voz_minima_ms: int = 600):
+                 voz_minima_ms: int = 600, fin_por_contenido: bool = False,
+                 ventana_larga_ms: int = 1200, esperando: str | None = None,
+                 max_reanudaciones: int = 2):
         self.asr = modelo_asr
         self.tts = voz_tts
         self.agente = agente
@@ -97,6 +105,15 @@ class Tuberia:
         # como intervención y el sistema contesta a los 900 ms con la
         # transcripción vacía. Pasó en la primera ejecución.
         self.voz_minima_ms = voz_minima_ms
+        # Decidir el fin de turno tambien por el contenido, no solo por el
+        # silencio. Es la salida que el ADR 0002 dejo escrita.
+        self.fin_por_contenido = fin_por_contenido
+        # Lo que se espera cuando la frase parece estar a medias. Mas largo que
+        # la ventana normal: el coste solo se paga en los turnos que lo
+        # necesitan, en vez de en todos.
+        self.ventana_larga_ms = ventana_larga_ms
+        self.esperando = esperando
+        self.max_reanudaciones = max_reanudaciones
 
     # ------------------------------------------------------------------ VAD
 
@@ -116,16 +133,18 @@ class Tuberia:
 
     # --------------------------------------------------------------- turno
 
-    def turno(self, audio: np.ndarray) -> TurnoCompleto:
-        resultado = TurnoCompleto(muestras_audio=len(audio))
-        acumulado: list[np.ndarray] = []
-        silencio_ms = 0
-        voz_ms = 0
-        ultimo_con_voz = None      # reloj de pared del último trozo con voz
-        t_fin_declarado = None
+    def _escuchar(self, audio, desde, acumulado, ventana_ms, voz_ms_previa,
+                  reloj_audio):
+        """Consume audio hasta que hay silencio suficiente, o hasta que se acaba.
 
-        reloj_audio = time.perf_counter()
-        for inicio in range(0, len(audio), MUESTRAS_POR_TROZO):
+        Devuelve dónde se quedó, cuándo se declaró el fin, y cuándo fue el
+        último trozo con voz. Está separado del resto para poder **reanudar**
+        la escucha si la frase resulta estar a medias.
+        """
+        silencio_ms = 0
+        voz_ms = voz_ms_previa
+        ultimo_con_voz = None
+        for inicio in range(desde, len(audio), MUESTRAS_POR_TROZO):
             trozo = audio[inicio:inicio + MUESTRAS_POR_TROZO]
             acumulado.append(trozo)
 
@@ -142,33 +161,61 @@ class Tuberia:
                 ultimo_con_voz = time.perf_counter()
             else:
                 silencio_ms += TROZO_MS
-                if (voz_ms >= self.voz_minima_ms
-                        and silencio_ms >= self.ventana_ms):
-                    t_fin_declarado = time.perf_counter()
-                    break
+                if voz_ms >= self.voz_minima_ms and silencio_ms >= ventana_ms:
+                    return (inicio + MUESTRAS_POR_TROZO, time.perf_counter(),
+                            ultimo_con_voz, voz_ms)
+        return len(audio), time.perf_counter(), ultimo_con_voz, voz_ms
 
-        if ultimo_con_voz is None:
-            raise ValueError("no se detectó voz en el audio")
-        if t_fin_declarado is None:
-            # El audio se acabó sin que hubiera silencio suficiente. Se declara
-            # el fin aquí, pero queda dicho: la grabación no daba para más.
-            t_fin_declarado = time.perf_counter()
+    def turno(self, audio: np.ndarray) -> TurnoCompleto:
+        resultado = TurnoCompleto(muestras_audio=len(audio))
+        acumulado: list[np.ndarray] = []
+        reloj_audio = time.perf_counter()
+        posicion, voz_ms = 0, 0
+        ventana = self.ventana_ms
+        ultimo_con_voz = None
+        reanudaciones = 0
+        t_cero = None
 
-        # ----- EL CRONÓMETRO ÚNICO arranca cuando la persona se calló de verdad
-        t_cero = ultimo_con_voz
+        while True:
+            posicion, t_fin, con_voz, voz_ms = self._escuchar(
+                audio, posicion, acumulado, ventana, voz_ms, reloj_audio)
+            if con_voz is not None:
+                ultimo_con_voz = con_voz
+            if ultimo_con_voz is None:
+                raise ValueError("no se detectó voz en el audio")
 
-        resultado.etapas.append(Etapa(
-            "fin de habla", (t_fin_declarado - t_cero) * 1000,
-            f"ventana de silencio de {self.ventana_ms} ms"))
+            # El cronómetro arranca en el último trozo con voz de TODA la
+            # intervención, no del trozo actual: si hubo que seguir
+            # escuchando, lo que cuenta es cuándo se calló del todo.
+            t_cero = ultimo_con_voz
+            t = time.perf_counter()
+            segmentos, _ = self.asr.transcribe(np.concatenate(acumulado),
+                                               language="es", beam_size=1)
+            resultado.dicho = "".join(s.text for s in segmentos).strip()
+            ms_asr = (time.perf_counter() - t) * 1000
 
-        completo = np.concatenate(acumulado)
+            # Aquí el silencio deja de mandar solo. Con la transcripción
+            # delante se ve si la frase está a medias, y si lo está se vuelve a
+            # escuchar en vez de contestar a un documento cortado.
+            motivo = (parece_incompleto(resultado.dicho, self.esperando)
+                      if self.fin_por_contenido else None)
+            if (motivo and reanudaciones < self.max_reanudaciones
+                    and posicion < len(audio)):
+                resultado.reanudaciones.append(f"{resultado.dicho!r}: {motivo}")
+                resultado.etapas.append(Etapa(
+                    f"escucha extra {reanudaciones + 1}", ms_asr,
+                    f"no se contestó: {motivo}"))
+                ventana = self.ventana_larga_ms
+                reanudaciones += 1
+                continue
 
-        t = time.perf_counter()
-        segmentos, _ = self.asr.transcribe(completo, language="es", beam_size=1)
-        resultado.dicho = "".join(s.text for s in segmentos).strip()
-        resultado.etapas.append(Etapa(
-            "voz a texto", (time.perf_counter() - t) * 1000,
-            f"intervención entera ({len(completo) / FRECUENCIA:.1f} s), no en streaming"))
+            resultado.etapas.insert(0, Etapa(
+                "fin de habla", (t_fin - t_cero) * 1000,
+                f"ventana de {ventana} ms"
+                + (f", tras {reanudaciones} escucha(s) extra" if reanudaciones else "")))
+            resultado.etapas.append(Etapa("voz a texto", ms_asr,
+                                          "intervención entera, no en streaming"))
+            break
 
         # El agente avisa en cuanto hay algo pronunciable. Puede ser la frase
         # puente, no la respuesta: por eso se apuntan los dos instantes.

@@ -140,6 +140,48 @@ frase acabada en "mi documento es el uno cero siete..." está claramente a
 medias, y eso lo sabe el texto, no el silencio. Es más trabajo y es otra
 decisión que habrá que escribir aquí. No se adelanta hasta tener el dato.
 
+## Implementado el 2026-09-23, y lo que costó
+
+Está en `app/fin_de_turno.py`. Cuando la ventana corta de silencio se cumple,
+antes de contestar se mira **lo que se ha dicho**. Si la frase está a medias, se
+sigue escuchando con una ventana larga en vez de contestar.
+
+Son reglas, no una llamada a un modelo, y el motivo es de presupuesto:
+preguntarle al modelo "¿ha terminado?" cuesta otra petición en la ruta crítica,
+y el modelo es justo la etapa cara. Gastar 325 ms en cada pausa para decidir si
+esperar 900 más es pagar el problema para no tenerlo. Cuando las reglas no
+basten, el siguiente paso es un clasificador pequeño entrenado, no el grande.
+
+Dos reglas:
+
+- La última palabra no puede ser de las que piden algo detrás: `de`, `y`, `mi`,
+  `es`, `porque`…
+- Si se pidió el documento y todavía no hay un número de seis a once dígitos,
+  la persona no ha terminado de decirlo.
+
+**El resultado, sobre la misma grabación:**
+
+| | sin la regla | con la regla |
+|---|---|---|
+| lo que el sistema oyó | `"mi cédula es 70 234"` | `"mi cédula es 70 23 4 5 6 7"` |
+| consultas adelantadas usadas | 0 de 1 | **1 de 1** |
+| primer audio | 1570 ms | 2795 ms |
+| primer dato | 2978 ms | 3625 ms |
+
+Deja de cortar. Y al haber por fin un documento entero, el adelanto de consultas
+del [ADR 0004](0004-adelantar-la-consulta-antes-de-que-el-modelo-la-pida.md)
+—que llevaba dos ramas sin dispararse ni una vez— empieza a usarse.
+
+**Cuesta 1225 ms**, y no se disimula. Son los ~900 de ventana larga más una
+segunda transcripción que cae en la ruta crítica. El coste asimétrico manda:
+cortar a alguien mientras dicta su cédula pierde el dato y obliga a repetir la
+llamada entera; esperar de más solo es lento. Pero 3625 ms hasta el primer dato
+está muy lejos de los 800 del objetivo, y eso sigue sin resolverse.
+
+La segunda transcripción es lo primero que hay que quitar: con un ASR en
+streaming no haría falta transcribir dos veces, porque el texto ya estaría hecho
+cuando toca decidir.
+
 ## Lo que este ADR NO decide todavía
 
 El valor de la ventana. Sigue sin medirse, y hasta que se mida el presupuesto

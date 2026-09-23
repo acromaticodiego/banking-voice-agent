@@ -57,6 +57,11 @@ def main() -> int:
                         help="lo que tardaria un core bancario de verdad; la "
                              "herramienta de mentira contesta en 5 ms y con eso "
                              "el problema no existe")
+    parser.add_argument("--fin-por-contenido", action="store_true",
+                        help="no contestar si la frase esta a medias: seguir "
+                             "escuchando. Es la salida del ADR 0002")
+    parser.add_argument("--esperando", default=None,
+                        help="que se le pidio a la persona: documento, o nada")
     parser.add_argument("--adelantar", action="store_true",
                         help="dispara consultar_identidad en cuanto el ASR "
                              "reconoce un documento, sin esperar al modelo")
@@ -125,7 +130,9 @@ def main() -> int:
         agente = Agente(groq, modelo_llm, BASE,
                         adelantar=args.adelantar,
                         tardanza_herramienta_ms=args.tardanza_herramienta_ms)
-        tuberia = Tuberia(asr, voz, agente, ventana_silencio_ms=args.ventana_ms)
+        tuberia = Tuberia(asr, voz, agente, ventana_silencio_ms=args.ventana_ms,
+                          fin_por_contenido=args.fin_por_contenido,
+                          esperando=args.esperando)
         r = tuberia.turno(audio)
         ultimo = r
 
@@ -144,13 +151,15 @@ def main() -> int:
     servidor.should_exit = True
     hilo.join(timeout=5)
 
+    for motivo in ultimo.reanudaciones:
+        print(f"\n  NO contestó todavía y siguió escuchando:\n    {motivo}")
     print(f"\n  dijo     : {ultimo.dicho}")
     print(f"  contestó : {ultimo.contestado}")
 
     print("\nDESGLOSE (mediana de las vueltas)")
     print("=" * 66)
     for nombre, valores in por_etapa.items():
-        detalle = next(e.detalle for e in ultimo.etapas if e.nombre == nombre)
+        detalle = next((e.detalle for e in ultimo.etapas if e.nombre == nombre), '')
         print(f"  {nombre:<16}{statistics.median(valores):>9.0f} ms   {detalle}")
     print("-" * 66)
     suma = sum(statistics.median(v) for v in por_etapa.values())
@@ -171,6 +180,8 @@ def main() -> int:
     print(f"  {'etapa':<18}{'presupuesto':>13}{'de verdad':>12}")
     print("-" * 66)
     for nombre, publicado in PRESUPUESTO_PUBLICADO.items():
+        if nombre not in por_etapa:
+            continue
         real = statistics.median(por_etapa[nombre])
         print(f"  {nombre:<18}{publicado:>10.0f} ms{real:>9.0f} ms"
               + ("   <-- " + f"{real / publicado:.1f}x" if real > publicado * 1.3 else ""))
@@ -220,7 +231,7 @@ def main() -> int:
                    f"El voz a texto transcribe la intervención entera, no en streaming.")
     etapas_med = [
         Medicion(etapa="turno", implementacion=f"etapa: {nombre}",
-                 que_mide=next(e.detalle for e in ultimo.etapas if e.nombre == nombre),
+                 que_mide=next((e.detalle for e in ultimo.etapas if e.nombre == nombre), ''),
                  muestras_ms=valores)
         for nombre, valores in por_etapa.items()
     ]
