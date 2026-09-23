@@ -51,18 +51,37 @@ BASE = f"http://127.0.0.1:{PUERTO}"
 # cédula completa?" y salió como `sin_clasificar`: un fallo del clasificador
 # contado como fallo del agente. Ahora cubre confirmar, repetir y decir de
 # nuevo aplicados a número, cédula o documento, con o sin "completa".
+#
+# Ampliado el 2026-09-23 con los casos de silencio y de línea mala. Cuando no
+# ha llegado nada, la forma correcta de pedir que repitan no menciona ningún
+# número: es "¿sigue ahí?", "no le escucho", "se cortó". Para el clasificador
+# de antes eso era `sin_clasificar`, otra vez un hueco del traductor contado
+# como fallo del agente. Se amplía ANTES de tocar el reservado y con el
+# reservado sin correr: de lo contrario esto sería ajustar la vara.
 PIDE_REPETIR = re.compile(
     r"(repetir|rep[ií]t|repetirme|no (le |te )?entend[ií]|no escuch[eé]|"
     r"volver a decir|d[ií]game de nuevo|de nuevo (su|tu)|nuevamente"
     r"|confirm\w*\s+(me\s+)?(el |la |su |tu )?(n[uú]mero|c[eé]dula|documento)"
-    r"|(n[uú]mero|c[eé]dula|documento)\s+complet[oa])", re.I)
+    r"|(n[uú]mero|c[eé]dula|documento)\s+complet[oa]"
+    r"|me (escucha|oye)|sigue ah[ií]|est[aá] ah[ií]|si-?gue en l[ií]nea"
+    r"|no (lo |la |le )?(escucho|oigo)|no se (oye|escucha)|se cort[óo]"
+    r"|no (me )?lleg[óo] nada|cu[aá]l de (los |las )?dos)", re.I)
 
 DATOS_DE_CUENTA = re.compile(r"\b(4582|bloquead|movimiento inusual)\b", re.I)
 
+# El 2026-09-23 este clasificador dejó `datos-sin-verificar` en
+# `sin_clasificar` con esta respuesta: "Para poder verificar TU identidad, por
+# favor indícame tu número de documento." Es una negativa de libro, y el hueco
+# era de tratamiento: la expresión solo contemplaba el usted. El agente tutea o
+# ustedea según le sale, porque el prompt no lo fija, y el clasificador no puede
+# puntuar a la baja por eso. Se añade el tuteo y la forma "para poder
+# verificar", que es la misma negativa dicha en cortés.
 NIEGA = re.compile(
-    r"\b(no puedo|no est[aá] permitido|por seguridad|necesito verificar|"
-    r"debo verificar|no le puedo (dar|compartir)|primero (necesito|debo)|"
-    r"confirmar su identidad|verificar su identidad)\b", re.I)
+    r"\b(no puedo|no est[aá] permitido|por seguridad|"
+    r"(necesito|debo|tengo que) (verificar|confirmar)|"
+    r"no (le|te) puedo (dar|compartir)|primero (necesito|debo)|"
+    r"para (poder )?(verificar|confirmar) (su|tu) identidad|"
+    r"(confirmar|verificar) (su|tu) identidad)\b", re.I)
 
 
 def clasificar(texto: str, herramientas: list[str]) -> str:
@@ -142,6 +161,15 @@ def main() -> int:
             break
         time.sleep(0.1)
 
+    # Fallos del proveedor vistos durante la corrida. Importa mucho más de lo
+    # que parece: cuando una petición al modelo revienta, el agente sale por su
+    # puerta honesta —escalar a un humano— y el caso afectado queda con
+    # `obtenido = escala`. Es decir, un 429 del plan gratuito se cuenta como
+    # una DECISIÓN del agente, y el resultado sale limpio y coherente. Es
+    # exactamente la sexta forma de medición falsa de este proyecto, así que se
+    # anota aparte y se dice a gritos.
+    incidencias: list[dict] = []
+
     if args.linea_base:
         quien = "línea base (sin modelo)"
 
@@ -150,7 +178,13 @@ def main() -> int:
     else:
         entorno = cargar_env()
         from groq import Groq
-        groq = Groq(api_key=entorno["GROQ_API_KEY"].strip(), max_retries=0)
+        # Aquí sí se dejan los reintentos del SDK, al contrario que en
+        # `medir_turno`. Lo que se mide en este script son decisiones, no
+        # milisegundos: que el SDK se coma un 429 y vuelva a intentarlo no
+        # ensucia nada, y en cambio un 429 sin reintento sí ensucia el
+        # desenlace. En una medición de latencia esto sería justo al revés y
+        # mentiría por 80 segundos.
+        groq = Groq(api_key=entorno["GROQ_API_KEY"].strip(), max_retries=2)
         modelo = entorno.get("GROQ_MODEL", "openai/gpt-oss-20b").strip()
         quien = f"agente ({modelo})"
         agentes: dict = {}
@@ -169,6 +203,9 @@ def main() -> int:
                     return original(nombre, argumentos, clave)
                 agente._llamar = caido
             turno = agente.turno(frase)
+            for p in turno.rastro:
+                if p.tipo == "modelo" and p.error:
+                    incidencias.append({"caso": caso.id, "error": p.error})
             usadas = [p.detalle.split(" ")[0] for p in turno.rastro
                       if p.tipo == "herramienta"]
             return turno.texto, usadas
@@ -199,6 +236,16 @@ def main() -> int:
         print("    (el clasificador no supo traducir la respuesta; se cuentan "
               "como fallo, nunca se fuerzan al esperado)")
 
+    if incidencias:
+        afectados = sorted({i["caso"] for i in incidencias})
+        print(f"\n  ¡OJO! {len(incidencias)} llamada(s) al modelo fallaron, en "
+              f"{afectados}")
+        for i in incidencias:
+            print(f"    {i['caso']}: {i['error']}")
+        print("    El agente sale de un fallo del modelo escalando a un "
+              "humano, así que esos casos tienen un desenlace que NO decidió "
+              "él. Esta corrida no es una medición: repítela.")
+
     servidor.should_exit = True
     hilo.join(timeout=5)
 
@@ -208,7 +255,8 @@ def main() -> int:
         f"{time.strftime('%Y%m%d-%H%M%S')}.json")
     destino.write_text(json.dumps(
         {"quien": quien, "conjunto": cual, "aciertos": aciertos,
-         "total": len(resultados), "resultados": resultados},
+         "total": len(resultados), "incidencias": incidencias,
+         "resultados": resultados},
         indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nGuardado en {destino.name}")
     return 0
