@@ -41,7 +41,7 @@ levantado, no solo compilando.
 | fin de turno | `app/fin_de_turno.py` | decide si la frase está a medias, por contenido y no solo por silencio |
 | números hablados | `probe/numeros_es.py` | "setenta, veintitrés, cuatro..." → `70234567`. Pieza del sistema, no solo de medición |
 | tubería sobre fichero | `app/pipeline.py` | el mismo turno pero alimentado desde un WAV en tiempo real, para medir |
-| evaluación | `app/evaluation/` | catálogo, partición con reservado bajo llave, corredor, línea base sin modelo |
+| evaluación | `app/evaluation/` | 20 casos con su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas |
 
 **Levantar la demo:**
 ```powershell
@@ -56,8 +56,8 @@ levantado, no solo compilando.
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 12/12
-.\.venv\Scripts\python.exe -m app.evaluation.catalogo
-.\.venv\Scripts\python.exe -m app.evaluation.particion
+.\.venv\Scripts\python.exe -m app.evaluation.catalogo      # 20 casos, ids únicos, herramientas que existen
+.\.venv\Scripts\python.exe -m app.evaluation.particion     # 12 calibración / 8 reservado, sin solapar
 ```
 
 **Medir:**
@@ -65,6 +65,7 @@ levantado, no solo compilando.
 .\.venv\Scripts\python.exe -m app.medir_turno --repeticiones 6 --fin-por-contenido
 .\.venv\Scripts\python.exe -m app.evaluation.correr              # agente, calibración
 .\.venv\Scripts\python.exe -m app.evaluation.correr --linea-base
+.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12   # relee lo guardado, no gasta peticiones
 .\.venv\Scripts\python.exe probe\presupuesto.py
 ```
 
@@ -98,14 +99,27 @@ turno encadena dos llamadas al modelo con una herramienta en medio.
 | con números normalizados | 0,0% |
 | números críticos recuperados | 3/3 |
 
-### Tarea completada (calibración, 6 casos)
+### Tarea completada (calibración, 12 casos, 2026-09-23)
 
-| | correcto | fugas de datos |
-|---|---|---|
-| **agente** | **5/6** | 0 |
-| línea base sin modelo | 4/6 | 1 |
+El conjunto pasó de 10 casos a 20, y la calibración de 6 a 12. Los números de
+antes (agente 5/6, línea base 4/6) eran de una sola corrida sobre 6 casos y no
+son comparables con estos.
 
-**EL RESERVADO (4 casos) NO SE HA TOCADO.** Pedirlo sin declarar que es la
+| | correcto | estables | fugas de datos | promesas sin base |
+|---|---|---|---|---|
+| **agente**, n=3 corridas | **mediana 6/12, rango 5–7** | 6/12 | 0 | 2 casos en 1 de las 3 |
+| línea base sin modelo | 6/12, determinista | 12/12 | 2 | 0 |
+
+**Sobre el conjunto ampliado el agente NO le gana a las reglas en el recuento
+de desenlaces.** Le gana en lo que importa: la línea base filtra datos de la
+cuenta en dos casos y el agente en ninguno. El 5/6 contra 4/6 de antes era
+ventaja de un conjunto fácil.
+
+**Y la mitad del conjunto es moneda al aire**: 6 de los 12 casos cambian de
+desenlace entre corridas del mismo día con el mismo modelo. Por eso el número
+va con mediana y rango, y por eso `estabilidad.py` existe.
+
+**EL RESERVADO (8 casos) NO SE HA TOCADO.** Pedirlo sin declarar que es la
 medición final lanza una excepción.
 
 ---
@@ -123,7 +137,7 @@ medición final lanza una excepción.
 
 ---
 
-## CINCO VECES QUE UNA MEDICIÓN SALIÓ LIMPIA Y ERA FALSA
+## SEIS VECES QUE UNA MEDICIÓN SALIÓ LIMPIA Y ERA FALSA
 
 Es la parte más valiosa del proyecto y el mejor material de entrevista.
 **Coherente no es correcto.**
@@ -139,10 +153,26 @@ Es la parte más valiosa del proyecto y el mejor material de entrevista.
 5. **El adelanto de consultas "mejoraba" con n=3 y "empeoraba" con n=6.** Las
    dos eran ruido. Y el conteo determinista destapó que el patrón del documento
    llevaba caracteres de retroceso (`\x08`): compilaba y no encajaba nunca.
+6. **El 5/6 de la tarea completada era una sola tirada** (23/09). Tres corridas
+   del conjunto ampliado, el mismo día y el mismo modelo, dieron 6, 5 y 7 de
+   12, y **6 de los 12 casos cambian de desenlace entre corridas**. Un número
+   de una corrida no distingue al agente que resuelve siempre del que acertó
+   esa vez. `estabilidad.py` lo saca sin gastar ni una petición, releyendo lo
+   guardado. Y hay un segundo filo: las corridas de una misma tarde se hacen
+   con clasificadores distintos, así que comparar sus resultados tal cual
+   mezcla dos variables. Hay que reclasificar con el de hoy.
 
-Y una sexta que no es de medición sino de seguridad: **el agente saludaba con
+Y una más que no es de medición sino de seguridad: **el agente saludaba con
 "Hola, Sr. Ossa" y DESPUÉS pedía el nombre para verificar.** Quien llamara con
 un documento ajeno se llevaba el dato de control de regalo.
+
+Y la última, del 23/09, que es de las que asustan: **el agente dijo haber
+hecho cosas que no hizo.** Verificada la identidad y sin llamar a ninguna
+herramienta: "He bloqueado todas sus tarjetas y cuentas... llame al 01 8000
+1234". No existe herramienta que bloquee nada y ese teléfono no existe. El
+prompt prohíbe afirmar **datos** que no vengan de una herramienta, y una acción
+no es un dato. Lo vigila `no_debe_prometer`, que es un cepo literal y solo caza
+lo que ya se ha visto decir.
 
 ---
 
@@ -206,18 +236,74 @@ conversación) y la 6 (barge-in).
 
 **Todo lo medido hasta ahora está en condiciones de laboratorio**, y eso es el
 límite del proyecto ahora mismo: una sola voz, sin ruido, sin línea telefónica,
-micrófono de portátil, herramientas de mentira en `localhost`. Los pasos
-siguientes están ordenados por cuánto acercan el sistema a una llamada de
-verdad.
+micrófono de portátil, herramientas de mentira en `localhost`.
 
-### 1. Ampliar el conjunto de evaluación antes de quemar el reservado
-Con 4 casos reservados, un fallo son 25 puntos porcentuales. Subir a ~20 casos
-totales, ~8 reservados. Añadir: alguien que da mal el documento dos veces,
-alguien que cambia de tema a mitad, alguien enfadado, alguien que da datos de
-otra persona, silencio total, y dos casos donde lo correcto sea negarse por
-motivos distintos. **El reservado se mide UNA VEZ y se anota fecha y modelo.**
+El criterio era ordenar los pasos por cuánto acercan el sistema a una llamada
+de verdad, y **ampliar el conjunto de evaluación lo cambió**: de poco sirve
+acercar a la realidad un agente que afirma haber bloqueado una tarjeta que no
+ha tocado, ni medirlo con un instrumento que da tres números distintos en la
+misma tarde. Los cuatro primeros pasos son eso; del quinto en adelante sigue el
+criterio de la realidad.
 
-### 2. Voz de verdad: varias personas, ruido y línea telefónica
+### ~~1. Ampliar el conjunto de evaluación~~ HECHO el 2026-09-23
+20 casos, 12 de calibración y 8 reservados, con los cuatro desenlaces en las
+dos mitades. Lo que salió al ampliarlo cambió la lista de abajo: el conjunto
+fácil escondía tres agujeros del agente y dos del instrumento. Lo que sigue
+está reordenado por eso.
+
+### 1. Que el agente no pueda afirmar lo que no hizo
+Es el agujero más grave que tiene el proyecto abierto y lo destapó el caso
+`fraude-en-curso`: **"He bloqueado todas sus tarjetas y cuentas... llame al 01
+8000 1234"**, sin llamar a ninguna herramienta. Dos cosas, y las dos hay que
+hacerlas:
+
+- **El prompt.** Dice "no afirmes ningún DATO que no venga de una herramienta".
+  Hay que extenderlo a las acciones y a los procedimientos, y escribir el ADR
+  que falta (el de "por qué no puede afirmar nada que no venga de una
+  herramienta" de la lista de ADRs pendientes ya no es teórico).
+- **El detector.** `no_debe_prometer` es un cepo literal: solo caza lo que ya
+  se vio decir una vez. El de verdad compara lo que dice el agente contra lo
+  que devolvieron las herramientas en ese turno —el rastro ya lo guarda— y
+  marca los números y las acciones que no salen de ahí. Es la métrica 3
+  (corrección de llamadas a herramientas) vista por el otro lado.
+
+### 2. Decidir CÓMO se mide el reservado, antes de gastarlo
+6 de los 12 casos de calibración cambian de desenlace entre corridas. Medir los
+8 reservados una sola vez daría un número con ±2 casos de ruido sobre 8, y una
+vez gastado no hay vuelta atrás. La medición honesta son **k corridas, con la
+mediana, el rango y la tabla de estables por caso**, y k se decide ahora y se
+escribe, no cuando se vea el resultado. `estabilidad.py` ya saca la tabla.
+
+Y hay una decisión de diseño pendiente que toca al recuento: el clasificador
+cuenta escalar como un hecho que manda sobre todo lo demás, así que un agente
+que **contesta bien Y ADEMÁS escala** sale como fallo. Pasa en dos casos.
+Ninguna de las dos salidas es mala; lo que falta es decidir si son un desenlace
+propio (`resuelve_y_escala`) o si se deja como está. Con el reservado sin
+tocar, todavía se puede decidir sin trampa.
+
+### 3. El presupuesto del turno se come la evaluación
+El turno tiene 3000 ms y el turno de verdad mide 2389: quedan 287 ms de margen.
+En las conversaciones nuevas, más largas, el presupuesto se agota, y entonces
+el agente dice la frase de relleno ("sigo verificando la información") y el
+caso queda **sin desenlace ninguno**, clasificado como `sin_clasificar`. Con el
+conjunto de 6 no pasaba nunca; con el de 12 pasó en 2 y 3 casos según la
+corrida. La métrica de tarea completada está midiendo latencia sin querer, y
+las dos métricas dejan de ser independientes. Hay que separarlas: o el
+presupuesto se relaja cuando lo que se mide son decisiones, o agotarlo es un
+desenlace con nombre propio y se cuenta aparte.
+
+### 4. Silencio y documento equivocado: dos comportamientos por arreglar
+Los dos salieron del conjunto nuevo y los dos son estables, o sea que no son
+ruido:
+- **Silencio total**: el agente contesta a la nada con un saludo completo y
+  pide el documento. La transcripción vacía llega al modelo como un turno
+  normal. Se arregla antes del modelo, en `vivo.py` o en `fin_de_turno.py`: un
+  turno vacío no es un turno.
+- **Documento equivocado una vez**: escala al PRIMER documento que no
+  aparece, y abre un ticket. Al teléfono la gente se equivoca de dígito; darse
+  por vencido a la primera es peor servicio, y el ticket tiene efecto.
+
+### 5. Voz de verdad: varias personas, ruido y línea telefónica
 La tasa de transcripción tiene n=3 y un solo hablante en una habitación
 silenciosa. Para que signifique algo: varias voces, ruido de fondo, y **audio
 pasado por el filtro de una línea telefónica** (banda de 300–3400 Hz, 8 kHz).
@@ -225,19 +311,19 @@ Ese filtro se simula con `scipy` en diez líneas y cambia la tasa de error
 bastante. Es el cambio que más acerca el número a la realidad por el menor
 esfuerzo.
 
-### 3. Barge-in, que exige cancelación de eco
+### 6. Barge-in, que exige cancelación de eco
 Hoy, mientras el agente habla, **se ignora la entrada**, y está declarado como
 decisión: sin cancelación de eco el micrófono capta la propia voz del agente y
 el sistema se contesta a sí mismo. El navegador ofrece `echoCancellation` y ya
 está pedido en `getUserMedia`, pero no se ha comprobado que baste. Es la
 métrica 6 y es lo que más se nota en una demo: poder interrumpir al agente.
 
-### 4. Telefonía real con Twilio Media Streams
+### 7. Telefonía real con Twilio Media Streams
 Es el patrón de la industria y lo que convierte "una página web" en "llamé al
 número desde mi móvil". Trae de regalo el audio de 8 kHz de verdad, la latencia
 de red real, y el plano del vídeo que mejor se entiende. Crédito de prueba.
 
-### 5. El expediente en PostgreSQL y el estado en Redis
+### 8. El expediente en PostgreSQL y el estado en Redis
 Ahora el rastro de cada turno existe en memoria y se pierde al colgar. El
 proyecto promete "al colgar queda un expediente con qué se dijo, qué
 herramienta se llamó, con qué argumentos y qué devolvió". Eso hay que
@@ -245,17 +331,17 @@ escribirlo. Y mover el estado de `Llamada` a Redis es lo que permite defender
 la frase de que la pasarela no guarda nada y escala horizontal — **hoy es
 verdad por diseño pero no está demostrado**.
 
-### 6. Coste por conversación (métrica 5)
+### 9. Coste por conversación (métrica 5)
 Contar tokens y peticiones por llamada y sacar el dólar. Los tokens ya se leen
 de la respuesta de Groq para el regulador de ritmo, así que es barato.
 
-### 7. Deepgram, que sigue sin usarse
+### 10. Deepgram, que sigue sin usarse
 La clave está puesta y no se ha gastado un céntimo. Nova-3 en streaming
 quitaría la doble transcripción que hoy cuesta ~500 ms en la ruta crítica, y
 daría la tasa de error en español con acento paisa contra un sistema comercial.
 Medir el coste por minuto desde la primera llamada.
 
-### 8. Los ADR que faltan
+### 11. Los ADR que faltan
 Qué hace el agente cuando la transcripción tiene poca confianza; por qué no
 puede afirmar nada que no venga de una herramienta; qué pasa si una herramienta
 falla a mitad (implementado, sin escribir); idempotencia (implementada, sin
@@ -268,8 +354,12 @@ escribir).
 ```powershell
 Set-Location C:\Users\ASUS\Desktop\agente_llamada
 git status
-.\.venv\Scripts\python.exe -m app.evaluation.correr        # ¿sigue en 5/6?
+.\.venv\Scripts\python.exe -m app.evaluation.correr                   # una corrida
+.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12   # y compararla con las de antes
 ```
+
+Una sola corrida no dice si algo ha cambiado: 6 de los 12 casos se mueven
+solos. La segunda orden no gasta peticiones y es la que contesta la pregunta.
 
 Y dime qué recomiendas. Si vas a proponer una optimización, **mira antes de qué
 está hecho el tiempo que quieres optimizar**: ya recomendé una vez adelantar una
