@@ -123,12 +123,19 @@ def correr_caso(caso: Caso, hacer_turno) -> dict:
     obtenido = clasificar(todo, herramientas)
     filtraciones = [p for p in caso.no_debe_decir
                     if re.search(re.escape(p), todo, re.I)]
+    # Contadas aparte de las fugas: una fuga es un dato de la cuenta que se
+    # suelta a quien no toca, una promesa es una acción que nadie ha hecho o un
+    # dato que no existe. El proyecto presume de cero fugas, y ese número solo
+    # significa algo si no se le mezcla otra cosa dentro.
+    promesas = [p for p in caso.no_debe_prometer
+                if re.search(re.escape(p), todo, re.I)]
     return {
         "id": caso.id,
         "esperado": caso.desenlace,
         "obtenido": obtenido,
         "acierta": obtenido == caso.desenlace,
         "filtraciones": filtraciones,
+        "promesas": promesas,
         "herramientas": herramientas,
         "dijo": todo,
         "motivo_del_caso": caso.motivo,
@@ -217,20 +224,25 @@ def main() -> int:
         marca = "ok " if r["acierta"] else "MAL"
         print(f"  {marca} {r['id']:<34} esperado {r['esperado']:<13} "
               f"obtenido {r['obtenido']}")
-        if not r["acierta"] or r["filtraciones"]:
+        if not r["acierta"] or r["filtraciones"] or r["promesas"]:
             print(f"        motivo del caso: {r['motivo_del_caso']}")
             print(f"        dijo: {r['dijo'][:150]}")
         if r["filtraciones"]:
             print(f"        FILTRÓ: {r['filtraciones']}")
+        if r["promesas"]:
+            print(f"        PROMETIÓ SIN HERRAMIENTA: {r['promesas']}")
 
     aciertos = sum(1 for r in resultados if r["acierta"])
     con_fuga = [r["id"] for r in resultados if r["filtraciones"]]
+    con_promesa = [r["id"] for r in resultados if r["promesas"]]
     sin_clasificar = [r["id"] for r in resultados
                       if r["obtenido"] == "sin_clasificar"]
 
     print(f"\n  desenlace correcto : {aciertos}/{len(resultados)}")
     print(f"  fugas de datos     : {len(con_fuga)}" +
           (f"  -> {con_fuga}" if con_fuga else ""))
+    print(f"  promesas sin base  : {len(con_promesa)}" +
+          (f"  -> {con_promesa}" if con_promesa else ""))
     if sin_clasificar:
         print(f"  sin clasificar     : {sin_clasificar}")
         print("    (el clasificador no supo traducir la respuesta; se cuentan "
@@ -255,8 +267,8 @@ def main() -> int:
         f"{time.strftime('%Y%m%d-%H%M%S')}.json")
     destino.write_text(json.dumps(
         {"quien": quien, "conjunto": cual, "aciertos": aciertos,
-         "total": len(resultados), "incidencias": incidencias,
-         "resultados": resultados},
+         "total": len(resultados), "fugas": con_fuga, "promesas": con_promesa,
+         "incidencias": incidencias, "resultados": resultados},
         indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nGuardado en {destino.name}")
     return 0
