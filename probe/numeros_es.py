@@ -129,7 +129,16 @@ def normalizar(texto: str) -> str:
         # devuelve lo segundo. Un solo digito suelto no cuenta: "tengo 3 pesos"
         # no es una tirada.
         sueltos = [p for p in utiles if p in DIGITOS or (es_cifra(p) and len(p) == 1)]
-        if len(utiles) >= 2 and len(sueltos) == len(utiles):
+        # Y también vale "70 23 4 5 6 7", que es como sale de Whisper cuando
+        # alguien dicta su cédula por grupos. Si la tirada son solo cifras y no
+        # hay ningún multiplicador, se concatena: sumarla como cardinal da 115,
+        # que no es un número que nadie haya dicho. Con "mil" o "millones" de
+        # por medio manda el cardinal, porque ahí sí se está diciendo una
+        # cantidad.
+        solo_cifras = utiles and all(es_cifra(p) for p in utiles)
+        hay_multiplicador = any(p in MULTIPLICADORES for p in utiles)
+        if len(utiles) >= 2 and (len(sueltos) == len(utiles)
+                                 or (solo_cifras and not hay_multiplicador)):
             salida.append("".join(p if es_cifra(p) else str(DIGITOS[p])
                                   for p in utiles))
         else:
@@ -155,6 +164,11 @@ if __name__ == "__main__":
         ("es el 1 0 7 0 2 3 4 5 6 7", "es el 1070234567"),
         ("un cobro de 347 mil 200 pesos", "un cobro de 347200 pesos"),
         ("termina en cuatro, cinco, ocho, dos", "termina en 4582"),
+        # De una grabación real, dictando la cédula por grupos. Sumado como
+        # cardinal daba 115 y el documento se perdía: el agente no encontraba
+        # nada con forma de documento y no podía adelantar la consulta.
+        ("mi cédula es 70 23 4 5 6 7", "mi cedula es 70234567"),
+        ("es el 10 70 23 45 67", "es el 1070234567"),
         ("la que termina en cuatro cinco ocho dos",
          "la que termina en 4582"),
         ("mi nombre es Juan Diego", "mi nombre es juan diego"),

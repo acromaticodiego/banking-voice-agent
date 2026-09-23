@@ -1,0 +1,137 @@
+{
+  "fecha": "2026-09-23T09:51:01.763576-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "turno",
+      "implementacion": "tubería completa (cuda/float16) [primer audio]",
+      "que_mide": "desde el último trozo de audio con voz hasta el primer trozo de audio reproducible, sea la respuesta o la frase puente",
+      "muestras_ms": [
+        1447.517799999332,
+        1324.8030999966431,
+        1359.7864000039408
+      ],
+      "unidad": "ms",
+      "notas": "Audio muestra-libre-datos.wav. Ventana de silencio 300 ms. Suma de etapas 2490 ms, sin contabilizar -1130 ms. El voz a texto transcribe la intervención entera, no en streaming.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 1359.8,
+        "p95": 1438.7,
+        "min": 1324.8,
+        "max": 1447.5
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "tubería completa (cuda/float16) [primer dato]",
+      "que_mide": "desde el último trozo de audio con voz hasta que empieza a sonar la respuesta con la información pedida",
+      "muestras_ms": [
+        2832.364100002451,
+        2259.032900008606,
+        2364.002700007404
+      ],
+      "unidad": "ms",
+      "notas": "La frase puente no mueve este número. Publicarlo al lado del otro es lo que impide que un relleno pase por una mejora.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 2364.0,
+        "p95": 2785.5,
+        "min": 2259.0,
+        "max": 2832.4
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: fin de habla",
+      "que_mide": "ventana de silencio de 300 ms",
+      "muestras_ms": [
+        300.1935000065714,
+        299.66950000380166,
+        299.98900000646245
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 300.0,
+        "p95": 300.2,
+        "min": 299.7,
+        "max": 300.2
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: voz a texto",
+      "que_mide": "intervención entera (8.4 s), no en streaming",
+      "muestras_ms": [
+        430.13380000775214,
+        438.8580000086222,
+        440.26560000202153
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 438.9,
+        "p95": 440.1,
+        "min": 430.1,
+        "max": 440.3
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: texto a voz",
+      "que_mide": "hasta el primer trozo reproducible (puente)",
+      "muestras_ms": [
+        176.65019999549259,
+        127.40539999504108,
+        116.30579999473412
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 127.4,
+        "p95": 171.7,
+        "min": 116.3,
+        "max": 176.7
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: agente",
+      "que_mide": "1 llamada(s) a herramienta",
+      "muestras_ms": [
+        2101.7992999986745,
+        1520.3638000093633,
+        1623.575499994331
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 1623.6,
+        "p95": 2054.0,
+        "min": 1520.4,
+        "max": 2101.8
+      }
+    }
+  ]
+}

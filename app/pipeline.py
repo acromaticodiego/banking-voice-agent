@@ -62,6 +62,7 @@ class TurnoCompleto:
     dicho: str = ""
     contestado: str = ""
     puente: str = ""
+    adelantos_usados: int = 0
     muestras_audio: int = 0
     rastro: list = field(default_factory=list)
 
@@ -189,6 +190,7 @@ class Tuberia:
         turno_agente = self.agente.turno(resultado.dicho, al_hablar=hablar)
         resultado.contestado = turno_agente.texto
         resultado.puente = turno_agente.puente
+        resultado.adelantos_usados = turno_agente.adelantos_usados
         resultado.rastro = turno_agente.rastro
         llamadas = sum(1 for p in turno_agente.rastro if p.tipo == "herramienta")
         resultado.etapas.append(Etapa(

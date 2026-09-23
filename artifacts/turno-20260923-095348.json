@@ -1,0 +1,155 @@
+{
+  "fecha": "2026-09-23T09:53:48.541765-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "turno",
+      "implementacion": "tubería completa (cuda/float16) [primer audio]",
+      "que_mide": "desde el último trozo de audio con voz hasta el primer trozo de audio reproducible, sea la respuesta o la frase puente",
+      "muestras_ms": [
+        1358.0458000069484,
+        1815.7227999909082,
+        2488.159500004258,
+        2258.837500005029,
+        1502.9565000004368,
+        1556.870300002629
+      ],
+      "unidad": "ms",
+      "notas": "Audio muestra-libre-datos.wav. Ventana de silencio 300 ms. Suma de etapas 3326 ms, sin contabilizar -1640 ms. El voz a texto transcribe la intervención entera, no en streaming.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 6,
+        "p50": 1686.3,
+        "p95": 2430.8,
+        "min": 1358.0,
+        "max": 2488.2
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "tubería completa (cuda/float16) [primer dato]",
+      "que_mide": "desde el último trozo de audio con voz hasta que empieza a sonar la respuesta con la información pedida",
+      "muestras_ms": [
+        2355.6358000059845,
+        2994.073499998194,
+        3523.2595000125,
+        4123.113600013312,
+        3170.504299996537,
+        3312.62300000526
+      ],
+      "unidad": "ms",
+      "notas": "La frase puente no mueve este número. Publicarlo al lado del otro es lo que impide que un relleno pase por una mejora.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 6,
+        "p50": 3241.6,
+        "p95": 3973.2,
+        "min": 2355.6,
+        "max": 4123.1
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: fin de habla",
+      "que_mide": "ventana de silencio de 300 ms",
+      "muestras_ms": [
+        300.08420000376645,
+        299.90699999325443,
+        299.6199000044726,
+        299.79080001066905,
+        299.99419998785015,
+        299.7926000098232
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 6,
+        "p50": 299.8,
+        "p95": 300.1,
+        "min": 299.6,
+        "max": 300.1
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: voz a texto",
+      "que_mide": "intervención entera (8.4 s), no en streaming",
+      "muestras_ms": [
+        482.0964999962598,
+        387.0401000021957,
+        439.3449000053806,
+        374.50960000569467,
+        503.63279999874067,
+        394.545899995137
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 6,
+        "p50": 416.9,
+        "p95": 498.2,
+        "min": 374.5,
+        "max": 503.6
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: texto a voz",
+      "que_mide": "hasta el primer trozo reproducible (puente)",
+      "muestras_ms": [
+        137.21200000145473,
+        120.05800000042655,
+        112.84200000227429,
+        115.69469999813009,
+        110.55430000124034,
+        117.42929999309126
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 6,
+        "p50": 116.6,
+        "p95": 132.9,
+        "min": 110.6,
+        "max": 137.2
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: agente",
+      "que_mide": "1 llamada(s) a herramienta",
+      "muestras_ms": [
+        1573.2935999985784,
+        2307.0362999860663,
+        2784.1895000019576,
+        3448.627800011309,
+        2366.753399997833,
+        2618.202500001644
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 6,
+        "p50": 2492.5,
+        "p95": 3282.5,
+        "min": 1573.3,
+        "max": 3448.6
+      }
+    }
+  ]
+}
