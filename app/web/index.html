@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Agente de voz — banking-voice-agent</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 15px/1.5 "Segoe UI", system-ui, sans-serif;
+    background: #12141a; color: #e6e8ee;
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr;
+    height: 100vh;
+  }
+  header { grid-column: 1 / -1; padding: 16px 24px; border-bottom: 1px solid #262a35; }
+  h1 { margin: 0; font-size: 17px; font-weight: 600; }
+  header p { margin: 4px 0 0; color: #8b93a7; font-size: 13px; }
+  main, aside { padding: 20px 24px; overflow-y: auto; }
+  aside { border-left: 1px solid #262a35; background: #0e1015; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+       color: #8b93a7; margin: 0 0 12px; font-weight: 600; }
+
+  #llamar {
+    font: inherit; font-size: 16px; font-weight: 600; padding: 14px 28px;
+    border: 0; border-radius: 8px; background: #2f7d4f; color: #fff; cursor: pointer;
+  }
+  #llamar.colgar { background: #a33a3a; }
+  #llamar:disabled { background: #3a3f4d; color: #8b93a7; cursor: default; }
+
+  #estado { margin: 16px 0 24px; font-size: 14px; color: #8b93a7; }
+  #estado b { color: #e6e8ee; }
+  .medidor { height: 8px; background: #1b1f29; border-radius: 4px; overflow: hidden;
+             margin-top: 10px; }
+  .medidor > div { height: 100%; width: 0; background: #2f7d4f; transition: width .06s; }
+
+  .turno { border-left: 2px solid #262a35; padding: 0 0 14px 14px; margin-bottom: 4px; }
+  .quien { font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+           color: #8b93a7; margin-bottom: 3px; }
+  .persona .quien { color: #6ea8fe; }
+  .agente .quien { color: #7bc99a; }
+  .puente { opacity: .65; font-style: italic; }
+  .parcial { color: #d8a657; font-size: 13px; }
+
+  .paso { font-size: 13px; padding: 8px 10px; background: #161a22; border-radius: 6px;
+          margin-bottom: 6px; }
+  .paso code { color: #d8a657; }
+  .paso .arg { color: #8b93a7; }
+  .cifras { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px;
+            font-size: 13px; margin-bottom: 18px; }
+  .cifras span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums;
+                                  color: #e6e8ee; }
+  .cifras span:nth-child(odd) { color: #8b93a7; }
+  .nota { font-size: 12px; color: #6d748a; border-top: 1px solid #262a35;
+          padding-top: 12px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Agente de voz — verificación de identidad</h1>
+  <p>Habla, calla dos segundos, y el agente contesta. Todo corre en esta máquina
+     salvo el modelo.</p>
+</header>
+
+<main>
+  <button id="llamar">Llamar</button>
+  <div id="estado">Pulsa <b>Llamar</b> y permite el micrófono.
+    <div class="medidor"><div id="nivel"></div></div>
+  </div>
+  <h2>Conversación</h2>
+  <div id="conversacion"></div>
+</main>
+
+<aside>
+  <h2>Lo que oye quien llama</h2>
+  <div class="cifras">
+    <span>primer audio (deja de oír silencio)</span><span id="t-audio">—</span>
+    <span>primer dato (se entera de algo)</span><span id="t-dato">—</span>
+    <span>voz a texto</span><span id="t-asr">—</span>
+    <span>esperas extra por frase a medias</span><span id="t-reanud">—</span>
+  </div>
+  <h2>Qué hizo el agente</h2>
+  <div id="pasos"></div>
+  <p class="nota">
+    Los dos primeros números van juntos a propósito. La frase puente que el
+    agente dice mientras consulta baja el primero y no toca el segundo: publicar
+    solo el primero convertiría un relleno en una mejora.
+  </p>
+</aside>
+
+<script>
+const boton = document.getElementById("llamar");
+const estado = document.getElementById("estado");
+const nivel = document.getElementById("nivel");
+const conversacion = document.getElementById("conversacion");
+const pasos = document.getElementById("pasos");
+
+let ws = null, contexto = null, flujo = null, fuente = null, worklet = null;
+let cola = Promise.resolve();
+let esperandoAudio = null;
+
+function pinta(quien, texto, clase) {
+  const div = document.createElement("div");
+  div.className = "turno " + (quien === "persona" ? "persona" : "agente");
+  div.innerHTML = `<div class="quien">${quien}</div>`;
+  const p = document.createElement("div");
+  if (clase) p.className = clase;
+  p.textContent = texto;
+  div.appendChild(p);
+  conversacion.appendChild(div);
+  conversacion.scrollTop = conversacion.scrollHeight;
+}
+
+// El audio del agente llega en trozos de PCM de 16 bits. Se encolan y se
+// reproducen en orden: si se lanzaran a la vez sonarían encabalgados.
+function reproducir(pcm, frecuencia) {
+  cola = cola.then(() => new Promise(resolve => {
+    const muestras = new Int16Array(pcm);
+    const buffer = contexto.createBuffer(1, muestras.length, frecuencia);
+    const canal = buffer.getChannelData(0);
+    for (let i = 0; i < muestras.length; i++) canal[i] = muestras[i] / 32768;
+    const nodo = contexto.createBufferSource();
+    nodo.buffer = buffer;
+    nodo.connect(contexto.destination);
+    nodo.onended = () => resolve();
+    nodo.start();
+  }));
+  return cola;
+}
+
+// El micrófono va a la frecuencia que le dé la gana el sistema (48 kHz casi
+// siempre) y la tubería espera 16 kHz. Se remuestrea aquí, en el navegador,
+// porque mandar 48 kHz por el socket es triplicar el tráfico para tirar dos
+// tercios al llegar.
+const WORKLET = `
+class Captura extends AudioWorkletProcessor {
+  constructor() { super(); this.resto = []; }
+  process(entradas) {
+    const entrada = entradas[0][0];
+    if (!entrada) return true;
+    const factor = sampleRate / 16000;
+    const salida = new Int16Array(Math.floor(entrada.length / factor));
+    for (let i = 0; i < salida.length; i++) {
+      const v = entrada[Math.floor(i * factor)];
+      salida[i] = Math.max(-1, Math.min(1, v)) * 32767;
+    }
+    let pico = 0;
+    for (let i = 0; i < entrada.length; i++) pico = Math.max(pico, Math.abs(entrada[i]));
+    this.port.postMessage({ pcm: salida.buffer, pico }, [salida.buffer]);
+    return true;
+  }
+}
+registerProcessor("captura", Captura);
+`;
+
+async function llamar() {
+  boton.disabled = true;
+  estado.firstChild.textContent = "Pidiendo el micrófono… ";
+  try {
+    flujo = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
+    });
+  } catch (e) {
+    estado.firstChild.textContent = "No se pudo abrir el micrófono: " + e.message +
+      " — recuerda que solo funciona en localhost o https. ";
+    boton.disabled = false;
+    return;
+  }
+
+  contexto = new AudioContext();
+  const url = URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" }));
+  await contexto.audioWorklet.addModule(url);
+  fuente = contexto.createMediaStreamSource(flujo);
+  worklet = new AudioWorkletNode(contexto, "captura");
+
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = "arraybuffer";
+
+  ws.onmessage = async (ev) => {
+    if (typeof ev.data !== "string") {
+      if (esperandoAudio) {
+        const { frecuencia } = esperandoAudio;
+        esperandoAudio = null;
+        await reproducir(ev.data, frecuencia);
+        ws.send(JSON.stringify({ fin: "reproduccion" }));
+      }
+      return;
+    }
+    const m = JSON.parse(ev.data);
+    if (m.tipo === "oido") {
+      pinta("quien llama", m.texto);
+    } else if (m.tipo === "dice") {
+      pinta("agente", m.texto, m.datos.clase === "puente" ? "puente" : null);
+      esperandoAudio = { frecuencia: m.datos.frecuencia };
+    } else if (m.tipo === "estado") {
+      estado.firstChild.textContent = m.texto === "sigo escuchando"
+        ? `Sigo escuchando: ${m.datos.motivo}. `
+        : `Estado: ${m.texto}. `;
+      if (m.texto === "sigo escuchando") {
+        pinta("quien llama", `…${m.datos.parcial}`, "parcial");
+      }
+    } else if (m.tipo === "herramienta") {
+      const div = document.createElement("div");
+      div.className = "paso";
+      div.innerHTML = `<code>${m.texto}</code> <span class="arg">` +
+        `${JSON.stringify(m.datos.argumentos)} · ${m.datos.ms} ms</span>`;
+      pasos.appendChild(div);
+    } else if (m.tipo === "tiempos") {
+      document.getElementById("t-audio").textContent = m.datos.primer_audio_ms + " ms";
+      document.getElementById("t-dato").textContent = m.datos.primer_dato_ms + " ms";
+      document.getElementById("t-asr").textContent = m.datos.ms_asr + " ms";
+      document.getElementById("t-reanud").textContent = m.datos.reanudaciones;
+    }
+  };
+
+  worklet.port.onmessage = (ev) => {
+    nivel.style.width = Math.min(100, Math.sqrt(ev.data.pico) * 140) + "%";
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(ev.data.pcm);
+  };
+
+  fuente.connect(worklet);
+  boton.disabled = false;
+  boton.textContent = "Colgar";
+  boton.classList.add("colgar");
+  boton.onclick = colgar;
+}
+
+function colgar() {
+  if (ws) ws.close();
+  if (flujo) flujo.getTracks().forEach(t => t.stop());
+  if (contexto) contexto.close();
+  boton.textContent = "Llamar";
+  boton.classList.remove("colgar");
+  boton.onclick = llamar;
+  estado.firstChild.textContent = "Llamada terminada. ";
+  nivel.style.width = "0";
+}
+
+boton.onclick = llamar;
+</script>
+</body>
+</html>

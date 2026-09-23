@@ -77,6 +77,14 @@ def parece_incompleto(texto: str, esperando: str | None = None) -> str | None:
     normalizado = normalizar(texto)
     cifras = re.findall(r"\d+", normalizado)
 
+    # Que nadie haya pedido el documento no significa que no lo estén dando.
+    # Si la propia frase dice "cédula" o "documento", el número que venga
+    # detrás es eso, y un número corto es un número a medio decir. Sin esto,
+    # el primer turno de la llamada —donde el agente todavía no ha preguntado
+    # nada— se corta igual, y ahí es donde más duele.
+    if esperando is None and re.search(r"\b(c[eé]dula|documento|nit)\b", texto.lower()):
+        esperando = "documento"
+
     if esperando == "documento":
         completo = [c for c in cifras
                     if MINIMO_DOCUMENTO <= len(c) <= MAXIMO_DOCUMENTO]
@@ -108,6 +116,14 @@ if __name__ == "__main__":
         # del documento puede verlo.
         ("mi cédula es 234 y llamo por lo de la tarjeta", "documento", True),
         ("ahora mismo no me acuerdo", "documento", True),
+        # Sin que nadie haya preguntado nada: la frase misma dice "cédula".
+        # Esto salió de la primera llamada por el navegador, donde el primer
+        # turno se cortaba igual porque el agente aún no había pedido el dato.
+        ("claro que sí, mirá mis datos son mi cédula es 70 234", None, True),
+        ("mi cédula es 70 23 4 5 6 7", None, False),
+        # Y el caso contrario, para que la regla no se dispare sola: hay un
+        # número corto, pero nadie está dando un documento.
+        ("me cobraron 40 pesos de más", None, False),
         ("mi número de documento es el uno cero siete cero dos tres cuatro cinco seis siete",
          "documento", False),
         ("buenas, me bloquearon la tarjeta y no sé por qué", None, False),
