@@ -12,26 +12,84 @@ de escribirlo. Gastar poco para saber si conviene gastar mucho.
 
 ---
 
-## El resultado que justifica haber medido primero
+## El número, y cómo cambió tres veces
 
-El objetivo era **800 ms por turno**, que es donde una conversación empieza a
-sentirse rota. La primera medición dijo 2296 ms. La cifra actual es **916 ms**,
-y entre una y otra no se escribió ni una línea del sistema: solo se corrigió
-cómo se medía.
+El objetivo es **800 ms por turno**, que es donde una conversación empieza a
+sentirse rota.
 
-| | p50 |
+| | |
 |---|---|
-| primera medición | 2296 ms |
-| tras corregir el método | **916 ms** |
+| primera medición, por etapas sueltas | 2296 ms |
+| lo mismo, tras corregir tres errores de método | 916 ms |
+| el turno completo, con un solo cronómetro | 2389 ms |
+| **con frase puente: cuando deja de oírse silencio** | **1424 ms** |
+| **con frase puente: cuando llega el dato** | **2061 ms** |
 | objetivo | 800 ms |
 
-Los 1380 ms de diferencia no eran optimización. Eran tres errores de medición.
+Las dos primeras filas son la **suma de cuatro etapas medidas por separado**, y
+entre una y otra no se escribió ni una línea del sistema: los 1380 ms de
+diferencia no fueron optimización, fueron tres errores de medición.
+
+La tercera fila es el turno de verdad, y es la que cuenta.
+
+### Por qué la suma de las partes mentía: 2389 ms
+
+La suma de las partes daba 916 ms: cuatro etapas medidas **cada una por separado y en su
+mejor caso**. Cuando el turno corre entero —audio en tiempo real, detección de
+fin de habla, transcripción, agente con su herramienta, síntesis— y se
+cronometra con un solo reloj desde que la persona se calla hasta que hay audio
+que reproducir, sale **2389 ms**. Dos veces y media más.
+
+| etapa | presupuesto por partes | turno completo | |
+|---|---|---|---|
+| fin de habla | 300 ms | 300 ms | |
+| voz a texto | 162 ms | 542 ms | 3,3× |
+| agente | 325 ms | 1267 ms | 3,9× |
+| texto a voz | 128 ms | 274 ms | 2,1× |
+| **total** | **916 ms** | **2389 ms** | **2,6×** |
+
+Por qué cada una:
+
+- **El agente no hace una llamada al modelo, hace dos.** Los 325 ms eran el
+  tiempo hasta el primer contenido hablable de **una** petición. Un turno real
+  decide llamar a una herramienta, espera a la herramienta, y vuelve a
+  preguntarle al modelo con el resultado. Ninguna sonda veía esa cadena.
+- **El voz a texto transcribe la intervención entera**, 8,4 s, no la cola de
+  2 s que medía la sonda. Con un ASR en streaming de verdad volvería a
+  parecerse a los 162 ms, pero eso es una estimación y no está medido.
+- **La síntesis depende de la frase.** 128 ms era una frase corta preparada;
+  lo que contesta el agente es más largo.
+
+El presupuesto por partes sigue siendo útil para saber dónde tocar. Pero **el
+número del proyecto es el de punta a punta**.
+
+### Y hay dos números de punta a punta, no uno
+
+De esos 1296 ms del agente, casi todos son silencio: el modelo decide llamar a
+una herramienta, se espera la consulta, y se le vuelve a preguntar con el
+resultado. Así que el agente **dice una frase puente** en cuanto sabe que va a
+haber espera — *"Permítame un momento, lo estoy revisando"* — que es verdad,
+porque está consultando.
+
+| | sin puente | con puente |
+|---|---|---|
+| **primer audio**, cuando deja de oírse silencio | 2389 ms | **1424 ms** |
+| **primer dato**, cuando se entera de algo | 2389 ms | 2061 ms |
+
+**Los dos se publican siempre juntos, y esa es la parte importante.** La frase
+puente mejora el primero en casi un segundo y no toca el segundo: la espera
+sigue ahí, solo que tapada. Dar únicamente el 1424 convertiría un relleno en
+una mejora de rendimiento. La sonda imprime los dos y guarda los dos, para que
+no se pueda contar a medias sin editarlo a mano. Razonado en
+[`docs/adr/0003`](docs/adr/0003-que-dice-el-agente-mientras-la-herramienta-corre.md).
 
 ---
 
 ## Presupuesto del turno
 
-Medido el 2026-09-19 en un portátil con RTX 3050 de 6 GB. Qué instante a qué
+Cada etapa medida POR SEPARADO y en su mejor caso, el 2026-09-19, en un portátil
+con RTX 3050 de 6 GB. La suma de esta tabla no es lo que tarda un turno: para eso
+está la sección de arriba. Qué instante a qué
 instante se cronometra en cada etapa: [`docs/adr/0001`](docs/adr/0001-que-se-mide-en-el-presupuesto-del-turno.md).
 
 | etapa | p50 | p95 | n | cómo |
