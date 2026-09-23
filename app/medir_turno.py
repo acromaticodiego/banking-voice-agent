@@ -53,6 +53,13 @@ def main() -> int:
     parser.add_argument("--audio", default="muestra-libre-datos.wav")
     parser.add_argument("--repeticiones", type=int, default=3)
     parser.add_argument("--ventana-ms", type=int, default=300)
+    parser.add_argument("--tardanza-herramienta-ms", type=int, default=0,
+                        help="lo que tardaria un core bancario de verdad; la "
+                             "herramienta de mentira contesta en 5 ms y con eso "
+                             "el problema no existe")
+    parser.add_argument("--adelantar", action="store_true",
+                        help="dispara consultar_identidad en cuanto el ASR "
+                             "reconoce un documento, sin esperar al modelo")
     args = parser.parse_args()
 
     ruta = ARTEFACTOS / args.audio
@@ -109,12 +116,15 @@ def main() -> int:
     )
     por_etapa: dict[str, list[float]] = {}
     huecos: list[float] = []
+    adelantos: list[int] = []
     ultimo = None
 
     for vuelta in range(1, args.repeticiones + 1):
         # Agente nuevo en cada vuelta: la historia acumulada cambiaría el
         # tamaño del contexto y con él la latencia del modelo.
-        agente = Agente(groq, modelo_llm, BASE)
+        agente = Agente(groq, modelo_llm, BASE,
+                        adelantar=args.adelantar,
+                        tardanza_herramienta_ms=args.tardanza_herramienta_ms)
         tuberia = Tuberia(asr, voz, agente, ventana_silencio_ms=args.ventana_ms)
         r = tuberia.turno(audio)
         ultimo = r
@@ -124,6 +134,7 @@ def main() -> int:
         for e in r.etapas:
             por_etapa.setdefault(e.nombre, []).append(e.ms)
         huecos.append(r.sin_contabilizar_ms)
+        adelantos.append(r.adelantos_usados)
 
         print(f"  vuelta {vuelta}/{args.repeticiones}: "
               f"primer audio {r.ms_primer_audio or 0:.0f} ms, "
@@ -173,6 +184,16 @@ def main() -> int:
     # puente baja el primero y no toca el segundo: publicar solo el primero
     # convertiria un relleno en una mejora.
     medida_dato = statistics.median(dato.muestras_ms)
+
+    if args.adelantar:
+        usados = sum(adelantos)
+        print(f"\nCONSULTAS ADELANTADAS: {usados} de {len(adelantos)} vueltas "
+              "sirvieron la consulta ya hecha.")
+        print(f"  Eso saca los {args.tardanza_herramienta_ms} ms del core de la "
+              "ruta crítica, y ese conteo es determinista.")
+        print("  El efecto en el tiempo TOTAL no se puede afirmar con esta muestra:")
+        print("  las dos llamadas al modelo varían más que lo que se ahorra.")
+
     print("\nLO QUE OYE QUIEN LLAMA")
     print("=" * 66)
     print(f"  primer audio (deja de oír silencio) {medida:>9.0f} ms")

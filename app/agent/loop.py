@@ -22,11 +22,19 @@ argumentos, lo que devolvió y cuánto tardó. Eso es el expediente.
 from __future__ import annotations
 
 import json
+import re
+import sys
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import httpx
+
+# `numeros_es` vive con las sondas: es la misma pieza que normaliza los
+# numeros dichos en voz alta, y duplicarla seria tener dos verdades.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "probe"))
 
 SISTEMA = (
     "Agente telefónico de un banco colombiano. Frases cortas: esto se habla. "
@@ -83,6 +91,18 @@ HERRAMIENTAS = [
 # —preguntar dos veces no rompe nada— pero abrir un ticket sí.
 CON_EFECTO = {"escalar_a_humano"}
 
+# Herramientas que se pueden disparar ANTES de que el modelo las pida.
+# Solo las de lectura pura: preguntar dos veces por un documento no cambia
+# nada, y si el modelo acaba no pidiéndola, lo único que se pierde es una
+# consulta. Ninguna con efecto entra aquí, y no por prudencia: adelantar una
+# escalada sería abrir un ticket que nadie pidió.
+ADELANTABLES = {"consultar_identidad"}
+
+# Un documento colombiano dicho en voz alta y ya normalizado a cifras. Entre
+# seis y once dígitos seguidos: por debajo es un importe o una hora, por
+# encima no es un documento.
+PATRON_DOCUMENTO = re.compile(r"\b(\d{6,11})\b")
+
 # Lo que dice el agente mientras una herramienta corre.
 #
 # Existe porque el turno con herramienta son dos llamadas al modelo con una
@@ -119,6 +139,8 @@ class Turno:
     ms_total: float = 0.0
     agotado: bool = False
     puente: str = ""              # lo que se dijo mientras la herramienta corría
+    adelantada: bool = False      # se disparó una consulta antes de que el modelo la pidiera
+    adelantos_usados: int = 0     # cuántas de esas consultas acabó usando el modelo
     ms_puente: float | None = None
     clave: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
@@ -131,23 +153,83 @@ class Turno:
 
 class Agente:
     def __init__(self, cliente_groq, modelo: str, base_herramientas: str,
-                 presupuesto_ms: float = 3000.0) -> None:
+                 presupuesto_ms: float = 3000.0, adelantar: bool = False,
+                 tardanza_herramienta_ms: int = 0) -> None:
         self.groq = cliente_groq
         self.modelo = modelo
         self.base = base_herramientas.rstrip("/")
         self.presupuesto_ms = presupuesto_ms
         self.historia: list[dict] = [{"role": "system", "content": SISTEMA}]
+        self.adelantar = adelantar
+        # Lo que tardaría un core bancario de verdad. La herramienta de mentira
+        # contesta en 5 ms, y con eso el problema que se quiere medir no existe.
+        self.tardanza_ms = tardanza_herramienta_ms
+        self._adelantadas: dict[tuple, dict] = {}
+        self._hilos_vivos: list = []
+
+    # ------------------------------------------------------ adelantar consulta
+
+    def _lanzar_adelantada(self, dicho: str, clave: str):
+        """Dispara `consultar_identidad` sin esperar a que el modelo la pida.
+
+        Si en lo que dijo la persona hay algo con forma de documento, la
+        consulta puede salir YA, en paralelo con la primera llamada al modelo,
+        en vez de detrás. Cuando el modelo la pida, el resultado ya está.
+
+        La apuesta se pierde a veces —quien llama dice un número que no era su
+        documento, o el modelo decide preguntar otra cosa— y entonces se ha
+        gastado una consulta de lectura para nada. Ese es todo el coste, y por
+        eso solo se adelantan herramientas sin efecto.
+        """
+        if not self.adelantar:
+            return None
+        from numeros_es import normalizar
+
+        encontrado = PATRON_DOCUMENTO.search(normalizar(dicho))
+        if not encontrado:
+            return None
+        documento = encontrado.group(1)
+        llave = ("consultar_identidad", documento)
+
+        def trabajo() -> None:
+            resultado, ms = self._llamar(
+                "consultar_identidad", {"documento": documento}, clave)
+            self._adelantadas[llave] = {"resultado": resultado, "ms": ms}
+
+        hilo = threading.Thread(target=trabajo, daemon=True)
+        hilo.start()
+        return hilo
 
     # ------------------------------------------------------------ herramientas
 
     def _ejecutar(self, nombre: str, argumentos: dict, clave: str) -> tuple[dict, float]:
+        """Devuelve el resultado, usando el adelantado si lo hay."""
+        if nombre in ADELANTABLES:
+            llave = (nombre, "".join(c for c in str(argumentos.get("documento", ""))
+                                     if c.isdigit()))
+            # Puede estar ya hecha, o estar corriendo. En el segundo caso se
+            # espera a que acabe: aun así se ha ganado todo el tiempo que
+            # llevaba en marcha mientras el modelo pensaba.
+            for _ in range(200):
+                if llave in self._adelantadas:
+                    hecho = self._adelantadas.pop(llave)
+                    return hecho["resultado"], 0.0
+                if not any(h.is_alive() for h in self._hilos_vivos):
+                    break
+                time.sleep(0.005)
+        return self._llamar(nombre, argumentos, clave)
+
+    def _llamar(self, nombre: str, argumentos: dict, clave: str) -> tuple[dict, float]:
         cuerpo = dict(argumentos)
         if nombre in CON_EFECTO:
             cuerpo["clave_idempotencia"] = clave
+        cabeceras = {}
+        if self.tardanza_ms:
+            cabeceras["X-Tardar-Ms"] = str(self.tardanza_ms)
         arranque = time.perf_counter()
         try:
-            with httpx.Client(timeout=5) as c:
-                r = c.post(f"{self.base}/{nombre}", json=cuerpo)
+            with httpx.Client(timeout=10) as c:
+                r = c.post(f"{self.base}/{nombre}", json=cuerpo, headers=cabeceras)
             ms = (time.perf_counter() - arranque) * 1000
             if r.status_code >= 400:
                 # Al modelo se le dice que falló, no se le oculta. Es él quien
@@ -173,6 +255,15 @@ class Agente:
         """
         turno = Turno()
         arranque = time.perf_counter()
+
+        # Lo primero, antes incluso de preguntarle al modelo: si en lo que
+        # dijo la persona ya hay un documento, la consulta sale ahora y corre
+        # en paralelo con la decision del modelo.
+        hilo = self._lanzar_adelantada(dicho, turno.clave)
+        if hilo is not None:
+            self._hilos_vivos = [hilo]
+            turno.adelantada = True
+
         self.historia.append({"role": "user", "content": dicho})
         paso = 0
 
@@ -242,7 +333,17 @@ class Agente:
                 except json.JSONDecodeError:
                     argumentos = {}
                 resultado, ms = self._ejecutar(nombre, argumentos, turno.clave)
-                turno.rastro.append(Paso("herramienta", nombre, ms,
+                # Una consulta servida por el adelanto sale a coste cero en la
+                # ruta critica: ya estaba hecha. Se marca para poder contarlas,
+                # porque ese conteo SI es deterministico, mientras que el
+                # efecto en el tiempo total se pierde en la varianza de las
+                # llamadas al modelo.
+                if ms == 0.0 and nombre in ADELANTABLES:
+                    nombre_paso = f"{nombre} (adelantada)"
+                    turno.adelantos_usados += 1
+                else:
+                    nombre_paso = nombre
+                turno.rastro.append(Paso("herramienta", nombre_paso, ms,
                                          argumentos=argumentos, resultado=resultado,
                                          error=resultado.get("error")))
                 self.historia.append({
