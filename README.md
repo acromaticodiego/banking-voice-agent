@@ -12,24 +12,27 @@ de escribirlo. Gastar poco para saber si conviene gastar mucho.
 
 ---
 
-## El resultado que justifica haber medido primero
+## El número, y cómo cambió tres veces
 
-El objetivo era **800 ms por turno**, que es donde una conversación empieza a
-sentirse rota. La primera medición dijo 2296 ms. La cifra actual es **916 ms**,
-y entre una y otra no se escribió ni una línea del sistema: solo se corrigió
-cómo se medía.
+El objetivo es **800 ms por turno**, que es donde una conversación empieza a
+sentirse rota.
 
-| | p50 |
+| | |
 |---|---|
-| primera medición | 2296 ms |
-| tras corregir el método | **916 ms** |
+| primera medición, por etapas sueltas | 2296 ms |
+| lo mismo, tras corregir tres errores de método | 916 ms |
+| **el turno completo, con un solo cronómetro** | **2389 ms** |
 | objetivo | 800 ms |
 
-Los 1380 ms de diferencia no eran optimización. Eran tres errores de medición.
+Las dos primeras filas son la **suma de cuatro etapas medidas por separado**, y
+entre una y otra no se escribió ni una línea del sistema: los 1380 ms de
+diferencia no fueron optimización, fueron tres errores de medición.
 
-### Y después el turno completo dijo otra cosa: 2389 ms
+La tercera fila es el turno de verdad, y es la que cuenta.
 
-Los 916 ms son la suma de cuatro etapas medidas **cada una por separado y en su
+### Por qué la suma de las partes mentía: 2389 ms
+
+La suma de las partes daba 916 ms: cuatro etapas medidas **cada una por separado y en su
 mejor caso**. Cuando el turno corre entero —audio en tiempo real, detección de
 fin de habla, transcripción, agente con su herramienta, síntesis— y se
 cronometra con un solo reloj desde que la persona se calla hasta que hay audio
