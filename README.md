@@ -27,11 +27,45 @@ cómo se medía.
 
 Los 1380 ms de diferencia no eran optimización. Eran tres errores de medición.
 
+### Y después el turno completo dijo otra cosa: 2389 ms
+
+Los 916 ms son la suma de cuatro etapas medidas **cada una por separado y en su
+mejor caso**. Cuando el turno corre entero —audio en tiempo real, detección de
+fin de habla, transcripción, agente con su herramienta, síntesis— y se
+cronometra con un solo reloj desde que la persona se calla hasta que hay audio
+que reproducir, sale **2389 ms**. Dos veces y media más.
+
+| etapa | presupuesto por partes | turno completo | |
+|---|---|---|---|
+| fin de habla | 300 ms | 300 ms | |
+| voz a texto | 162 ms | 542 ms | 3,3× |
+| agente | 325 ms | 1267 ms | 3,9× |
+| texto a voz | 128 ms | 274 ms | 2,1× |
+| **total** | **916 ms** | **2389 ms** | **2,6×** |
+
+Por qué cada una:
+
+- **El agente no hace una llamada al modelo, hace dos.** Los 325 ms eran el
+  tiempo hasta el primer contenido hablable de **una** petición. Un turno real
+  decide llamar a una herramienta, espera a la herramienta, y vuelve a
+  preguntarle al modelo con el resultado. Ninguna sonda veía esa cadena.
+- **El voz a texto transcribe la intervención entera**, 8,4 s, no la cola de
+  2 s que medía la sonda. Con un ASR en streaming de verdad volvería a
+  parecerse a los 162 ms, pero eso es una estimación y no está medido.
+- **La síntesis depende de la frase.** 128 ms era una frase corta preparada;
+  lo que contesta el agente es más largo.
+
+El presupuesto por partes sigue siendo útil para saber dónde tocar. Pero **el
+número del proyecto es el de punta a punta**, y ahora mismo está en 2389 ms
+contra un objetivo de 800.
+
 ---
 
 ## Presupuesto del turno
 
-Medido el 2026-09-19 en un portátil con RTX 3050 de 6 GB. Qué instante a qué
+Cada etapa medida POR SEPARADO y en su mejor caso, el 2026-09-19, en un portátil
+con RTX 3050 de 6 GB. La suma de esta tabla no es lo que tarda un turno: para eso
+está la sección de arriba. Qué instante a qué
 instante se cronometra en cada etapa: [`docs/adr/0001`](docs/adr/0001-que-se-mide-en-el-presupuesto-del-turno.md).
 
 | etapa | p50 | p95 | n | cómo |

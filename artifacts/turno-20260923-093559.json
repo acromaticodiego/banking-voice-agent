@@ -1,0 +1,116 @@
+{
+  "fecha": "2026-09-23T09:35:59.365217-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "turno",
+      "implementacion": "tubería completa (cuda/float16)",
+      "que_mide": "desde el último trozo de audio con voz hasta el primer trozo de audio reproducible",
+      "muestras_ms": [
+        2389.3600000010338,
+        3789.21079999418,
+        2375.5448999872897
+      ],
+      "unidad": "ms",
+      "notas": "Audio muestra-libre-datos.wav. Ventana de silencio 300 ms. Suma de etapas 2383 ms, sin contabilizar 7 ms. El voz a texto transcribe la intervención entera, no en streaming.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 2389.4,
+        "p95": 3649.2,
+        "min": 2375.5,
+        "max": 3789.2
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: fin de habla",
+      "que_mide": "ventana de silencio de 300 ms",
+      "muestras_ms": [
+        300.15710000589024,
+        299.83720000018366,
+        299.99029998725746
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 300.0,
+        "p95": 300.1,
+        "min": 299.8,
+        "max": 300.2
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: voz a texto",
+      "que_mide": "intervención entera (8.4 s), no en streaming",
+      "muestras_ms": [
+        541.8457000050694,
+        584.1361999919172,
+        534.2777000041679
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 541.8,
+        "p95": 579.9,
+        "min": 534.3,
+        "max": 584.1
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: agente",
+      "que_mide": "1 llamada(s) a herramienta",
+      "muestras_ms": [
+        1206.2192999874242,
+        2699.688000007882,
+        1267.0569000038086
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 1267.1,
+        "p95": 2556.4,
+        "min": 1206.2,
+        "max": 2699.7
+      }
+    },
+    {
+      "etapa": "turno",
+      "implementacion": "etapa: texto a voz",
+      "que_mide": "hasta el primer trozo reproducible",
+      "muestras_ms": [
+        340.98769999400247,
+        205.3883000044152,
+        273.91100001113955
+      ],
+      "unidad": "ms",
+      "notas": "",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 273.9,
+        "p95": 334.3,
+        "min": 205.4,
+        "max": 341.0
+      }
+    }
+  ]
+}
