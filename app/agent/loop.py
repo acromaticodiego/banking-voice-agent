@@ -242,6 +242,32 @@ class Agente:
             return {"error": f"no se pudo llamar a la herramienta: "
                              f"{type(exc).__name__}", "reintentable": True}, ms
 
+    def _preguntar_al_modelo(self, reintentos: int = 1):
+        """Una petición al modelo, con un reintento para los fallos de forma.
+
+        Los `tool_use_failed` son del generador, no de la red: el modelo emitió
+        una llamada a herramienta que no valida. Volver a pedirlo suele salir
+        bien porque la temperatura no es cero. Un solo reintento: dos ya se
+        comen el presupuesto del turno, y para eso está la salida a un humano.
+        """
+        ultimo = None
+        for intento in range(reintentos + 1):
+            try:
+                return self.groq.chat.completions.create(
+                    model=self.modelo,
+                    messages=self.historia,
+                    tools=HERRAMIENTAS,
+                    tool_choice="auto",
+                    temperature=0.2,
+                    max_tokens=400,
+                    reasoning_effort="low",
+                )
+            except Exception as exc:  # noqa: BLE001
+                ultimo = exc
+                if "tool_use_failed" not in str(exc):
+                    raise
+        raise ultimo
+
     # ------------------------------------------------------------------ turno
 
     def turno(self, dicho: str, max_pasos: int = 4, al_hablar=None) -> Turno:
@@ -281,15 +307,29 @@ class Agente:
                 break
 
             t0 = time.perf_counter()
-            respuesta = self.groq.chat.completions.create(
-                model=self.modelo,
-                messages=self.historia,
-                tools=HERRAMIENTAS,
-                tool_choice="auto",
-                temperature=0.2,
-                max_tokens=400,
-                reasoning_effort="low",
-            )
+            try:
+                respuesta = self._preguntar_al_modelo()
+            except Exception as exc:  # noqa: BLE001
+                # El modelo puede generar una llamada a herramienta mal formada
+                # —vista de verdad: `functions/escalar_a_humano` con el prefijo
+                # pegado— y entonces la API devuelve un 400 y se lleva el turno
+                # por delante. Un fallo del proveedor no puede dejar a alguien
+                # escuchando silencio al teléfono: se anota y se sale por la
+                # salida honesta, que es un humano.
+                turno.rastro.append(Paso("modelo", "el modelo falló",
+                                         (time.perf_counter() - t0) * 1000,
+                                         error=f"{type(exc).__name__}: {exc}"))
+                turno.texto = ("Disculpe, tuve un problema técnico. "
+                               "Le paso con un asesor.")
+                resultado, ms = self._llamar("escalar_a_humano",
+                                             {"motivo": "fallo del modelo"},
+                                             turno.clave)
+                turno.rastro.append(Paso("herramienta", "escalar_a_humano", ms,
+                                         argumentos={"motivo": "fallo del modelo"},
+                                         resultado=resultado))
+                if al_hablar:
+                    al_hablar(turno.texto, "respuesta")
+                break
             ms_modelo = (time.perf_counter() - t0) * 1000
             mensaje = respuesta.choices[0].message
             turno.rastro.append(Paso("modelo",
