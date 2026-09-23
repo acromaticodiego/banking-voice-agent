@@ -61,8 +61,16 @@ class TurnoCompleto:
     punta_a_punta_ms: float = 0.0
     dicho: str = ""
     contestado: str = ""
+    puente: str = ""
     muestras_audio: int = 0
     rastro: list = field(default_factory=list)
+
+    # Los dos instantes que hay que publicar juntos. El primero es cuándo quien
+    # llama deja de oír silencio; el segundo, cuándo se entera de algo. Una
+    # frase puente mejora el primero y no toca el segundo, así que dar solo el
+    # primero sería maquillar la métrica.
+    ms_primer_audio: float | None = None
+    ms_primer_dato: float | None = None
 
     @property
     def suma_etapas_ms(self) -> float:
@@ -161,23 +169,31 @@ class Tuberia:
             "voz a texto", (time.perf_counter() - t) * 1000,
             f"intervención entera ({len(completo) / FRECUENCIA:.1f} s), no en streaming"))
 
+        # El agente avisa en cuanto hay algo pronunciable. Puede ser la frase
+        # puente, no la respuesta: por eso se apuntan los dos instantes.
+        def hablar(texto: str, clase: str) -> None:
+            inicio_tts = time.perf_counter()
+            for trozo_audio in self.tts.synthesize(texto):
+                if trozo_audio.audio_int16_bytes:
+                    break
+            ahora = time.perf_counter()
+            if resultado.ms_primer_audio is None:
+                resultado.ms_primer_audio = (ahora - t_cero) * 1000
+                resultado.etapas.append(Etapa(
+                    "texto a voz", (ahora - inicio_tts) * 1000,
+                    f"hasta el primer trozo reproducible ({clase})"))
+            if clase == "respuesta":
+                resultado.ms_primer_dato = (ahora - t_cero) * 1000
+
         t = time.perf_counter()
-        turno_agente = self.agente.turno(resultado.dicho)
+        turno_agente = self.agente.turno(resultado.dicho, al_hablar=hablar)
         resultado.contestado = turno_agente.texto
+        resultado.puente = turno_agente.puente
         resultado.rastro = turno_agente.rastro
         llamadas = sum(1 for p in turno_agente.rastro if p.tipo == "herramienta")
         resultado.etapas.append(Etapa(
             "agente", (time.perf_counter() - t) * 1000,
             f"{llamadas} llamada(s) a herramienta"))
-
-        t = time.perf_counter()
-        primer_trozo_ms = None
-        for trozo_audio in self.tts.synthesize(resultado.contestado):
-            if trozo_audio.audio_int16_bytes:
-                primer_trozo_ms = (time.perf_counter() - t) * 1000
-                break
-        resultado.etapas.append(Etapa(
-            "texto a voz", primer_trozo_ms or 0.0, "hasta el primer trozo reproducible"))
 
         resultado.punta_a_punta_ms = (time.perf_counter() - t_cero) * 1000
         return resultado

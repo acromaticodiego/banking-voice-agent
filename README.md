@@ -21,7 +21,9 @@ sentirse rota.
 |---|---|
 | primera medición, por etapas sueltas | 2296 ms |
 | lo mismo, tras corregir tres errores de método | 916 ms |
-| **el turno completo, con un solo cronómetro** | **2389 ms** |
+| el turno completo, con un solo cronómetro | 2389 ms |
+| **con frase puente: cuando deja de oírse silencio** | **1424 ms** |
+| **con frase puente: cuando llega el dato** | **2061 ms** |
 | objetivo | 800 ms |
 
 Las dos primeras filas son la **suma de cuatro etapas medidas por separado**, y
@@ -59,8 +61,27 @@ Por qué cada una:
   lo que contesta el agente es más largo.
 
 El presupuesto por partes sigue siendo útil para saber dónde tocar. Pero **el
-número del proyecto es el de punta a punta**, y ahora mismo está en 2389 ms
-contra un objetivo de 800.
+número del proyecto es el de punta a punta**.
+
+### Y hay dos números de punta a punta, no uno
+
+De esos 1296 ms del agente, casi todos son silencio: el modelo decide llamar a
+una herramienta, se espera la consulta, y se le vuelve a preguntar con el
+resultado. Así que el agente **dice una frase puente** en cuanto sabe que va a
+haber espera — *"Permítame un momento, lo estoy revisando"* — que es verdad,
+porque está consultando.
+
+| | sin puente | con puente |
+|---|---|---|
+| **primer audio**, cuando deja de oírse silencio | 2389 ms | **1424 ms** |
+| **primer dato**, cuando se entera de algo | 2389 ms | 2061 ms |
+
+**Los dos se publican siempre juntos, y esa es la parte importante.** La frase
+puente mejora el primero en casi un segundo y no toca el segundo: la espera
+sigue ahí, solo que tapada. Dar únicamente el 1424 convertiría un relleno en
+una mejora de rendimiento. La sonda imprime los dos y guarda los dos, para que
+no se pueda contar a medias sin editarlo a mano. Razonado en
+[`docs/adr/0003`](docs/adr/0003-que-dice-el-agente-mientras-la-herramienta-corre.md).
 
 ---
 

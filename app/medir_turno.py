@@ -96,9 +96,16 @@ def main() -> int:
           f"lo que dura el audio.\n")
 
     punta = Medicion(
-        etapa="turno", implementacion=f"tubería completa ({dispositivo})",
+        etapa="turno", implementacion=f"tubería completa ({dispositivo}) [primer audio]",
         que_mide="desde el último trozo de audio con voz hasta el primer trozo "
-                 "de audio reproducible",
+                 "de audio reproducible, sea la respuesta o la frase puente",
+    )
+    dato = Medicion(
+        etapa="turno", implementacion=f"tubería completa ({dispositivo}) [primer dato]",
+        que_mide="desde el último trozo de audio con voz hasta que empieza a sonar "
+                 "la respuesta con la información pedida",
+        notas="La frase puente no mueve este número. Publicarlo al lado del otro "
+              "es lo que impide que un relleno pase por una mejora.",
     )
     por_etapa: dict[str, list[float]] = {}
     huecos: list[float] = []
@@ -112,15 +119,16 @@ def main() -> int:
         r = tuberia.turno(audio)
         ultimo = r
 
-        punta.muestras_ms.append(r.punta_a_punta_ms)
+        punta.muestras_ms.append(r.ms_primer_audio or r.punta_a_punta_ms)
+        dato.muestras_ms.append(r.ms_primer_dato or r.punta_a_punta_ms)
         for e in r.etapas:
             por_etapa.setdefault(e.nombre, []).append(e.ms)
         huecos.append(r.sin_contabilizar_ms)
 
         print(f"  vuelta {vuelta}/{args.repeticiones}: "
-              f"punta a punta {r.punta_a_punta_ms:.0f} ms, "
-              f"suma de etapas {r.suma_etapas_ms:.0f} ms, "
-              f"sin contabilizar {r.sin_contabilizar_ms:.0f} ms")
+              f"primer audio {r.ms_primer_audio or 0:.0f} ms, "
+              f"primer dato {r.ms_primer_dato or 0:.0f} ms"
+              + (f"  (puente: {r.puente!r})" if r.puente else ""))
 
     servidor.should_exit = True
     hilo.join(timeout=5)
@@ -160,6 +168,20 @@ def main() -> int:
     print(f"  {'TOTAL':<18}{total_publicado:>10.0f} ms{medida:>9.0f} ms")
     print(f"  {'objetivo':<18}{800:>10} ms")
 
+    # Los dos instantes, juntos y siempre. El primero mide cuando quien llama
+    # deja de oir silencio; el segundo, cuando se entera de algo. Una frase
+    # puente baja el primero y no toca el segundo: publicar solo el primero
+    # convertiria un relleno en una mejora.
+    medida_dato = statistics.median(dato.muestras_ms)
+    print("\nLO QUE OYE QUIEN LLAMA")
+    print("=" * 66)
+    print(f"  primer audio (deja de oír silencio) {medida:>9.0f} ms")
+    print(f"  primer dato  (se entera de algo)    {medida_dato:>9.0f} ms")
+    if ultimo.puente:
+        print(f"\n  Entre los dos suena: {ultimo.puente!r}")
+        print(f"  Son {medida_dato - medida:.0f} ms de frase puente. El silencio se")
+        print("  tapa; la espera sigue ahi, y por eso se publican los dos numeros.")
+
     if medida > total_publicado * 1.3:
         print(f"\n  El turno de verdad tarda {medida / total_publicado:.1f} veces lo que")
         print("  decía el presupuesto. Las sondas medían cada etapa aislada y en su")
@@ -181,7 +203,7 @@ def main() -> int:
                  muestras_ms=valores)
         for nombre, valores in por_etapa.items()
     ]
-    destino = guardar([punta, *etapas_med], "turno")
+    destino = guardar([punta, dato, *etapas_med], "turno")
     print(f"\nGuardado en {destino}")
     return 0
 

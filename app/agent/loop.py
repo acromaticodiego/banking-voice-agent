@@ -83,6 +83,22 @@ HERRAMIENTAS = [
 # —preguntar dos veces no rompe nada— pero abrir un ticket sí.
 CON_EFECTO = {"escalar_a_humano"}
 
+# Lo que dice el agente mientras una herramienta corre.
+#
+# Existe porque el turno con herramienta son dos llamadas al modelo con una
+# consulta en medio, y medido de punta a punta eso son 1267 ms de silencio. Una
+# persona al teléfono no aguanta un segundo y medio de nada sin pensar que se
+# cortó la llamada.
+#
+# La frase es verdad: el agente **está** consultando. Si fuera mentira sería
+# peor que el silencio.
+#
+# Y tiene un coste que hay que decir: usada en todos los turnos suena a relleno
+# y delata que el sistema es lento. Por eso solo se emite cuando el modelo
+# decide llamar a una herramienta en su PRIMER paso, que es el caso en que se
+# sabe que va a haber espera.
+FRASE_PUENTE = "Permítame un momento, lo estoy revisando."
+
 
 @dataclass
 class Paso:
@@ -102,6 +118,8 @@ class Turno:
     ms_primer_hablable: float | None = None
     ms_total: float = 0.0
     agotado: bool = False
+    puente: str = ""              # lo que se dijo mientras la herramienta corría
+    ms_puente: float | None = None
     clave: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     def resumen(self) -> str:
@@ -144,13 +162,22 @@ class Agente:
 
     # ------------------------------------------------------------------ turno
 
-    def turno(self, dicho: str, max_pasos: int = 4) -> Turno:
-        """Un turno completo: lo que dijo la persona, lo que contesta el agente."""
+    def turno(self, dicho: str, max_pasos: int = 4, al_hablar=None) -> Turno:
+        """Un turno completo: lo que dijo la persona, lo que contesta el agente.
+
+        `al_hablar` se llama en cuanto hay algo que se pueda pronunciar, que no
+        siempre es la respuesta. Si el modelo decide consultar una herramienta,
+        lo primero que hay que decir es la frase puente, y la respuesta buena
+        llega después. Quien mida esto tiene que quedarse con los dos
+        instantes, no solo con el primero.
+        """
         turno = Turno()
         arranque = time.perf_counter()
         self.historia.append({"role": "user", "content": dicho})
+        paso = 0
 
         for _ in range(max_pasos):
+            paso += 1
             transcurrido = (time.perf_counter() - arranque) * 1000
             if transcurrido > self.presupuesto_ms:
                 # El reloj manda. Decir algo tarde es peor que decir poco a
@@ -197,7 +224,16 @@ class Agente:
 
             if not mensaje.tool_calls:
                 turno.texto = (mensaje.content or "").strip()
+                if al_hablar and turno.texto:
+                    al_hablar(turno.texto, "respuesta")
                 break
+
+            # Va a haber espera: la herramienta y otra llamada al modelo. Se
+            # dice la frase puente ahora, no al final.
+            if paso == 1 and al_hablar:
+                turno.puente = FRASE_PUENTE
+                turno.ms_puente = (time.perf_counter() - arranque) * 1000
+                al_hablar(FRASE_PUENTE, "puente")
 
             for llamada in mensaje.tool_calls:
                 nombre = llamada.function.name
