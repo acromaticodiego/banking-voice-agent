@@ -43,6 +43,7 @@ levantado, no solo compilando.
 | tubería sobre fichero | `app/pipeline.py` | el mismo turno pero alimentado desde un WAV en tiempo real, para medir |
 | evaluación | `app/evaluation/` | 20 casos con su rúbrica y su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas, protocolo de la medición final |
 | fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números y acciones. Determinista, sin modelo |
+| confianza del ASR | `app/confianza.py` | resume lo que el modelo sabe de su propia transcripción. Se anota, no decide. ADR 0008 |
 | canal telefónico | `probe/linea_telefonica.py` | 300–3400 Hz, 8 kHz y µ-law: el audio como llega por una llamada. Se comprueba solo |
 
 **Levantar la demo:**
@@ -59,6 +60,7 @@ levantado, no solo compilando.
 .\.venv\Scripts\python.exe -m app.agent.prueba_silencio      # el turno vacío, sin gastar peticiones
 .\.venv\Scripts\python.exe -m app.agent.prueba_consumo       # el contador de tokens, exacto y sin cuota
 .\.venv\Scripts\python.exe -m app.agent.prueba_reintentos    # tres documentos antes de escalar, sin cuota
+.\.venv\Scripts\python.exe -m app.prueba_confianza          # el filtro de voz sigue puesto, sin cuota ni GPU
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
@@ -78,6 +80,7 @@ levantado, no solo compilando.
 #   el protocolo de la medición final, ensayado sobre calibración. Sin --ensayo
 #   y con --declaro-medicion-final, QUEMA el reservado: k=5, mayoría por caso
 .\.venv\Scripts\python.exe probe\limites_groq.py     # ¿queda cuota HOY? mira el límite diario
+.\.venv\Scripts\python.exe probe\confianza_asr.py   # ¿se inventa Whisper turnos? cero tokens, unos 4 min
 .\.venv\Scripts\python.exe probe\probe_wer.py --linea-telefonica   # la tasa de error por teléfono
 .\.venv\Scripts\python.exe probe\presupuesto.py
 ```
@@ -122,6 +125,40 @@ números críticos se recuperan igual. Los 3,3 puntos del literal, con n=3, no s
 distinguen del ruido. Conclusión honesta: **el canal telefónico no rompe a
 `faster-whisper small` en este material**, y lo que queda por probar no es el
 canal, son las voces y el ruido.
+
+### Turnos que nadie dijo (2026-09-24, 106 clips: 42 con voz, 64 sin ella)
+
+Whisper se inventa frases sobre el ruido de fondo, y lo que se inventa tiene
+letras, así que el guardia del turno vacío —que mira si hay alguna letra o
+dígito— lo deja pasar como si alguien hubiera hablado.
+
+| | sin filtro | con `vad_filter=True` |
+|---|---|---|
+| clips sin voz que producen texto | **7 de 64** | **0 de 64** |
+| clips con voz que se quedan mudos | 0 de 42 | 0 de 42 |
+| turnos que ganan palabras por la cola de silencio | 1 de 18 (+15) | 0 de 18 |
+| latencia, turno de 3 s + 1,2 s, mediana n=18 | 178 ms | 202 ms (**+24 ms**) |
+
+El silencio no es sintético: son tramos de medio segundo de las propias
+grabaciones, cosidos en clips de 1, 2, 4 y 8 s. Ninguno a 1 s, dos a 2 s, uno
+a 4 s, cuatro a 8 s: **cuanto más silencio se le da, más inventa.** Y ninguno
+de los 24 clips pasados por la línea telefónica alucinó.
+
+Lo que sale: *"¿Qué pasa?"*, *"¡Suscríbete!"*, *"Este es el canal de subtítulos
+en español de la Iglesia…"*. La primera es la peligrosa: no delata nada y un
+agente bancario se la traga como turno del cliente. **Qué clip alucina se
+repite entre corridas; qué dice, no** — es el fallback de temperatura de
+Whisper, que es aleatorio por dentro.
+
+Decidido en el ADR 0008: el filtro va puesto y las señales del ASR se anotan
+sin actuar. `probe/confianza_asr.py`.
+
+**AVISO sobre la latencia de arriba:** los 2389 ms del turno son del 23/09,
+**sin el filtro**. El filtro entró el 24/09 y cuesta +24 ms sobre un turno de
+3 s medido aparte, así que el turno de verdad estará en torno a 2413 ms — pero
+**eso es una suma, no una medición**, y este proyecto ya sabe lo que valen las
+sumas de partes. Hay que volver a correr `medir_turno` y publicar el número
+nuevo con su fecha.
 
 ### Coste por conversación (métrica 5): instrumentado, sin medir
 
@@ -218,6 +255,9 @@ medición final lanza una excepción.
   con el reloj de la demo, el prompt nuevo baja de 6 a 4 de 12
 - **0006** qué pasa si una herramienta falla a mitad. El error es un resultado
   para el modelo, no una excepción, y `reintentable` distingue el 5xx del 4xx
+- **0008** qué hace el agente cuando la transcripción no es de fiar. Whisper
+  se inventa turnos sobre el silencio —7 de 64 clips— y `vad_filter=True` los
+  deja en 0 por +24 ms. El umbral de confianza se descartó con su motivo
 - **0007** idempotencia de las acciones con efecto. La clave es del TURNO —ni
   de la llamada ni de la conversación— y de ahí se sigue que nada con efecto
   se puede adelantar. Escribirlo destapó que nadie comprobaba que la lista
@@ -225,7 +265,7 @@ medición final lanza una excepción.
 
 ---
 
-## SIETE VECES QUE UNA MEDICIÓN SALIÓ LIMPIA Y ERA FALSA
+## NUEVE VECES QUE UNA MEDICIÓN SALIÓ LIMPIA Y ERA FALSA
 
 Es la parte más valiosa del proyecto y el mejor material de entrevista.
 **Coherente no es correcto.**
@@ -257,6 +297,20 @@ Es la parte más valiosa del proyecto y el mejor material de entrevista.
    es una virtud. Con el reloj holgado los inventos reaparecen —otros, pero
    reaparecen—. **La medición más limpia de todas es la del sistema al que no
    se le ha dejado funcionar.**
+8. **El filtro de voz costaba +123 ms, y luego +158, y las dos veces era
+   falso** (24/09). Se midió transcribiendo las grabaciones enteras, que duran
+   entre 17 y 30 segundos. Nadie contesta eso por teléfono: un turno son tres
+   segundos de habla y su cola de silencio. Medido sobre eso, el filtro cuesta
+   **+24 ms**. La medición era reproducible, la sonda no tenía ningún fallo y
+   el número estaba mal por 5×, porque **medía el material equivocado**. Es la
+   misma familia que la suma de etapas que mentía por 2,6×.
+9. **Un umbral que separaba 7 de 7 y se cayó solo al enseñarle más material**
+   (24/09). Un corte por `avg_logprob` distinguía perfectamente los turnos
+   inventados de los de verdad. Entraron seis clips de habla más —no de
+   silencio: de habla legítima— y el peor de ellos se puso justo donde estaba
+   el corte, que bajó con él y pasó a cazar 5 de 7. No hubo error de medición:
+   **el umbral nunca había sido bueno, solo había visto poco.** Por eso el ADR
+   0008 anota las señales y no actúa sobre ellas.
 
 Y una más que no es de medición sino de seguridad: **el agente saludaba con
 "Hola, Sr. Ossa" y DESPUÉS pedía el nombre para verificar.** Quien llamara con
@@ -420,9 +474,13 @@ herramienta en medio. Mientras tanto, las dos cifras van juntas.
 El del silencio está hecho (24/09): un turno vacío ya no llega al modelo, se
 contesta con dos preguntas distintas y al tercer silencio se pasa a un humano
 con su ticket. Cuesta cero tokens y cero espera, y `prueba_silencio.py` lo
-cubre con un modelo que revienta si alguien lo llama. **Lo que ese arreglo no
-tapa:** Whisper alucina sobre el silencio y devuelve "Gracias." o un trozo de
-subtítulos; eso no es una cadena vacía y el guardia no lo ve.
+cubre con un modelo que revienta si alguien lo llama.
+
+El hueco que ese arreglo dejaba abierto —Whisper alucinando sobre el silencio,
+que no es una cadena vacía y el guardia no lo ve— **se tapó el 24/09**: el
+filtro de voz lo deja en 0 de 64 clips por +24 ms, y con él puesto el silencio
+llega como cadena vacía, o sea que cae en el guardia que ya estaba probado.
+ADR 0008.
 
 El del documento equivocado también: ahora se prueban **tres documentos
 distintos** antes de pasar a un humano, y la cuenta no la lleva el prompt —que
@@ -448,6 +506,17 @@ ruido de fondo.** n=3 con un solo hablante en una habitación callada no es una
 tasa de error, es una calibración de orden de magnitud. Y con el canal ya
 simulado, cualquier grabación nueva se puede medir por los dos caminos sin
 volver a grabar nada.
+
+**Y ahora hay una razón más para hacerlo, del 24/09.** El ruido de esta
+habitación mide 0,0011 de media absoluta y el `UMBRAL_VOZ` que abre turno es
+0,005: 13 dB de margen, que es lo único que impide hoy que un silencio abra
+un turno. Un aire acondicionado, un manos libres o una calle se comen esos 13
+dB, y con el ruido justo por encima del umbral **2 de 12 clips de silencio se
+transcribieron como frases a los 2 segundos**. El filtro de voz tapa eso (ADR
+0008), pero el umbral sigue calibrado para una sola habitación callada, y eso
+solo se arregla con grabaciones de otras. `probe/confianza_asr.py` ya mide las
+dos cosas —lo que se inventa y lo que el filtro se come— así que una grabación
+nueva entra sin escribir código.
 
 ### 6. Barge-in, que exige cancelación de eco
 Hoy, mientras el agente habla, **se ignora la entrada**, y está declarado como
@@ -483,12 +552,12 @@ quitaría la doble transcripción que hoy cuesta ~500 ms en la ruta crítica, y
 daría la tasa de error en español con acento paisa contra un sistema comercial.
 Medir el coste por minuto desde la primera llamada.
 
-### 11. El ADR que falta
-Solo queda uno: **qué hace el agente cuando la transcripción tiene poca
-confianza**, y ese no está implementado, así que no es escribir sino decidir.
-Los otros tres cayeron el 24/09: el 0005 (no afirmar lo que no venga de una
-herramienta), el 0006 (herramienta que falla a mitad) y el 0007
-(idempotencia).
+### ~~11. El ADR que falta~~ NO FALTA NINGUNO desde el 2026-09-24
+Los cuatro cayeron el 24/09: el 0005 (no afirmar lo que no venga de una
+herramienta), el 0006 (herramienta que falla a mitad), el 0007 (idempotencia)
+y el 0008 (la transcripción que no es de fiar). El 0008 era el único que
+además había que decidir y no solo escribir, y se decidió con la sonda
+delante: `probe/confianza_asr.py`, 106 clips, cero tokens.
 
 Y de escribir los dos últimos salió algo que no se esperaba: **explicar por qué
 la lista de herramientas adelantables es una lista blanca destapó que nadie
@@ -520,6 +589,18 @@ consulta que tardaba 5 ms para arreglar 1267 ms que eran del modelo.
 
 Escrito el 2026-09-24 al final de la sesión. **Es la medición final del
 reservado, y el orden importa porque el reservado se gasta al mirarlo.**
+
+**Lo que pasó al intentarlo (24/09, por la tarde):** el canario dijo que NO
+había cuota —20 fallos del proveedor, identificados como límite diario— y el
+protocolo paró en seco en vez de reintentar, que es justo lo que tenía que
+hacer. La sonda de límites, mientras tanto, decía que quedaban 7920 tokens del
+minuto: la cuarta vez que las cabeceras mienten sobre el día. **El reservado
+sigue intacto.** Con el día quemado se hizo el ADR 0008, que no gasta cuota.
+
+**Y eso añade una razón a lo del paso 1:** el agente volvió a cambiar el 24/09
+por la tarde (el filtro de voz en la ruta del turno). Las 3 corridas de
+calibración no son una formalidad, son la única manera de que el número del
+reservado se pueda comparar con algo.
 
 ### 0. Antes de nada: ¿hay cuota?
 
@@ -581,5 +662,11 @@ En este orden de valor:
 2. **El expediente en PostgreSQL y el estado en Redis** (punto 8): el proyecto
    promete que al colgar queda un expediente y hoy se pierde al cerrar el
    proceso. Es la mayor distancia entre lo que promete y lo que hace.
-3. **El ADR que falta**: qué hace el agente cuando la transcripción tiene poca
-   confianza. No está implementado, así que es decidir, no escribir.
+3. ~~**El ADR que falta**~~ HECHO el 24/09 con el día de cuota ya quemado: es
+   el ADR 0008, y salió con su medición de 106 clips sin gastar un token.
+
+Y una que no estaba en la lista y ahora sí, porque el 0008 la dejó preparada:
+**grabar voz en otra habitación** (punto 5). No hace falta cuota, solo un
+micrófono y un rato de ruido de fondo; `probe/confianza_asr.py` mide con lo que
+haya sin tocar código, y hoy todo el proyecto descansa sobre el suelo de ruido
+de una sola sala callada.

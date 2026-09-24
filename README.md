@@ -129,6 +129,38 @@ identidad lo segundo es lo único que decide.
 Con n=3 y un solo hablante esto calibra el orden de magnitud. No es una tasa
 representativa: para eso hacen falta varias voces, ruido y línea telefónica.
 
+### Turnos que nadie dijo
+
+Hay un error que no aparece en ninguna tasa: el que comete el sistema cuando
+**no se dijo nada**. Whisper se inventa frases sobre el ruido de fondo, y lo
+que se inventa tiene letras, así que el guardia del turno vacío —que mira si
+la transcripción tiene alguna letra o dígito— lo deja pasar como si alguien
+hubiera hablado.
+
+Medido sobre 106 clips (42 con voz, 64 sin ella), con el silencio sacado de las
+propias grabaciones y no sintetizado:
+
+| | sin filtro de voz | con `vad_filter=True` |
+|---|---|---|
+| clips sin voz que producen texto | **7 de 64** | **0 de 64** |
+| clips con voz que se quedan mudos | 0 de 42 | 0 de 42 |
+| turnos que ganan palabras por la cola de silencio | 1 de 18 (+15) | 0 de 18 |
+| coste en el turno (3 s + 1,2 s), mediana n=18 | 178 ms | 202 ms |
+
+Lo que sale: *"¡Suscríbete!"*, *"Este es el canal de subtítulos en español de
+la Iglesia…"* y *"¿Qué pasa?"*. Las dos primeras delatan de dónde vienen. **La
+tercera no delata nada**: es una frase que un cliente diría, y un agente
+bancario le contesta a una habitación vacía.
+
+Dos cosas más, que son las que hacen falta para decidir. **Qué clip alucina se
+repite entre corridas; qué dice, no** — es el fallback de temperatura de
+Whisper. Y **el umbral de confianza, que parecía la solución elegante, no lo
+es**: `no_speech_prob` no separa (hay habla de verdad que llega a 0,93), y un
+corte por `avg_logprob` cazaba 7 de 7 hasta que entraron seis clips de habla
+más, con los que pasó a cazar 5 de 7. El razonamiento completo, con lo que se
+descartó, está en
+[ADR 0008](docs/adr/0008-que-hace-el-agente-cuando-la-transcripcion-no-es-de-fiar.md).
+
 ---
 
 ## El hallazgo: el fin de habla no cabe en el presupuesto
