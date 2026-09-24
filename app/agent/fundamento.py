@@ -17,7 +17,7 @@ Porque un prompt no se puede comprobar. La regla "no afirmes lo que no venga de
 una herramienta" solo es una regla si algo la mide; si no, es un deseo escrito
 en español. Esto es lo que la mide, y es determinista: no llama a ningún modelo.
 
-## Qué comprueba, y son dos cosas distintas
+## Qué comprueba, y son tres cosas distintas
 
   · **Números.** Todo número de cuatro cifras o más que diga el agente tiene
     que estar en lo que devolvieron las herramientas o en lo que dijo quien
@@ -30,23 +30,44 @@ en español. Esto es lo que la mide, y es determinista: no llama a ningún model
     herramientas del agente son dos consultas y una escalada, casi toda acción
     que se atribuya está inventada por construcción.
 
+  · **Procedimientos** (desde el 2026-09-24). Trámites, canales, requisitos y
+    plazos: "acuda a una sucursal", "inicie sesión en la app", "necesitamos que
+    el nuevo titular esté presente", "en 15 días hábiles". No existe
+    herramienta que devuelva un procedimiento, así que afirmarlo es inventarlo.
+    Puede que hasta sea el procedimiento correcto del banco; da igual, el
+    agente no lo sabe, lo supone, y quien llama no puede distinguir una cosa de
+    otra. Incluye los compromisos de que alguien llamará después, que se miran
+    contra la escalada: con el ticket abierto son verdad y sin él no.
+
 ## Lo que NO comprueba, y hay que decirlo
 
-**Los procedimientos.** "Necesitamos que el nuevo titular esté presente y que
-ambos tengan sus documentos" no lleva ningún número y no afirma ninguna acción,
-así que esto lo deja pasar entero. Puede que hasta sea el procedimiento
-correcto del banco; da igual, el agente no tiene de dónde saberlo. Para eso
-sigue estando la lista literal `no_debe_prometer` de cada caso, que es un cepo
-y solo caza lo que ya se vio decir. Las dos piezas se solapan poco y ninguna
+**La voz pasiva.** "Su tarjeta ha sido bloqueada" no se la atribuye nadie, y es
+a la vez la forma más natural de contar un estado que devolvió la herramienta.
+Queda fuera a propósito (más abajo).
+
+Y sigue estando la lista literal `no_debe_prometer` de cada caso, que es un
+cepo y solo caza lo que ya se vio decir. Las piezas se solapan poco y ninguna
 sobra.
 
-**La voz pasiva.** "Su tarjeta ha sido bloqueada" no se la atribuye nadie, y es
-a la vez la forma más natural de contar un estado que devolvió la herramienta
-—cuyo motivo, literalmente, es "movimiento inusual detectado el 2026-09-15"—.
-Queda fuera a propósito: marcarla convertiría la respuesta correcta del caso
-principal en un invento. Solo se persigue la primera persona, que es donde
-está la mentira que importa: la que hace que quien llama cuelgue creyendo que
-alguien ha hecho algo.
+## Cuánto caza, medido
+
+Sobre **147 respuestas reales del agente** guardadas en `artifacts/`, la
+detección de procedimientos marca **10, y ninguna es un falso positivo**: las
+diez mandan a quien llama a una sucursal, a una app o a un portal que nadie ha
+mencionado, o le imponen un requisito. Entre ellas está, palabra por palabra,
+el ejemplo que el ADR 0005 había dejado escrito como el hueco grande.
+
+Lo que **no** cambia mucho es el recuento de la evaluación: sube de 1 a 2 casos
+en una corrida de doce y en las demás se queda igual. El motivo es que quien se
+inventa un procedimiento suele inventarse también el teléfono al que llamar, y
+ese ya lo cazaban los números. Lo que se gana no es cuántos: es **cuál**.
+
+**La voz pasiva, con detalle.** "Su tarjeta ha sido bloqueada" es la forma
+natural de contar un estado que devolvió la herramienta —cuyo motivo,
+literalmente, es "movimiento inusual detectado el 2026-09-15"—. Marcarla
+convertiría la respuesta correcta del caso principal en un invento. Solo se
+persigue la primera persona, que es donde está la mentira que importa: la que
+hace que quien llama cuelgue creyendo que alguien ha hecho algo.
 
 ## Hacia qué lado se equivoca
 

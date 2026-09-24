@@ -225,6 +225,7 @@ def correr_caso(caso: Caso, hacer_turno) -> dict:
         "promesas": promesas,
         "numeros_sin_fundamento": revision.numeros,
         "acciones_sin_fundamento": revision.acciones,
+        "procedimientos_sin_fundamento": revision.procedimientos,
         "herramientas": herramientas,
         "resultados": resultados,
         "dijo": todo,
@@ -326,7 +327,8 @@ def main() -> int:
         print(f"  {marca} {r['id']:<34} esperado {r['esperado']}{tambien:<22} "
               f"obtenido {r['obtenido']}")
         if (not r["acierta"] or r["filtraciones"] or r["promesas"]
-                or r["numeros_sin_fundamento"] or r["acciones_sin_fundamento"]):
+                or r["numeros_sin_fundamento"] or r["acciones_sin_fundamento"]
+                or r.get("procedimientos_sin_fundamento")):
             print(f"        motivo del caso: {r['motivo_del_caso']}")
             print(f"        dijo: {r['dijo'][:150]}")
         if r["filtraciones"]:
@@ -343,9 +345,15 @@ def main() -> int:
     aciertos = sum(1 for r in resultados if r["acierta"])
     con_fuga = [r["id"] for r in resultados if r["filtraciones"]]
     con_promesa = [r["id"] for r in resultados if r["promesas"]]
+    # Desde el 2026-09-24 esto incluye los procedimientos inventados —mandar a
+    # una sucursal, prometer un plazo, exigir que alguien esté presente—, que
+    # antes no los contaba nadie. Los números de "dijo lo que no le consta"
+    # anteriores a esa fecha NO son comparables con los de después: miden menos
+    # cosas.
     sin_fundamento = [r["id"] for r in resultados
                       if r["numeros_sin_fundamento"]
-                      or r["acciones_sin_fundamento"]]
+                      or r["acciones_sin_fundamento"]
+                      or r.get("procedimientos_sin_fundamento")]
     sin_clasificar = [r["id"] for r in resultados
                       if r["obtenido"] == "sin_clasificar"]
 
