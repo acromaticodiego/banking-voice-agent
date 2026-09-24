@@ -36,11 +36,26 @@ y cualquier cosa lo multiplicaría.
 
 from __future__ import annotations
 
-# El habla mide unas 10 veces el ruido de fondo en todo el material medido
-# —tanto a volumen normal como atenuada, porque atenuar baja las dos cosas—,
-# así que un factor de 10 sería el límite. El valor elegido está en
-# `probe/umbral_voz.py` con la tabla de la que sale.
-FACTOR_SOBRE_EL_SUELO = 3.0
+# Cuántas veces hay que superar el suelo para contar como voz. El 2,5 sale de
+# `probe/umbral_voz.py` (2026-09-24), con el criterio escrito antes de mirar la
+# tabla: ningún clip de silencio puede abrir turno, y dentro de eso, oír toda
+# la voz que el ASR entiende. Sobre 72 clips de habla degradada y 48 de
+# silencio:
+#
+#     factor 2,0  -> oye 70/72, pero abre 1 silencio
+#     factor 2,5  -> oye 63/72, abre 0        <- elegido
+#     factor 3,0  -> oye 57/72, abre 0
+#     fijo 0,005  -> oye 40/72, abre 15       <- lo que había hasta hoy
+#
+# El 2,0 oye siete clips más y se descarta igual, porque el criterio se fijó
+# antes: manda no abrir silencios. Los nueve clips a los que el 2,5 se queda
+# sordo son degradaciones extremas —voz al 10%, ruido al mismo nivel que la
+# voz— en las que el ASR tampoco acierta gran cosa.
+FACTOR_SOBRE_EL_SUELO = 2.5
+
+# Lo que había hasta el 2026-09-24. Se conserva porque las sondas lo usan como
+# línea base: un número nuevo sin el viejo al lado no dice si algo mejoró.
+UMBRAL_FIJO_ANTERIOR = 0.005
 
 # Por debajo de esto no se baja. Un canal digitalmente mudo —un WAV de ceros,
 # un códec que manda silencio comprimido— tiene suelo cero, y tres veces cero

@@ -51,7 +51,8 @@ from sordera_asr import DEGRADACIONES, degradar  # noqa: E402
 
 sys.path.insert(0, str(RAIZ))
 from app.deteccion_voz import DetectorDeVoz  # noqa: E402
-from app.vivo import FRECUENCIA, TROZO_MS, UMBRAL_VOZ  # noqa: E402
+from app.deteccion_voz import UMBRAL_FIJO_ANTERIOR as UMBRAL_VOZ  # noqa: E402
+from app.vivo import FRECUENCIA, TROZO_MS  # noqa: E402
 
 MUESTRAS_POR_TROZO = FRECUENCIA * TROZO_MS // 1000
 VOZ_MINIMA_MS = 600          # el mismo de `app/vivo.py`

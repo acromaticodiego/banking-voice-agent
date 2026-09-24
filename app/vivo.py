@@ -20,12 +20,12 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from app.confianza import resumir
+from app.deteccion_voz import DetectorDeVoz
 from app.fin_de_turno import parece_incompleto
 
 FRECUENCIA = 16000
 TROZO_MS = 20
 MUESTRAS_POR_TROZO = FRECUENCIA * TROZO_MS // 1000
-UMBRAL_VOZ = 0.005
 
 
 @dataclass
@@ -60,11 +60,22 @@ class Llamada:
         # ambiguo; sabiendo que se pidió el documento, es una cédula a medias.
         self.esperando: str | None = None
         self.hablando = False
+        # El detector es de la LLAMADA y no del turno: el suelo de ruido es una
+        # propiedad de la sala desde la que llaman, y tirarlo en cada turno
+        # obligaría a reaprenderlo desde cero cada vez que alguien contesta.
+        self.detector = DetectorDeVoz()
 
     # ------------------------------------------------------------------ audio
 
     def _hay_voz(self, trozo: np.ndarray) -> bool:
-        return bool(np.abs(trozo).mean() > UMBRAL_VOZ)
+        """Contra el ruido de esta llamada, no contra una constante.
+
+        El umbral fijo de 0,005 que había aquí describía esta habitación: con
+        la voz a la mitad no abría turno en ninguna de las 6 grabaciones, y por
+        línea telefónica en 1 de 6, sin que nadie se enterara de que alguien
+        había hablado. ADR 0009.
+        """
+        return self.detector.hay_voz(float(np.abs(trozo).mean()))
 
     def empujar(self, muestras: np.ndarray):
         """Recibe audio del navegador. Devuelve avisos si hay turno que cerrar.

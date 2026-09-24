@@ -63,7 +63,7 @@ from probe_wer import cifras, limpiar, tasa  # noqa: E402
 from probe_whisper_local import cargar_modelo, leer_wav  # noqa: E402
 
 sys.path.insert(0, str(RAIZ))
-from app.vivo import UMBRAL_VOZ  # noqa: E402
+from app.deteccion_voz import UMBRAL_FIJO_ANTERIOR as UMBRAL_VOZ  # noqa: E402
 
 FRECUENCIA = 16000
 
