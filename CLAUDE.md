@@ -503,13 +503,83 @@ Documentar lo ya implementado no es papeleo.
 ```powershell
 Set-Location C:\Users\ASUS\Desktop\agente_llamada
 git status
-.\.venv\Scripts\python.exe -m app.evaluation.correr                   # una corrida
-.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12   # y compararla con las de antes
+git log --oneline -5
+.\.venv\Scripts\python.exe probe\limites_groq.py    # ¿hay cuota HOY? mira el límite DIARIO
 ```
 
-Una sola corrida no dice si algo ha cambiado: 6 de los 12 casos se mueven
-solos. La segunda orden no gasta peticiones y es la que contesta la pregunta.
+Las comprobaciones que no gastan cuota están arriba, en ESTADO, y pasan todas.
+Córrelas si has tocado algo.
 
 Y dime qué recomiendas. Si vas a proponer una optimización, **mira antes de qué
 está hecho el tiempo que quieres optimizar**: ya recomendé una vez adelantar una
 consulta que tardaba 5 ms para arreglar 1267 ms que eran del modelo.
+
+---
+
+## EL SIGUIENTE PASO, en orden y sin margen de interpretación
+
+Escrito el 2026-09-24 al final de la sesión. **Es la medición final del
+reservado, y el orden importa porque el reservado se gasta al mirarlo.**
+
+### 0. Antes de nada: ¿hay cuota?
+
+El límite que manda es de **200 000 tokens al día** y NO sale en las cabeceras.
+El canario no es una petición suelta —eso pasa aunque no haya sitio para una
+corrida—, es esto:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.evaluation.medicion_final --ensayo --corridas 1
+```
+
+Si esa sale limpia, hay cuota. Cuesta ~5% del día. **Si no la hay, no se
+empieza**: hay trabajo de sobra que no gasta cuota (ver más abajo).
+
+### 1. Tres corridas de calibración PRIMERO
+
+```powershell
+.\.venv\Scripts\python.exe -m app.evaluation.correr      # x3, espaciadas
+.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual --presupuesto-ms 15000
+```
+
+**Sin esto el reservado no significa nada.** Los números de la tabla de tarea
+completada se midieron con un agente que ya no existe: sin el turno vacío y sin
+los tres intentos de documento. Hacen falta 3 corridas del agente de HOY para
+tener con qué comparar, y se hacen antes porque después del reservado ya no se
+puede cambiar nada sin contaminar.
+
+### 2. El reservado, k=5, una vez en la vida
+
+```powershell
+.\.venv\Scripts\python.exe -m app.evaluation.medicion_final --declaro-medicion-final
+```
+
+El protocolo ya está escrito en el propio módulo y no se cambia ahora: k=5,
+mediana, rango, conteo por caso, mayoría (≥3 de 5) y tabla de estables. Una
+corrida con fallos del proveedor se repite, **no se promedia**. Si no salen 5
+limpias, el programa se niega a dar un número, y eso se respeta.
+
+Sale además el **coste por conversación** (métrica 5) de regalo, porque los
+tokens ya se cuentan.
+
+### 3. Y entonces, con el número en la mano
+
+- Actualizar la tabla de LOS NÚMEROS con el reservado, la fecha, el modelo y el
+  commit. **Y decir que el reservado está quemado**: a partir de ahí todo lo
+  que se toque está informado por ese resultado, y hay que escribirlo cada vez
+  que se cite la cifra.
+- Rellenar `probe/precios.py` con los dos números de la consola de Groq
+  (entrada y salida por millón) para cerrar el coste en dólares. Sin ellos se
+  publican los tokens y se dice que el precio falta.
+
+### Si no hay cuota, esto avanza sin gastar nada
+
+En este orden de valor:
+
+1. **Barge-in** (punto 6): es lo que más se nota en una demo y lo único que
+   falta de las seis métricas junto al coste. Hace falta probarlo a mano con el
+   micrófono, así que requiere a Juan Diego delante.
+2. **El expediente en PostgreSQL y el estado en Redis** (punto 8): el proyecto
+   promete que al colgar queda un expediente y hoy se pierde al cerrar el
+   proceso. Es la mayor distancia entre lo que promete y lo que hace.
+3. **El ADR que falta**: qué hace el agente cuando la transcripción tiene poca
+   confianza. No está implementado, así que es decidir, no escribir.
