@@ -2,13 +2,40 @@
 
 Agente de voz telefónico para verificación de identidad y atención al cliente:
 mantiene una conversación, decide qué preguntar, llama herramientas, se recupera
-cuando algo falla, y trabaja contra un reloj. Al colgar queda un expediente con
-qué se dijo, qué herramienta se llamó, con qué argumentos, qué devolvió y qué
-evidencia justificó cada decisión.
+cuando algo falla, y trabaja contra un reloj. De cada turno queda un rastro con
+qué se dijo, qué herramienta se llamó, con qué argumentos y qué devolvió
+—hoy en memoria; persistirlo es de lo que falta, y está dicho abajo—.
 
-**Estado: día de medición terminado. El sistema todavía no está construido.**
-Lo que hay en el repositorio son sondas que miden si el proyecto es viable antes
-de escribirlo. Gastar poco para saber si conviene gastar mucho.
+**Estado (2026-09-24): el sistema funciona de punta a punta y está medido.**
+Se habla por el micrófono del navegador, el agente decide, llama herramientas,
+se recupera cuando fallan y contesta hablando. Lo que falta está al final, sin
+adornos: el expediente todavía vive en memoria y se pierde al colgar, no hay
+telefonía real, y la evaluación sobre el conjunto reservado no se ha hecho
+—el reservado sigue **sin tocar**, que es lo que le da valor—.
+
+> **Lo que de verdad merece la pena de este repositorio no son los números
+> buenos: es la lista de doce veces que una medición salió limpia y era
+> falsa.** Está más abajo, con nombre y apellido de cada error, incluidas las
+> que obligaron a revertir código escrito el mismo día.
+
+---
+
+## Qué hay construido
+
+| pieza | fichero | qué hace |
+|---|---|---|
+| llamada en vivo | `app/vivo.py` | consume audio según llega, decide cuándo terminó el turno, orquesta |
+| bucle del agente | `app/agent/loop.py` | decide, llama herramientas, se recupera, frase puente, presupuesto por turno, idempotencia |
+| herramientas | `app/tools/service.py` | FastAPI, una por capacidad, con cabeceras para provocar fallos y latencia |
+| pasarela y pantalla | `app/gateway.py`, `app/web/` | WebSocket, micrófono con AudioWorklet, conversación y llamadas a herramientas en vivo |
+| fin de turno | `app/fin_de_turno.py` | decide si la frase está a medias **por contenido**, no solo por silencio |
+| fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas. Determinista, sin modelo |
+| evaluación | `app/evaluation/` | 20 casos con rúbrica, partición con reservado bajo llave, línea base sin modelo, estabilidad entre corridas |
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.gateway:app --port 8000
+# y abrir http://127.0.0.1:8000/   (por localhost: el micrófono no va por IP)
+```
 
 ---
 
@@ -31,6 +58,12 @@ entre una y otra no se escribió ni una línea del sistema: los 1380 ms de
 diferencia no fueron optimización, fueron tres errores de medición.
 
 La tercera fila es el turno de verdad, y es la que cuenta.
+
+Vuelto a medir el 2026-09-24 con el filtro de voz dentro y el fin de turno por
+contenido: **2234 ms** al primer audio y **3112 ms** al primer dato (n=6). La
+diferencia con el 23/09 **no se le puede atribuir al filtro** —son días
+distintos y el componente que manda es el modelo remoto, 1459 de esos 2234 ms—;
+lo que sí se puede afirmar es que no lo ha empeorado de forma medible.
 
 ### Por qué la suma de las partes mentía: 2389 ms
 
@@ -110,11 +143,11 @@ límite inferior medido en condiciones buenas.
 `faster-whisper small` en GPU, sobre tres grabaciones de una sola persona con
 acento paisa, sin ruido de fondo.
 
-| | p50 | p95 |
+| | micrófono, 16 kHz | por línea telefónica |
 |---|---|---|
-| literal | 16,7% | 30,7% |
-| con los números normalizados | **0,0%** | 9,0% |
-| números críticos recuperados exactos | **3 / 3** | |
+| literal, p50 | 16,7% | 20,0% |
+| con los números normalizados, p50 | **0,0%** | **0,0%** |
+| números críticos recuperados exactos | **3 / 3** | **3 / 3** |
 
 La diferencia entre las dos primeras filas es el asunto entero. La referencia
 dice *"uno cero siete cero dos tres cuatro cinco seis siete"* y el sistema
@@ -126,8 +159,16 @@ Por eso se añade la tercera fila. Un sistema puede tener un 15% de error de
 palabra y acertar el 100% de los documentos, o al revés; en una verificación de
 identidad lo segundo es lo único que decide.
 
+La segunda columna es el mismo audio pasado por el canal de una llamada: banda
+de 300–3400 Hz, muestreo a 8 kHz y cuantización µ-law de 8 bits (G.711), y de
+vuelta a 16 kHz para el modelo. **El canal telefónico no rompe a
+`faster-whisper small` en este material**, y eso contradice lo que este mismo
+documento predijo: se dio por hecho que el filtro cambiaría la tasa bastante, y
+no la cambia. Los 3,3 puntos del literal, con n=3, no se distinguen del ruido.
+
 Con n=3 y un solo hablante esto calibra el orden de magnitud. No es una tasa
-representativa: para eso hacen falta varias voces, ruido y línea telefónica.
+representativa: para eso hacen falta **varias voces y ruido de fondo**, que es
+lo único que queda de este punto ahora que el canal está simulado.
 
 ### Turnos que nadie dijo
 
@@ -220,6 +261,54 @@ sonda que reimplementa la lógica del sistema mide la reimplementación, un
 detector de voz se mide por sus dos puertas, y la prueba que cazó esto fue la
 del sistema levantado mientras las seis deterministas seguían en verde.
 
+## Tarea completada: el agente contra un árbol de reglas
+
+20 casos escritos a mano, cada uno con su desenlace esperado **y el motivo por
+el que es ese y no otro**, partidos en 12 de calibración y 8 reservados. Los 8
+reservados **no se han mirado nunca**: pedirlos sin declarar que es la medición
+final lanza una excepción. El protocolo para gastarlos —k=5 corridas, mediana,
+rango, conteo por caso y mayoría— se escribió **antes** de tocarlos, que era la
+única ventana para escribirlo sin trampa.
+
+Sobre los 12 de calibración, tres corridas del mismo día y el mismo modelo:
+
+| desenlace correcto | agente | línea base sin modelo |
+|---|---|---|
+| con reloj holgado (15 s) | mediana **8/12**, rango 6–9 | 7/12, determinista |
+| con el reloj de la demo (3 s) | mediana **4/12**, rango 3–5 | — |
+| fugas de datos de la cuenta | **0** | **2** |
+
+Y la lectura honesta, que es la parte que importa:
+
+- **La ventaja del agente en desenlaces no se distingue del ruido.** Con el
+  reloj holgado saca 8 contra el 7 de un árbol de reglas, y su rango (6–9) tapa
+  ese 7 entero. Con el reloj de la demo **pierde**.
+- **La mitad del conjunto es moneda al aire**: 6 de los 12 casos cambian de
+  desenlace entre corridas del mismo día con el mismo modelo. Por eso cada
+  número va con mediana y rango, y por eso existe `estabilidad.py`.
+- **Donde gana de verdad no se cuenta en desenlaces**: la línea base filtra
+  datos de la cuenta en dos casos y el agente en ninguno, en ninguna corrida de
+  ningún brazo. Un árbol de reglas que consulta y recita no sabe callarse.
+- **El reloj y las decisiones están enredados**: la evaluación corre con reloj
+  holgado porque mide decisiones, así que **ese número no describe la demo**.
+  Las dos cifras se publican siempre juntas.
+
+## Coste por conversación
+
+Los tokens se cuentan por paso, por turno y por conversación, y el contador
+está comprobado con un modelo de mentira que declara su consumo. El precio está
+confirmado: **0,075 $ por millón de tokens de entrada y 0,30 $ de salida**
+([ficha del modelo](https://console.groq.com/docs/model/openai/gpt-oss-20b),
+24/09). **El número todavía no existe** porque hace falta una corrida con
+cuota, y llega de regalo con la medición del reservado.
+
+Lo que sí está comprobado, y es lo que cambia la lectura: **el coste de una
+conversación crece más que linealmente**, porque cada turno reenvía la historia
+anterior. Medir un turno y multiplicarlo por el número de turnos da un número
+bajo que no es el que se factura.
+
+---
+
 ## El hallazgo: el fin de habla no cabe en el presupuesto
 
 Para decidir que alguien terminó de hablar hay que esperar un rato de silencio.
@@ -250,10 +339,11 @@ con lo que se descartó.
 
 ---
 
-## Tres veces que una medición salió limpia y era falsa
+## Doce veces que una medición salió limpia y era falsa
 
 Es la parte más útil de este repositorio. **Coherente no es correcto**: un
-resultado que cuadra consigo mismo puede estar mal, y cuadraba.
+resultado que cuadra consigo mismo puede estar mal, y cuadraba. Dos de estas
+doce obligaron a revertir código escrito el mismo día.
 
 **1. El barrido del fin de habla aprobaba 100 ms.** Contaba los cortes como
 `segmentos - 1`, y las grabaciones demasiado bajas daban un solo segmento. Cero
@@ -272,10 +362,62 @@ reintentando un 429 por dentro, durmiendo lo que le decía el servidor mientras
 el cronómetro seguía corriendo. Un rechazo por límite es una espera
 administrativa, no latencia: ahora se cuenta aparte.
 
-Y una cuarta, en la métrica de transcripción: la primera versión daba un error
-normalizado **peor** que el literal, 45,5% contra 32,3%. El normalizador de
-números solo entendía palabras, y el ASR devuelve `1 0 7 0 2 3 4 5 6 7` en
-cifras sueltas y `347 mil 200` en forma mixta.
+**4. El error normalizado salía PEOR que el literal**, 45,5% contra 32,3%. El
+normalizador de números solo entendía palabras, y el ASR devuelve
+`1 0 7 0 2 3 4 5 6 7` en cifras sueltas y `347 mil 200` en forma mixta.
+
+**5. El adelanto de consultas "mejoraba" con n=3 y "empeoraba" con n=6.** Las
+dos eran ruido. Y el conteo determinista destapó que el patrón del documento
+llevaba caracteres de retroceso (`\x08`): compilaba y no encajaba nunca.
+
+**6. El 5/6 de tarea completada era una sola tirada.** Tres corridas del
+conjunto ampliado, el mismo día y el mismo modelo, dieron 6, 5 y 7 de 12. Un
+número de una corrida no distingue al agente que resuelve siempre del que
+acertó esa vez.
+
+**7. El prompt nuevo parecía haber acabado con los inventos: cero afirmaciones
+sin fundamento.** Y era verdad que había cero — porque el presupuesto de 3 s
+saltaba en 9 de 12 casos y el agente no llegaba a decir nada. **Un agente al
+que se corta antes de hablar no miente, y eso no es una virtud.** La medición
+más limpia de todas fue la del sistema al que no se le dejó funcionar.
+
+**8. El filtro de voz costaba +123 ms, y luego +158, y las dos veces era
+falso.** Se midió sobre grabaciones de 17 a 30 segundos; un turno son tres
+segundos de habla y su cola de silencio. Sobre eso cuesta **+24 ms**. La sonda
+no tenía ningún fallo: **medía el material equivocado**.
+
+**9. Un umbral que separaba 7 de 7 y se cayó solo al enseñarle más material.**
+Entraron seis clips de habla legítima, el peor se puso justo en el corte, y
+pasó a cazar 5 de 7; con el material de silencio corregido, 6 de 16. Tres
+medidas, cada una peor, ninguna por un error de medición: **el umbral nunca
+había sido bueno, solo había visto poco.**
+
+**10. El material de silencio no era silencio.** Para medir cuánto se inventa
+Whisper sobre el silencio se cogían los tramos de menos energía de cada
+grabación — y los de menos energía son **los ceros que el grabador deja al
+principio y al final**. El banco se llenó de tramos medio mudos y el problema
+salía por la mitad de su tamaño: 7 de 64 en vez de 16 de 64. El material no
+exageraba el problema, **lo escondía**.
+
+**11. Una prueba seguía pasando con lo que decía proteger roto.** El detector
+dependía de una asimetría; se rompió a propósito y las pruebas siguieron todas
+en verde. El mecanismo real era otro y el comentario del código explicaba el
+equivocado.
+
+**12. Tres sondas midieron un sistema que no existe, y una hizo que se cambiara
+el sistema de verdad.** Es la peor y la más instructiva. Una sonda dijo que el
+umbral de voz era sordo a la voz floja; se escribió un detector nuevo, con su
+criterio fijado de antemano y seis pruebas en verde, **y rompió el sistema**:
+el turno dejaba de cerrarse. Las tres sondas tenían cada una su propia idea de
+`app/vivo.py` —una comparaba el nivel medio del clip entero, otra reiniciaba la
+racha de voz, y ninguna medía si el turno **se cierra**, solo si se abre—.
+Medido por fin contra la clase real, el umbral de siempre funcionaba: **el
+problema no existía.** Se revirtió todo, y lo cazó la prueba del sistema
+levantado mientras las seis deterministas seguían verdes.
+
+Las doce están en
+[`docs/adr/`](docs/adr/) y en el cuaderno de trabajo del proyecto, cada una con
+la corrida que la destapó.
 
 ---
 
@@ -288,40 +430,93 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-probe.txt
 python -m piper.download_voices --download-dir voices es_MX-claude-high
 Copy-Item .env.example .env    # y pega la clave de Groq
+.\.venv\Scripts\python.exe probe\check_entorno.py     # ¿GPU? ¿micrófono?
 ```
+
+La demo:
 
 ```powershell
-.\.venv\Scripts\python.exe probe\check_entorno.py     # ¿GPU? ¿micrófono?
-.\.venv\Scripts\python.exe probe\grabadora.py         # grabar muestras de voz
-.\.venv\Scripts\python.exe probe\probe_whisper_local.py
-.\.venv\Scripts\python.exe probe\probe_groq.py
-.\.venv\Scripts\python.exe probe\probe_piper.py
-.\.venv\Scripts\python.exe probe\probe_vad.py
-.\.venv\Scripts\python.exe probe\probe_wer.py
-.\.venv\Scripts\python.exe probe\presupuesto.py       # el veredicto
+.\.venv\Scripts\python.exe -m uvicorn app.gateway:app --port 8000
 ```
 
-`presupuesto.py` **se niega a dar un total** si falta una etapa por medir, y
-sale con código 1. Un total incompleto es peor que ninguno, porque parece un
-total.
+Las comprobaciones. Casi todas **no gastan cuota del modelo**, y eso es
+deliberado: el plan gratuito da 200 000 tokens al día y un camino que solo se
+puede probar cuando hay cuota se acaba probando poco.
+
+```powershell
+.\.venv\Scripts\python.exe -m app.tools.prueba_servicio     # las herramientas
+.\.venv\Scripts\python.exe -m app.agent.prueba_fundamento   # el detector de inventos
+.\.venv\Scripts\python.exe -m app.agent.prueba_silencio     # el turno vacío
+.\.venv\Scripts\python.exe -m app.agent.prueba_reintentos   # tres documentos antes de escalar
+.\.venv\Scripts\python.exe -m app.prueba_confianza          # el filtro de voz sigue puesto
+.\.venv\Scripts\python.exe -m app.prueba_pasarela           # el stack entero, con audio real
+.\.venv\Scripts\python.exe -m app.fin_de_turno              # fin de turno por contenido
+.\.venv\Scripts\python.exe -m app.evaluation.particion      # el reservado no se solapa
+```
+
+Y las mediciones:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.medir_turno --repeticiones 6 --fin-por-contenido
+.\.venv\Scripts\python.exe -m app.evaluation.correr              # el agente
+.\.venv\Scripts\python.exe -m app.evaluation.correr --linea-base # el árbol de reglas
+.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual
+#   relee lo guardado: no gasta una sola petición. Sin los filtros se niega a
+#   mezclar corridas de tamaños o brazos distintos, que es como se fabrica una media falsa.
+.\.venv\Scripts\python.exe probe\confianza_asr.py                # ¿se inventa turnos?
+.\.venv\Scripts\python.exe probe\probe_wer.py --linea-telefonica
+```
 
 Cada medición se guarda en `artifacts/*.json` con su fecha, su máquina, su
 tamaño de muestra, las muestras crudas y la frase exacta de qué instante a qué
 instante se cronometró. Un número sin esa frase no se publica. El audio no se
-versiona.
+versiona. Y varios programas **se niegan a dar un número** antes que darlo
+mal: `presupuesto.py` si falta una etapa, `estabilidad.py` si le piden mezclar
+corridas de brazos distintos, y `medicion_final.py` si no consigue cinco
+corridas limpias.
+
+---
+
+## Las decisiones, con lo que se descartó
+
+Nueve ADR en [`docs/adr/`](docs/adr/). Los que más cuentan:
+
+| | |
+|---|---|
+| [**0002**](docs/adr/0002-como-se-decide-que-alguien-termino-de-hablar.md) | cómo se decide que alguien terminó de hablar. Ventana de silencio sola: 1600 ms, el 188% del presupuesto |
+| [**0003**](docs/adr/0003-que-dice-el-agente-mientras-la-herramienta-corre.md) | qué dice el agente mientras la herramienta corre, y la regla de publicar siempre los dos números juntos |
+| [**0004**](docs/adr/0004-adelantar-la-consulta-antes-de-que-el-modelo-la-pida.md) | adelantar la consulta antes de que el modelo la pida. Funciona, no se distingue del ruido, y el motivo es el hallazgo |
+| [**0005**](docs/adr/0005-por-que-no-puede-afirmar-nada-que-no-venga-de-una-herramienta.md) | por qué no puede afirmar nada que no venga de una herramienta — con el texto de respaldo que mentía |
+| [**0006**](docs/adr/0006-que-pasa-si-una-herramienta-falla-a-mitad.md) | qué pasa si una herramienta falla a mitad: el error es un resultado para el modelo, no una excepción |
+| [**0007**](docs/adr/0007-idempotencia-de-las-acciones-con-efecto.md) | idempotencia: la clave es del **turno**, y de ahí se sigue que nada con efecto se puede adelantar |
+| [**0008**](docs/adr/0008-que-hace-el-agente-cuando-la-transcripcion-no-es-de-fiar.md) | qué hace cuando la transcripción no es de fiar |
+| [**0009**](docs/adr/0009-cuando-se-decide-que-alguien-esta-hablando.md) | **decisión revertida el mismo día**, y de los documentos más útiles del repositorio |
 
 ---
 
 ## Qué falta
 
-El sistema. No hay pasarela de tiempo real, ni Redis, ni PostgreSQL, ni
-herramientas HTTP, ni bucle de agente, ni cliente de navegador. De las seis
-métricas por las que este proyecto quiere ser juzgado, están hechas la de
-latencia (por etapas, nunca de punta a punta) y la de transcripción. Faltan
-tarea completada sobre un conjunto reservado, corrección de las llamadas a
-herramientas, coste por conversación y barge-in.
+Sin adornos, y por orden de lo que más acerca esto a una llamada de verdad:
 
-De los seis ADR previstos hay dos.
+1. **La medición del conjunto reservado.** El protocolo está escrito y los 8
+   casos siguen sin tocarse. Es lo siguiente.
+2. **Varias voces y ruido.** Todo lo medido sale de **una sola habitación, un
+   micrófono y un hablante**. Ese es el techo del proyecto ahora mismo, y hoy
+   ya causó un problema: un cambio calibrado contra esa única sala hubo que
+   revertirlo (la número 12 de la lista de arriba).
+3. **Barge-in**: hoy, mientras el agente habla, se ignora la entrada. Es una
+   decisión declarada —sin cancelación de eco el micrófono capta la propia voz
+   del agente— y es la métrica que falta.
+4. **El expediente en PostgreSQL y el estado en Redis.** El rastro de cada
+   turno existe y se pierde al colgar. Es la mayor distancia entre lo que el
+   proyecto promete y lo que hace.
+5. **Telefonía real** (Twilio Media Streams), que trae de regalo el audio de
+   8 kHz de verdad y la latencia de red real.
+
+De las seis métricas por las que este proyecto quiere ser juzgado están hechas
+la latencia, la transcripción y la tarea completada sobre calibración. El coste
+está instrumentado y con el precio confirmado, a falta de una corrida. Faltan
+la corrección de llamadas a herramientas y el barge-in.
 
 ## Pila
 
@@ -331,5 +526,5 @@ De los seis ADR previstos hay dos.
 | texto → voz | `Piper` local / Deepgram Aura-2 | Piper da 136 ms de p95: ninguna ida y vuelta por red lo mejora |
 | modelo | `openai/gpt-oss-20b` en Groq | entra en el presupuesto del turno |
 | fin de habla | Silero VAD + fin de turno por contenido | ver `docs/adr/0002` |
-| estado | Redis | la pasarela no guarda nada, así escala horizontal |
-| expediente | PostgreSQL | |
+| estado | Redis | **previsto, no implementado.** La pasarela no guarda nada suyo, así que escala horizontal *por diseño* — pero eso hoy no está demostrado |
+| expediente | PostgreSQL | **previsto, no implementado.** Hoy el rastro vive en memoria |

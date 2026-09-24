@@ -32,7 +32,12 @@ TICKET = {"ticket": "ESC-1A2B3C4D", "motivo": "fuera de alcance",
 
 LLAMA = ["Buenas, mi cédula es 1070234567.", "Juan Diego Ossa."]
 
-# (qué dijo, resultados, herramientas llamadas, números esperados, acciones esperadas)
+# (qué dijo, resultados, herramientas llamadas, números, acciones[, procedimientos])
+#
+# El séptimo campo es opcional y por omisión es "ninguno". Así los diecisiete
+# casos que había siguen valiendo tal cual, y siguen de red: si la detección de
+# procedimientos marcara alguno de ellos, sería un falso positivo sobre una
+# respuesta que este archivo ya declaraba correcta, y saltaría aquí.
 CASOS = [
     # ------------------------------------------------ lo que hay que cazar
     (
@@ -161,23 +166,107 @@ CASOS = [
         [TICKET], ["escalar_a_humano"],
         [], [],
     ),
+
+    # ------------------------------------- los procedimientos que se inventa
+    # Todos salidos de respuestas REALES guardadas en `artifacts/`, no de
+    # frases pensadas para que el detector luzca.
+    (
+        "el hueco que el ADR 0005 dejó escrito, palabra por palabra",
+        "Para cambiar el titular de la cuenta, necesitamos que el nuevo "
+        "titular (tu hermano) esté presente y que ambos tengan sus documentos.",
+        [IDENTIDAD], ["consultar_identidad"],
+        [], [], ["necesitamos que"],
+    ),
+    (
+        "manda a quien llama a una app y a un portal que nadie ha mencionado",
+        "Inicie sesión en la app o portal del banco y revise el movimiento "
+        "que causó el bloqueo.",
+        [IDENTIDAD, TARJETA], ["consultar_identidad", "estado_tarjeta"],
+        [], [], ["portal", "la app", "inicie sesion"],
+    ),
+    (
+        "manda a una sucursal, que es el invento más caro: quien llama se "
+        "desplaza",
+        "Para desbloquearla, lo mejor es que se comunique con nuestro centro "
+        "de atención al cliente o acuda a una sucursal.",
+        [IDENTIDAD, TARJETA], ["consultar_identidad", "estado_tarjeta"],
+        [], [], ["sucursal", "centro de atencion", "acuda"],
+    ),
+    (
+        "un plazo, que es un compromiso del banco que el agente no puede dar",
+        "El desbloqueo se procesa en 15 días hábiles.",
+        [IDENTIDAD, TARJETA], ["consultar_identidad", "estado_tarjeta"],
+        [], [], ["15 dias habiles"],
+    ),
+    (
+        "promete que le van a llamar SIN haber escalado",
+        "Recibirá una llamada en breve para completar el proceso de bloqueo.",
+        [IDENTIDAD], ["consultar_identidad"],
+        [], [], ["recibira una llamada"],
+    ),
+    (
+        "y afirma un trámite en marcha que no ha empezado nadie",
+        "Sí, el cambio de titular está en proceso.",
+        [IDENTIDAD], ["consultar_identidad"],
+        [], [], ["esta en proceso"],
+    ),
+
+    # --------------------------- y lo que NO hay que marcar, que es lo difícil
+    (
+        "pedir el documento no es describir un trámite, y sale en casi todas "
+        "las respuestas buenas",
+        "Para poder ayudarle, necesito verificar su identidad. ¿Podría "
+        "indicarme su número de documento?",
+        [], [],
+        [], [], [],
+    ),
+    (
+        "pedir que repita un dato tampoco",
+        "Por favor, repita su nombre completo tal como aparece en su "
+        "documento de identidad.",
+        [], [],
+        [], [], [],
+    ),
+    (
+        "prometer la llamada CON el ticket abierto es verdad, y es la "
+        "respuesta correcta",
+        "He escalado su caso a un asesor humano. En breve, un representante "
+        "se pondrá en contacto con usted.",
+        [TICKET], ["consultar_identidad", "escalar_a_humano"],
+        [], [], [],
+    ),
+    (
+        "si la herramienta devolviera el canal, decirlo estaría fundado",
+        "Puede resolverlo en una sucursal.",
+        [{"canales": ["sucursal", "telefono"]}], ["consultar_identidad"],
+        [], [], [],
+    ),
+    (
+        "ofrecer hablar con un humano no es mandar a nadie a ninguna parte",
+        "Si necesita más información, le recomiendo que hable con un asesor.",
+        [IDENTIDAD, TARJETA], ["consultar_identidad", "estado_tarjeta"],
+        [], [], [],
+    ),
 ]
 
 
 def main() -> int:
     fallos = 0
-    for titulo, dicho, resultados, llamadas, esperados_num, esperadas_acc in CASOS:
+    for caso in CASOS:
+        titulo, dicho, resultados, llamadas, esperados_num, esperadas_acc = caso[:6]
+        esperados_proc = caso[6] if len(caso) > 6 else []
         r = revisar(dicho, resultados, LLAMA, llamadas)
         mal = (sorted(r.numeros) != sorted(esperados_num)
-               or sorted(r.acciones) != sorted(esperadas_acc))
+               or sorted(r.acciones) != sorted(esperadas_acc)
+               or sorted(r.procedimientos) != sorted(esperados_proc))
         print(f"  {'MAL' if mal else 'ok '} {titulo}")
         if mal:
             fallos += 1
             print(f"        dijo     : {dicho}")
             print(f"        esperaba : números {esperados_num}, "
-                  f"acciones {esperadas_acc}")
+                  f"acciones {esperadas_acc}, procedimientos {esperados_proc}")
             print(f"        obtuvo   : números {r.numeros}, "
-                  f"acciones {r.acciones}")
+                  f"acciones {r.acciones}, procedimientos {r.procedimientos}")
 
     print(f"\n  {len(CASOS) - fallos}/{len(CASOS)} correctas")
     return 1 if fallos else 0
