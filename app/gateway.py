@@ -66,6 +66,10 @@ def arrancar() -> None:
     print("Cargando texto a voz...")
     voz = PiperVoice.load(str(RAIZ / "voices" / "es_MX-claude-high.onnx"))
 
+    from app.expediente import desde_entorno
+    expediente = desde_entorno()
+    print(f"Expediente: {type(expediente).__name__}")
+
     entorno = cargar_env()
     from groq import Groq
     PIEZAS.update({
@@ -74,6 +78,7 @@ def arrancar() -> None:
         "groq": Groq(api_key=entorno["GROQ_API_KEY"].strip(), max_retries=0),
         "modelo": entorno.get("GROQ_MODEL", "openai/gpt-oss-20b").strip(),
         "dispositivo": dispositivo,
+        "expediente": expediente,
     })
     print("\nListo.  ->  http://127.0.0.1:8000/\n")
 
@@ -88,7 +93,8 @@ async def conversacion(ws: WebSocket) -> None:
     await ws.accept()
     agente = Agente(PIEZAS["groq"], PIEZAS["modelo"], BASE_HERRAMIENTAS,
                     adelantar=True)
-    llamada = Llamada(PIEZAS["asr"], PIEZAS["voz"], agente)
+    llamada = Llamada(PIEZAS["asr"], PIEZAS["voz"], agente,
+                      expediente=PIEZAS.get("expediente"))
 
     await ws.send_text(json.dumps({
         "tipo": "estado", "texto": "escuchando",
@@ -132,3 +138,8 @@ async def conversacion(ws: WebSocket) -> None:
                         "datos": aviso.datos}))
     except WebSocketDisconnect:
         pass
+    finally:
+        # Colgar es el momento en que el expediente deja de crecer, así que es
+        # el momento de cerrarlo. Va en `finally` porque una llamada que acaba
+        # mal es justo la que más falta hace poder leer después.
+        llamada.colgar()

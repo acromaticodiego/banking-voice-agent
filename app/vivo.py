@@ -19,7 +19,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from app.agent.fundamento import revisar
 from app.confianza import resumir
+from app.expediente import TurnoAnotado, pasos_desde_rastro
 from app.fin_de_turno import parece_incompleto
 
 FRECUENCIA = 16000
@@ -52,7 +54,16 @@ class Llamada:
 
     def __init__(self, asr, voz, agente, ventana_ms: int = 300,
                  ventana_larga_ms: int = 1200, voz_minima_ms: int = 600,
-                 max_reanudaciones: int = 2) -> None:
+                 max_reanudaciones: int = 2, expediente=None) -> None:
+        # El expediente es opcional a propósito: la demo tiene que poder correr
+        # sin base de datos, y las pruebas del turno no deberían necesitar una.
+        # Cuando no hay, el rastro sigue existiendo en los avisos y se pierde
+        # al colgar, que es lo que pasaba siempre hasta el 2026-09-24.
+        self.expediente = expediente
+        self.id_llamada = expediente.abrir() if expediente is not None else None
+        # Lo que ha dicho quien llama, para que el detector de fundamento
+        # sepa que repetir un documento dictado no es inventárselo.
+        self.dicho_por_quien_llama: list[str] = []
         self.asr = asr
         self.voz = voz
         self.agente = agente
@@ -143,6 +154,8 @@ class Llamada:
                           {"motivo": motivo, "parcial": dicho,
                            "confianza": senales})]
 
+        if dicho:
+            self.dicho_por_quien_llama.append(dicho)
         avisos.append(Aviso("oido", dicho, {"ms_asr": round(ms_asr),
                                             "confianza": senales}))
         avisos.append(Aviso("estado", "pensando"))
@@ -186,6 +199,9 @@ class Llamada:
             "reanudaciones": self.reanudaciones,
         }))
 
+        self._anotar(turno, dicho, senales, ms_asr, primer_audio_ms,
+                     primer_dato_ms)
+
         # Si el agente acaba de pedir el documento, el siguiente turno lo sabe.
         bajo = turno.texto.lower()
         if "documento" in bajo or "cédula" in bajo or "cedula" in bajo:
@@ -195,6 +211,58 @@ class Llamada:
 
         self._reiniciar()
         return avisos
+
+    def _anotar(self, turno, dicho: str, senales: dict, ms_asr: float,
+                primer_audio_ms: float | None,
+                primer_dato_ms: float | None) -> None:
+        """Deja el turno escrito donde sobreviva a colgar.
+
+        La revisión de fundamento se hace aquí y no en el bucle del agente
+        porque es lo que convierte un registro en un expediente: no basta con
+        guardar qué dijo, hay que guardar si lo que dijo tenía de dónde salir.
+        Es determinista y no llama a ningún modelo, así que no cuesta nada del
+        presupuesto del turno.
+
+        Nada de esto puede tumbar la llamada: el almacén ya se traga sus
+        errores y los cuenta, y aun así esto va envuelto, porque un fallo al
+        REUNIR los datos sería un fallo en la ruta de la voz.
+        """
+        if self.expediente is None or self.id_llamada is None:
+            return
+        try:
+            resultados = [p.resultado for p in turno.rastro
+                          if p.tipo == "herramienta" and p.resultado is not None]
+            herramientas = [p.detalle.split(" ")[0] for p in turno.rastro
+                            if p.tipo == "herramienta"]
+            revision = revisar(turno.texto, resultados,
+                               self.dicho_por_quien_llama, herramientas)
+            self.expediente.anotar_turno(self.id_llamada, TurnoAnotado(
+                oido=dicho,
+                contestado=turno.texto,
+                puente=turno.puente,
+                confianza=senales,
+                sin_fundamento={"numeros": revision.numeros,
+                                "acciones": revision.acciones,
+                                "procedimientos": revision.procedimientos},
+                ms_asr=round(ms_asr),
+                ms_total=round(turno.ms_total),
+                ms_primer_audio=round(primer_audio_ms) if primer_audio_ms else None,
+                ms_primer_dato=round(primer_dato_ms) if primer_dato_ms else None,
+                agotado=turno.agotado,
+                silencio=turno.silencio,
+                tokens_entrada=turno.tokens_entrada,
+                tokens_salida=turno.tokens_salida,
+                peticiones=turno.peticiones,
+                clave=turno.clave,
+                pasos=pasos_desde_rastro(turno.rastro)))
+        except Exception:  # noqa: BLE001
+            # Se pierde ese turno del expediente; la llamada sigue.
+            pass
+
+    def colgar(self, motivo: str = "colgo") -> None:
+        """Al colgar se cierra el expediente. Si no hay, no pasa nada."""
+        if self.expediente is not None and self.id_llamada is not None:
+            self.expediente.cerrar(self.id_llamada, motivo)
 
     def _reiniciar(self) -> None:
         self.buffer.clear()
