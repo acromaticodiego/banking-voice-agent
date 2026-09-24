@@ -73,15 +73,34 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common import ARTEFACTOS, Medicion, describe_host, guardar, percentil  # noqa: E402
+from common import ARTEFACTOS, RAIZ, Medicion, describe_host, guardar, percentil  # noqa: E402
 from linea_telefonica import a_linea_telefonica  # noqa: E402
 from probe_whisper_local import cargar_modelo, leer_wav  # noqa: E402
+from probe_wer import limpiar  # noqa: E402
+
+sys.path.insert(0, str(RAIZ))
+from app.vivo import UMBRAL_VOZ  # noqa: E402
 
 FRECUENCIA = 16000
 TRAMO_S = 0.5
 DURACIONES_SALA_S = (1.0, 2.0, 4.0, 8.0)
 CLIPS_POR_DURACION = 6
 SNR_TAPADA_DB = 0.0
+
+# Las colas de silencio que el sistema de verdad le pega al habla antes de
+# transcribir. No son inventadas: son las ventanas de `app/vivo.py`. 300 ms es
+# la ventana corta que cierra un turno normal; 1200 ms la larga a la que se
+# pasa cuando la frase parece a medias; 3600 ms es esa larga con las dos
+# reanudaciones que el sistema permite. El buffer se transcribe entero, así
+# que esto es lo que Whisper recibe de verdad cada vez que alguien habla.
+COLAS_S = (0.3, 1.2, 3.6)
+
+# Una sala más ruidosa que esta. El VAD de energía de `app/vivo.py` solo abre
+# turno por encima de `UMBRAL_VOZ`, y el ruido de esta habitación se queda muy
+# por debajo; con este factor se pregunta qué pasaría en una sala, un manos
+# libres o una calle donde el suelo de ruido sí lo supere, que es la condición
+# en la que el silencio llegaría a Whisper sin que nadie haya hablado.
+FACTOR_SALA_FUERTE = 1.2
 
 # Un tramo cuenta como sala si su energía está por debajo de esta fracción de
 # la energía del fichero entero. Conservador a propósito: con un umbral alto
@@ -101,6 +120,7 @@ class Clip:
     audio: np.ndarray
     hay_voz: bool          # la verdad conocida, no lo que diga el modelo
     familia: str           # "habla", "sala", "sala-telefono", "sintetico", ...
+    base: str | None = None   # de qué clip deriva, para comparar textos
 
     @property
     def duracion_s(self) -> float:
@@ -117,6 +137,8 @@ class Lectura:
     vad: bool
     duracion_s: float
     rms: float
+    nivel_vad: float       # media absoluta: lo que mira el VAD de energía en vivo
+    base: str | None
     texto: str
     segmentos: int
     no_speech_max: float | None
@@ -228,6 +250,29 @@ def construir_clips(rutas: list[Path]) -> tuple[list[Clip], int]:
                                   a_linea_telefonica(sala, FRECUENCIA).astype(np.float32),
                                   False, "sala-telefono"))
 
+        # La sala de una habitación más ruidosa: la única en la que el VAD de
+        # energía abriría un turno sin que nadie haya hablado.
+        for duracion in DURACIONES_SALA_S:
+            for i in range(3):
+                sala = coser(tramos, duracion, generador)
+                nivel = float(np.abs(sala).mean())
+                if nivel > 0:
+                    sala = (sala * (UMBRAL_VOZ * FACTOR_SALA_FUERTE / nivel)).astype(np.float32)
+                clips.append(Clip(f"fuerte-{duracion:g}s-{i}", sala, False, "sala-fuerte"))
+
+        # Y lo que el sistema le pasa a Whisper DE VERDAD: el habla con la cola
+        # de silencio que cerró el turno pegada detrás.
+        for ruta in rutas:
+            audio, frecuencia, _ = leer_wav(ruta)
+            if frecuencia != FRECUENCIA:
+                continue
+            corto = ruta.stem.replace("muestra-", "")
+            for cola_s in COLAS_S:
+                cola = coser(tramos, cola_s, generador)
+                clips.append(Clip(f"{corto}+{cola_s:g}s",
+                                  np.concatenate([audio.astype(np.float32), cola]),
+                                  True, "habla-con-cola", base=corto))
+
     for duracion in (2.0, 8.0):
         n = int(duracion * FRECUENCIA)
         clips.append(Clip(f"digital-{duracion:g}s", np.zeros(n, dtype=np.float32),
@@ -260,12 +305,43 @@ def leer(modelo, clip: Clip, vad: bool) -> Lectura:
     return Lectura(
         clip=clip.nombre, familia=clip.familia, hay_voz=clip.hay_voz, vad=vad,
         duracion_s=round(clip.duracion_s, 2), rms=round(rms(clip.audio), 5),
+        nivel_vad=round(float(np.abs(clip.audio).mean()), 5), base=clip.base,
         texto=texto, segmentos=len(segs),
         no_speech_max=max((s.no_speech_prob for s in segs), default=None),
         avg_logprob_min=min((s.avg_logprob for s in segs), default=None),
         compresion_max=max((s.compression_ratio for s in segs), default=None),
         prob_idioma=info.language_probability, ms=ms,
     )
+
+
+def texto_extra(lecturas: list[Lectura]) -> list[dict]:
+    """¿Le pega Whisper palabras de más cuando el turno lleva su cola de silencio?
+
+    Es el modo de fallo que sí puede darse hoy sin cambiar nada: el buffer de
+    `app/vivo.py` se transcribe entero, cola incluida, así que la comparación
+    es contra el mismo audio sin cola. Se mira el prefijo: si lo que sale
+    empieza igual y sigue, lo de después es lo que se inventó al final; si ni
+    siquiera empieza igual, se dice que el texto cambió, que es otra cosa y
+    tampoco es buena.
+    """
+    indice = {(l.clip, l.vad): l for l in lecturas}
+    salida = []
+    for l in lecturas:
+        if l.base is None:
+            continue
+        base = indice.get((l.base, l.vad))
+        if base is None:
+            continue
+        palabras, palabras_base = limpiar(l.texto), limpiar(base.texto)
+        mismo_principio = palabras[:len(palabras_base)] == palabras_base
+        salida.append({
+            "clip": l.clip, "vad": l.vad, "base": l.base,
+            "palabras_base": len(palabras_base), "palabras": len(palabras),
+            "mismo_principio": mismo_principio,
+            "añadido": " ".join(palabras[len(palabras_base):]) if mismo_principio else None,
+            "texto": l.texto,
+        })
+    return salida
 
 
 def separa(lecturas: list[Lectura], senal: str, direccion: str) -> dict:
@@ -366,12 +442,22 @@ def main() -> int:
         resumen_alucinacion[f"vad={vad}"] = {
             "sin_voz": len(mudos), "producen_texto": len(hablan),
             "por_duracion": {
-                f"{d:g}s": sum(1 for l in hablan if abs(l.duracion_s - d) < 0.01)
+                f"{d:g}s": [sum(1 for l in hablan if abs(l.duracion_s - d) < 0.01),
+                            sum(1 for l in mudos if abs(l.duracion_s - d) < 0.01)]
                 for d in DURACIONES_SALA_S
+            },
+            "por_familia": {
+                f: [sum(1 for l in hablan if l.familia == f),
+                    sum(1 for l in mudos if l.familia == f)]
+                for f in sorted({l.familia for l in mudos})
             },
         }
         print(f"  vad_filter={str(vad):<5} {len(hablan)} de {len(mudos)} clips sin voz "
               f"producen texto con letras")
+        for clave, (cuantos, total) in resumen_alucinacion[f"vad={vad}"]["por_familia"].items():
+            print(f"      por familia  {clave:<16} {cuantos}/{total}")
+        for clave, (cuantos, total) in resumen_alucinacion[f"vad={vad}"]["por_duracion"].items():
+            print(f"      por duración {clave:<16} {cuantos}/{total}")
         for l in hablan:
             print(f"      {l.clip:<20} {l.duracion_s:>4.1f} s -> {l.texto[:56]!r}")
         # Y la otra cara: habla que se queda sin transcribir.
@@ -379,6 +465,22 @@ def main() -> int:
         print(f"  {'':<18} {len(sordos)} de "
               f"{sum(1 for l in lecturas if l.hay_voz and l.vad is vad)} clips CON voz "
               f"se quedan sin transcribir")
+
+    print("\n" + "=" * 74)
+    print("EL HABLA CON SU COLA DE SILENCIO, que es lo que el sistema transcribe hoy")
+    colas = texto_extra(lecturas)
+    for vad in (False, True):
+        delos = [c for c in colas if c["vad"] is vad]
+        crecen = [c for c in delos if c["mismo_principio"] and c["añadido"]]
+        cambian = [c for c in delos if not c["mismo_principio"]]
+        print(f"  vad_filter={str(vad):<5} {len(crecen)} de {len(delos)} ganan palabras "
+              f"al final; {len(cambian)} cambian de texto")
+        for c in crecen:
+            print(f"      {c['clip']:<20} +{c['palabras'] - c['palabras_base']:>2} -> "
+                  f"{c['añadido'][:56]!r}")
+        for c in cambian:
+            print(f"      {c['clip']:<20} texto distinto ({c['palabras_base']} -> "
+                  f"{c['palabras']} palabras)")
 
     analisis = {}
     for vad in (False, True):
@@ -435,7 +537,8 @@ def main() -> int:
         "dispositivo": dispositivo, "snr_tapada_db": SNR_TAPADA_DB,
         "umbral_sala": UMBRAL_SALA, "tramos_de_sala": tramos,
         "criterio": "el corte no puede rechazar ningún clip con voz",
-        "alucinacion": resumen_alucinacion,
+        "umbral_voz_del_sistema": UMBRAL_VOZ, "colas_s": list(COLAS_S),
+        "alucinacion": resumen_alucinacion, "colas": colas,
         "lecturas": [asdict(l) for l in lecturas], "analisis": analisis,
     }, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nGuardado en {crudo.name} y {destino.name}")

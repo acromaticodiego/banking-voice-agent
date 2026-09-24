@@ -1,0 +1,83 @@
+{
+  "fecha": "2026-09-24T16:24:46.063257-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "asr",
+      "implementacion": "faster-whisper small (cuda/float16) vad=False",
+      "que_mide": "transcribir el clip entero de habla, de llamada a resultado",
+      "muestras_ms": [
+        477.7534000168089,
+        950.0736999907531,
+        468.8734000083059,
+        328.82389999576844,
+        342.58059997227974,
+        483.41879999497905,
+        378.2487999997102,
+        776.8325000070035,
+        380.61939997714944,
+        297.4853999912739,
+        359.0956999978516,
+        540.3244000044651,
+        383.8030000042636,
+        799.547500006156,
+        362.842600006843,
+        305.6945000134874,
+        345.6074000278022,
+        473.60230001504533
+      ],
+      "unidad": "ms",
+      "notas": "Clips: documento, libre-bloqueo, libre-cobro, libre-datos, monto, titubeos. Va en la ruta crítica del turno.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 18,
+        "p50": 382.2,
+        "p95": 822.1,
+        "min": 297.5,
+        "max": 950.1
+      }
+    },
+    {
+      "etapa": "asr",
+      "implementacion": "faster-whisper small (cuda/float16) vad=True",
+      "que_mide": "transcribir el clip entero de habla, de llamada a resultado",
+      "muestras_ms": [
+        597.7637999749277,
+        786.6626999748405,
+        600.1795000047423,
+        417.6327000022866,
+        586.6430999885779,
+        583.6166999943089,
+        524.0718999993987,
+        829.7629999869969,
+        518.2276999985334,
+        401.3981000171043,
+        438.52629998582415,
+        497.6384999754373,
+        608.5132000152953,
+        808.4673999983352,
+        554.6689000038896,
+        410.23609999683686,
+        466.3269000011496,
+        526.4199000084773
+      ],
+      "unidad": "ms",
+      "notas": "Clips: documento, libre-bloqueo, libre-cobro, libre-datos, monto, titubeos. Va en la ruta crítica del turno.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 18,
+        "p50": 540.5,
+        "p95": 811.7,
+        "min": 401.4,
+        "max": 829.8
+      }
+    }
+  ]
+}
