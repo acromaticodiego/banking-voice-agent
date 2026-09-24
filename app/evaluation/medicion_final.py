@@ -139,6 +139,31 @@ def es_limite_diario(incidencias: list[dict]) -> bool:
     return any("tokens per day" in i.get("error", "") for i in incidencias)
 
 
+def hay_cuota_para_empezar(groq, modelo: str) -> tuple[bool, str]:
+    """Una petición del tamaño real, ANTES de tocar el reservado.
+
+    Esto no es prudencia de más: es que un reservado se gasta al mirarlo, y se
+    gasta **por corridas**. Si el protocolo arranca, hace dos corridas y se
+    queda sin cuota a la tercera, el programa se niega a dar un número —bien—
+    pero los 8 casos ya han pasado por el agente y sus resultados ya se han
+    visto por pantalla. Medio reservado gastado no es medio reservado: es un
+    reservado del que ya se sabe algo.
+
+    El límite diario no sale en ninguna cabecera, así que la única forma de
+    preguntarlo es pedir algo del tamaño de lo que se va a pedir y ver si lo
+    rechazan.
+    """
+    try:
+        groq.chat.completions.create(
+            model=modelo,
+            messages=[{"role": "system", "content": SISTEMA},
+                      {"role": "user", "content": "Hola, mi cédula es 1070234567"}],
+            max_tokens=400, reasoning_effort="low")
+        return True, ""
+    except Exception as exc:  # noqa: BLE001
+        return False, f"{type(exc).__name__}: {str(exc)[:200]}"
+
+
 def una_corrida(casos, groq, modelo: str) -> dict:
     """Una pasada por todos los casos, con su contabilidad."""
     incidencias: list[dict] = []
@@ -200,6 +225,20 @@ def main() -> int:
           f"{len(casos)} casos, k={args.corridas}, modelo {modelo}, "
           f"presupuesto {PRESUPUESTO_MS:.0f} ms, commit {commit_actual()}\n")
 
+    if not args.ensayo:
+        puede, motivo = hay_cuota_para_empezar(groq, modelo)
+        if not puede:
+            print("NO SE EMPIEZA. El proveedor ya está rechazando peticiones "
+                  f"del tamaño real:\n    {motivo}")
+            print("\nArrancar ahora significaría gastar el reservado a medias, "
+                  "y medio reservado no es medio reservado: es un reservado del "
+                  "que ya se sabe algo. Vuelve cuando haya cuota "
+                  "(probe/limites_groq.py lo dice).")
+            servidor.should_exit = True
+            hilo.join(timeout=5)
+            return 3
+        print("  cuota comprobada con una petición del tamaño real.\n")
+
     limpias: list[dict] = []
     descartadas: list[dict] = []
     intentos = 0
@@ -233,6 +272,25 @@ def main() -> int:
               f"corridas salieron limpias en {intentos} intentos.")
         print("Dar la mediana de menos corridas de las que dice el protocolo "
               "sería cambiar el protocolo después de verlo fallar.")
+        if not args.ensayo and (limpias or descartadas):
+            # Y si se llegó a correr aunque sea una vez, el reservado ya no
+            # está entero. Queda por escrito, porque la próxima medición ya
+            # no será la primera y quien lea el número tiene que saberlo.
+            aviso = RAIZ / "artifacts" / "reservado-gastado-a-medias.json"
+            previo = (json.loads(aviso.read_text(encoding="utf-8"))
+                      if aviso.exists() else {"intentos": []})
+            previo["intentos"].append({
+                "fecha": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "commit": commit_actual(),
+                "corridas_limpias": len(limpias),
+                "corridas_descartadas": len(descartadas),
+                "aciertos_vistos": [c["aciertos"] for c in limpias],
+            })
+            aviso.write_text(json.dumps(previo, indent=2, ensure_ascii=False),
+                             encoding="utf-8")
+            print(f"\nEL RESERVADO YA NO ESTÁ ENTERO: se corrió "
+                  f"{len(limpias) + len(descartadas)} vez/veces y los "
+                  f"resultados se han visto. Anotado en {aviso.name}.")
         return 2
 
     # -------------------------------------------------- lo que se publica
