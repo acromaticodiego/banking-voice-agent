@@ -42,6 +42,16 @@ def resumir(segmentos: list, prob_idioma: float | None = None) -> dict:
     nadie— devuelve el resumen con todo a `None` y `segmentos: 0`, que no es
     un error: es la respuesta.
     """
+    if not isinstance(segmentos, (list, tuple)):
+        # Se exige una secuencia a propósito. faster-whisper devuelve un
+        # generador perezoso que se recorre UNA vez: si llegara aquí sin
+        # materializar, quien lo consumiera primero se quedaría con todo y el
+        # otro con nada, en silencio. Mejor una excepción que lo diga.
+        raise TypeError(
+            "resumir() espera una lista de segmentos ya materializada. "
+            "El generador de faster-whisper se agota al recorrerlo, y "
+            "compartirlo entre el texto y las señales deja vacío a uno de "
+            "los dos sin dar ningún error.")
     if not segmentos:
         return {"segmentos": 0, "no_speech_max": None, "avg_logprob_min": None,
                 "compresion_max": None, "prob_idioma": prob_idioma}

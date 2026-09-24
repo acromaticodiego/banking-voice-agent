@@ -212,12 +212,21 @@ def prueba_el_generador_se_materializa() -> None:
 
 def main() -> int:
     print("La confianza del voz a texto, sin cuota y sin GPU\n")
-    prueba_resumir_sin_segmentos()
-    prueba_resumir_toma_los_extremos()
-    prueba_el_turno_pide_el_filtro()
-    prueba_sin_filtro_revienta()
-    prueba_las_senales_quedan_escritas()
-    prueba_el_generador_se_materializa()
+    # Cada prueba va envuelta: una que reviente tiene que contarse como fallo
+    # suyo y dejar correr a las demás. Sin esto, romper el sistema a propósito
+    # -que es como se comprueba que estas pruebas cubren algo- deja de decir
+    # cuántas cosas se rompieron y solo dice cuál fue la primera.
+    for prueba in (prueba_resumir_sin_segmentos,
+                   prueba_resumir_toma_los_extremos,
+                   prueba_el_turno_pide_el_filtro,
+                   prueba_sin_filtro_revienta,
+                   prueba_las_senales_quedan_escritas,
+                   prueba_el_generador_se_materializa):
+        try:
+            prueba()
+        except Exception as exc:  # noqa: BLE001
+            comprobar(f"{prueba.__name__} termina sin reventar", False,
+                      f"{type(exc).__name__}: {exc}")
     print(f"\n{'TODO BIEN' if not fallos else f'{fallos} FALLOS'}")
     return 1 if fallos else 0
 
