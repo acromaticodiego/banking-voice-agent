@@ -181,6 +181,26 @@ def es_silencio(dicho: str) -> bool:
     return not any(c.isalnum() for c in dicho)
 
 
+def _consumo(respuesta) -> tuple[int, int]:
+    """Tokens de entrada y de salida de una respuesta del modelo.
+
+    Groq los pone en `usage` cuando la respuesta no va en streaming, y en
+    `x_groq.usage` cuando sí (ahí llegan en el último trozo). Se miran los dos
+    sitios porque el bucle podría pasar a streaming cualquier día, y un
+    contador que devuelve cero en silencio es peor que no tenerlo: el coste
+    saldría gratis y nadie lo dudaría.
+    """
+    for fuente in (getattr(respuesta, "usage", None),
+                   getattr(getattr(respuesta, "x_groq", None), "usage", None)):
+        if fuente is None:
+            continue
+        entrada = getattr(fuente, "prompt_tokens", None)
+        salida = getattr(fuente, "completion_tokens", None)
+        if entrada is not None or salida is not None:
+            return int(entrada or 0), int(salida or 0)
+    return 0, 0
+
+
 @dataclass
 class Paso:
     """Una cosa que pasó en el turno, con su instante y su duración."""
@@ -190,6 +210,8 @@ class Paso:
     argumentos: dict | None = None
     resultado: dict | None = None
     error: str | None = None
+    tokens_entrada: int = 0
+    tokens_salida: int = 0
 
 
 @dataclass
@@ -200,6 +222,9 @@ class Turno:
     ms_total: float = 0.0
     agotado: bool = False
     silencio: int = 0             # si fue un turno vacío, el cuántos seguidos
+    tokens_entrada: int = 0
+    tokens_salida: int = 0
+    peticiones: int = 0           # llamadas al modelo que costaron dinero
     puente: str = ""              # lo que se dijo mientras la herramienta corría
     adelantada: bool = False      # se disparó una consulta antes de que el modelo la pidiera
     adelantos_usados: int = 0     # cuántas de esas consultas acabó usando el modelo
@@ -236,6 +261,13 @@ class Agente:
         # Silencios seguidos. Se pone a cero en cuanto alguien dice algo: dos
         # silencios con una frase en medio son dos incidentes, no una racha.
         self.silencios = 0
+        # Y el consumo de TODA la conversación, que es la unidad en la que se
+        # factura una llamada. Por turno no dice nada: lo que le cuesta a un
+        # banco es la llamada entera, y crece más que linealmente porque cada
+        # turno reenvía la historia anterior.
+        self.tokens_entrada = 0
+        self.tokens_salida = 0
+        self.peticiones = 0
 
     # ------------------------------------------------------ adelantar consulta
 
@@ -437,10 +469,28 @@ class Agente:
                 break
             ms_modelo = (time.perf_counter() - t0) * 1000
             mensaje = respuesta.choices[0].message
+            # El consumo viene en la respuesta y hasta el 2026-09-24 nadie lo
+            # leía. Es la métrica 5 —coste por conversación— casi gratis: los
+            # tokens son un hecho que devuelve el proveedor, y lo único que
+            # hay que añadir después es el precio.
+            #
+            # Se anota por PASO y no solo por turno, porque un turno con
+            # herramienta son dos llamadas y la segunda lleva dentro todo lo
+            # que devolvió la herramienta: si el core bancario contesta un
+            # JSON grande, el coste se va por ahí y en el total no se ve.
+            entrada, salida = _consumo(respuesta)
             turno.rastro.append(Paso("modelo",
                                      "decide llamar herramienta" if mensaje.tool_calls
                                      else "contesta",
-                                     ms_modelo))
+                                     ms_modelo,
+                                     tokens_entrada=entrada,
+                                     tokens_salida=salida))
+            turno.tokens_entrada += entrada
+            turno.tokens_salida += salida
+            turno.peticiones += 1
+            self.tokens_entrada += entrada
+            self.tokens_salida += salida
+            self.peticiones += 1
             if turno.ms_primer_hablable is None:
                 turno.ms_primer_hablable = (time.perf_counter() - arranque) * 1000
 

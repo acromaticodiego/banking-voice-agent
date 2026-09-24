@@ -121,7 +121,8 @@ def clasificar(texto: str, herramientas: list[str]) -> str:
 
 
 def turno_del_agente(groq, modelo: str, presupuesto_ms: float, sistema: str,
-                     incidencias: list[dict], agotados: list[str]):
+                     incidencias: list[dict], agotados: list[str],
+                     consumo: dict[str, dict] | None = None):
     """Devuelve la función que hace un turno, con toda su contabilidad.
 
     Extraído de `main` el 2026-09-24 para que la medición final del reservado
@@ -132,6 +133,10 @@ def turno_del_agente(groq, modelo: str, presupuesto_ms: float, sistema: str,
     `incidencias` y `agotados` son las dos listas que hay que mirar antes de
     creerse un número: los fallos del proveedor y los turnos a los que se les
     acabó el reloj.
+
+    `consumo` recoge los tokens de cada conversación. Se lee del agente y no
+    se suma turno a turno porque la unidad que se factura es la LLAMADA, y
+    crece más que linealmente: cada turno reenvía la historia anterior.
     """
     agentes: dict = {}
 
@@ -163,6 +168,12 @@ def turno_del_agente(groq, modelo: str, presupuesto_ms: float, sistema: str,
         # contrastar lo que el agente afirma.
         devueltos = [p.resultado for p in turno.rastro
                      if p.tipo == "herramienta" and p.resultado is not None]
+        if consumo is not None:
+            consumo[caso.id] = {
+                "tokens_entrada": agente.tokens_entrada,
+                "tokens_salida": agente.tokens_salida,
+                "peticiones": agente.peticiones,
+            }
         return turno.texto, usadas, devueltos
 
     return hacer_turno
@@ -275,6 +286,7 @@ def main() -> int:
     # anota aparte y se dice a gritos.
     incidencias: list[dict] = []
     agotados: list[str] = []
+    consumo: dict[str, dict] = {}
 
     if args.linea_base:
         quien = "línea base (sin modelo)"
@@ -301,7 +313,8 @@ def main() -> int:
         # buscar la frase de relleno en el texto: la frase se puede cambiar y
         # el texto se puede parecer.
         hacer_turno = turno_del_agente(groq, modelo, args.presupuesto_ms,
-                                       sistema, incidencias, agotados)
+                                       sistema, incidencias, agotados,
+                                       consumo)
 
     print(f"{quien} sobre {cual}: {len(casos)} casos\n")
     resultados = [correr_caso(c, hacer_turno) for c in casos]
@@ -348,6 +361,26 @@ def main() -> int:
         print("    (el clasificador no supo traducir la respuesta; se cuentan "
               "como fallo, nunca se fuerzan al esperado)")
 
+    if consumo:
+        entrada = sum(c["tokens_entrada"] for c in consumo.values())
+        salida = sum(c["tokens_salida"] for c in consumo.values())
+        peticiones = sum(c["peticiones"] for c in consumo.values())
+        from precios import para  # noqa: PLC0415
+        precio = para(modelo)
+        coste = precio.coste(entrada, salida)
+        print(f"\n  consumo             : {entrada + salida} tokens "
+              f"({entrada} de entrada, {salida} de salida) en {peticiones} "
+              f"peticiones, {len(consumo)} conversaciones")
+        media = (entrada + salida) / len(consumo)
+        print(f"  por conversación    : {media:.0f} tokens de media")
+        if coste is None:
+            print(f"  coste               : no se puede decir. El precio de "
+                  f"{modelo} está SIN CONFIRMAR ({precio.fuente})")
+        else:
+            print(f"  coste               : {coste:.5f} $ en total, "
+                  f"{coste / len(consumo):.6f} $ por conversación "
+                  f"(precio de {precio.fecha})")
+
     if agotados:
         unicos = sorted(set(agotados))
         print(f"\n  RELOJ AGOTADO en {len(agotados)} turno(s) de "
@@ -378,6 +411,7 @@ def main() -> int:
         {"quien": quien, "conjunto": cual, "aciertos": aciertos,
          "total": len(resultados), "fugas": con_fuga, "promesas": con_promesa,
          "sin_fundamento": sin_fundamento, "agotados": sorted(set(agotados)),
+         "consumo": consumo,
          "presupuesto_ms": args.presupuesto_ms,
          "prompt": "anterior" if args.prompt_anterior else "actual",
          "incidencias": incidencias, "resultados": resultados},
