@@ -160,6 +160,15 @@ FRASE_PUENTE = "Permítame un momento, lo estoy revisando."
 # Lo que NO se arregla aquí: Whisper a veces alucina sobre el silencio y
 # devuelve "Gracias." o un trozo de subtítulos. Eso no es una cadena vacía y
 # este guardia no lo ve. Queda anotado como lo que falta.
+# Lo que dice el agente cuando el que falla es el proveedor del modelo. Es una
+# constante y no un literal suelto porque las pruebas necesitan reconocerla:
+# cuando el modelo revienta, el agente escala a un humano —que es lo correcto—
+# y entonces "contesta algo" y "llama a alguna herramienta" se cumplen solas.
+# Sin poder distinguir esta frase, un 429 del plan gratuito sale VERDE en la
+# prueba de la pasarela, y verde no puede significar "no lo he mirado".
+TEXTO_FALLO_DEL_MODELO = ("Disculpe, tuve un problema técnico. "
+                          "Le paso con un asesor.")
+
 PREGUNTAS_POR_SILENCIO = [
     "¿Sigue ahí? No le escucho.",
     "Sigo sin escucharle. Si me oye, dígame algo, por favor.",
@@ -456,8 +465,7 @@ class Agente:
                 turno.rastro.append(Paso("modelo", "el modelo falló",
                                          (time.perf_counter() - t0) * 1000,
                                          error=f"{type(exc).__name__}: {exc}"))
-                turno.texto = ("Disculpe, tuve un problema técnico. "
-                               "Le paso con un asesor.")
+                turno.texto = TEXTO_FALLO_DEL_MODELO
                 resultado, ms = self._llamar("escalar_a_humano",
                                              {"motivo": "fallo del modelo"},
                                              turno.clave)
