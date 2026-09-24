@@ -9,14 +9,15 @@ recibe como si alguien hubiera hablado, y el agente contesta a nadie. Al
 teléfono —donde el silencio es lo más común que hay: la persona se apartó, se
 cortó, el micrófono está muteado— eso no es un caso raro.
 
-Esta sonda no arregla nada. Mide si existe la señal con la que arreglarlo,
-porque hoy se tira a la basura: en `app/vivo.py` la llamada es
-`segmentos, _ = self.asr.transcribe(...)` y de cada segmento solo se usa
-`.text`. faster-whisper devuelve además, por segmento, `no_speech_prob`,
-`avg_logprob` y `compression_ratio`, y en el `info` que se descarta con `_` va
-la probabilidad del idioma. La pregunta de la sonda es si alguno de esos
-números separa "aquí no habló nadie" de "aquí habló alguien", sobre el audio
-real de esta máquina y de este hablante.
+Esta sonda no arregla nada. Mide dos cosas con las que decidir:
+
+  1. **Cada cuánto pasa**, sobre silencio de verdad de este micrófono y esta
+     sala, y si `vad_filter=True` (Silero, dentro de faster-whisper) lo tapa.
+  2. **Si existe la señal** con la que verlo cuando pasa, porque hoy se tira a
+     la basura: en `app/vivo.py` la llamada es `segmentos, _ = transcribe(...)`
+     y de cada segmento solo se usa `.text`. faster-whisper devuelve además
+     `no_speech_prob`, `avg_logprob` y `compression_ratio` por segmento, y la
+     probabilidad del idioma en el `info` que se descarta con `_`.
 
 ## El criterio, escrito ANTES de ver los números
 
@@ -28,37 +29,34 @@ alguien que sí estaba hablando es peor que contestarle a un silencio. Así que:
   · Dentro de esa restricción, que cace todo el material sin voz que pueda.
   · Si ninguna señal separa sin tocar el habla, **la conclusión es que no
     separa**, y se dice. No se busca luego una combinación a medida de estos
-    18 clips, que es como se fabrica un número que solo funciona el día que se
+    clips, que es como se fabrica un número que solo funciona el día que se
     midió.
 
-## Qué material se mide
+## De dónde sale el silencio
 
-De verdad, del micrófono de esta máquina, no sintético:
+No de una fila de ceros: de esta habitación. De cada grabación se sacan todos
+los tramos de medio segundo cuya energía está muy por debajo de la del fichero,
+y con ese banco se cosen clips de 1, 2, 4 y 8 segundos. La duración importa y
+por eso hay cuatro: a Whisper se le dan cada vez más segundos de nada, que es
+justo la situación en la que se le conoce la manía de inventar.
 
-  · `habla` — las grabaciones que ya existen en `artifacts/`.
-  · `sala` — la ventana de 2 s más callada de cada una de esas grabaciones.
-    Es el ruido de fondo real de la habitación y del micrófono: el silencio
-    que de verdad le va a llegar al agente, no una fila de ceros.
-  · las dos anteriores **por línea telefónica** (300–3400 Hz, 8 kHz, µ-law),
-    que es como llegarán de verdad.
-  · `habla-tapada` — el habla mezclada con ese mismo ruido de sala subido
-    hasta 0 dB de relación señal/ruido. Sirve para saber si la señal mide
-    "no se entiende" o solo "no hay nadie": son dos guardias distintos y el
-    agente necesita saber cuál es cuál.
-  · `silencio-digital` y `ruido-blanco`, sintéticos, como referencia de los
-    extremos.
+**Dónde puede fallar esta verdad, dicho antes de usarla:** "sin voz" lo decide
+la energía, no un oído. Un tramo flojo podría llevar el final de una palabra o
+una respiración, y entonces contaríamos como invento algo que sí se dijo. El
+error va en la dirección incómoda —infla la cifra de alucinación en vez de
+taparla—, y con `--guardar-clips` los WAV quedan en `artifacts/` para poder
+escucharlos y desmentirlo.
 
 ## Y de paso, el coste
 
-`vad_filter=True` (Silero) le quita a Whisper el audio sin voz antes de
-transcribir, y es la otra manera de tapar esto. Pero va en la ruta crítica del
-turno, que ya se come su presupuesto de 3000 ms, así que aquí se mide lo que
-cuesta en milisegundos y no solo si funciona. Una solución que arregla la
-alucinación y añade 400 ms al turno no es gratis y no se puede decidir sin el
-número.
+`vad_filter=True` va en la ruta crítica del turno, que ya se come su
+presupuesto de 3000 ms, así que aquí se mide lo que cuesta en milisegundos y
+no solo si funciona. Una solución que arregla la alucinación y añade 400 ms al
+turno no es gratis y no se puede decidir sin el número.
 
 Uso:
   .\.venv\Scripts\python.exe probe\confianza_asr.py [--modelo small] [--repeticiones 3]
+  .\.venv\Scripts\python.exe probe\confianza_asr.py --guardar-clips
 """
 
 from __future__ import annotations
@@ -66,7 +64,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import dataclass, field, asdict
+import time
+import wave
+from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -77,8 +77,20 @@ from common import ARTEFACTOS, Medicion, describe_host, guardar, percentil  # no
 from linea_telefonica import a_linea_telefonica  # noqa: E402
 from probe_whisper_local import cargar_modelo, leer_wav  # noqa: E402
 
-VENTANA_SALA_S = 2.0
+FRECUENCIA = 16000
+TRAMO_S = 0.5
+DURACIONES_SALA_S = (1.0, 2.0, 4.0, 8.0)
+CLIPS_POR_DURACION = 6
 SNR_TAPADA_DB = 0.0
+
+# Un tramo cuenta como sala si su energía está por debajo de esta fracción de
+# la energía del fichero entero. Conservador a propósito: con un umbral alto
+# entrarían colas de palabras y la verdad de la sonda dejaría de ser verdad.
+UMBRAL_SALA = 0.10
+
+
+def rms(audio: np.ndarray) -> float:
+    return float(np.sqrt(np.mean(np.asarray(audio, dtype=np.float64) ** 2)))
 
 
 @dataclass
@@ -88,11 +100,11 @@ class Clip:
     nombre: str
     audio: np.ndarray
     hay_voz: bool          # la verdad conocida, no lo que diga el modelo
-    familia: str           # "habla", "sala", "habla-telefono", ...
+    familia: str           # "habla", "sala", "sala-telefono", "sintetico", ...
 
     @property
     def duracion_s(self) -> float:
-        return len(self.audio) / 16000
+        return len(self.audio) / FRECUENCIA
 
 
 @dataclass
@@ -103,6 +115,8 @@ class Lectura:
     familia: str
     hay_voz: bool
     vad: bool
+    duracion_s: float
+    rms: float
     texto: str
     segmentos: int
     no_speech_max: float | None
@@ -117,24 +131,46 @@ class Lectura:
         return any(c.isalnum() for c in self.texto)
 
 
-def ventana_mas_callada(audio: np.ndarray, frecuencia: int,
-                        ventana_s: float = VENTANA_SALA_S) -> np.ndarray | None:
-    """El tramo más callado del clip: ruido de sala real, no ceros.
+# --------------------------------------------------------------- el material
 
-    Se busca por energía en ventanas solapadas. Devuelve None si el clip no da
-    para una ventana entera, porque media ventana rellenada con algo no es el
-    ruido de nadie.
-    """
-    n = int(ventana_s * frecuencia)
+def banco_de_sala(rutas: list[Path]) -> list[np.ndarray]:
+    """Todos los tramos de medio segundo que son ruido de fondo, de todas las
+    grabaciones. Cosidos después, dan silencio largo que no se repite a sí
+    mismo: un mismo tramo en bucle sería periódico, y la periodicidad es
+    exactamente la clase de estructura que un modelo se inventa."""
+    tramos: list[np.ndarray] = []
+    n = int(TRAMO_S * FRECUENCIA)
+    for ruta in rutas:
+        audio, frecuencia, _ = leer_wav(ruta)
+        if frecuencia != FRECUENCIA:
+            continue
+        umbral = rms(audio) * UMBRAL_SALA
+        for i in range(0, len(audio) - n + 1, n):
+            trozo = audio[i:i + n]
+            if rms(trozo) < umbral:
+                tramos.append(trozo.astype(np.float32))
+    return tramos
+
+
+def coser(tramos: list[np.ndarray], duracion_s: float,
+          generador: np.random.Generator) -> np.ndarray:
+    cuantos = int(np.ceil(duracion_s * FRECUENCIA / (TRAMO_S * FRECUENCIA)))
+    elegidos = [tramos[i] for i in generador.integers(0, len(tramos), cuantos)]
+    return np.concatenate(elegidos)[:int(duracion_s * FRECUENCIA)]
+
+
+def ventana_mas_callada(audio: np.ndarray, ventana_s: float = 2.0) -> np.ndarray | None:
+    """El tramo más callado de un clip concreto, para el ruido de su propia sala."""
+    n = int(ventana_s * FRECUENCIA)
     if len(audio) < n:
         return None
-    paso = max(1, int(0.25 * frecuencia))
-    mejor, energia_min = None, None
+    paso = max(1, int(0.25 * FRECUENCIA))
+    mejor, minimo = None, None
     for i in range(0, len(audio) - n + 1, paso):
         trozo = audio[i:i + n]
-        energia = float(np.sqrt(np.mean(trozo.astype(np.float64) ** 2)))
-        if energia_min is None or energia < energia_min:
-            mejor, energia_min = trozo, energia
+        energia = rms(trozo)
+        if minimo is None or energia < minimo:
+            mejor, minimo = trozo, energia
     return mejor
 
 
@@ -161,8 +197,60 @@ def mezclar_a_snr(voz: np.ndarray, ruido: np.ndarray, snr_db: float) -> np.ndarr
     return mezcla.astype(np.float32)
 
 
+def construir_clips(rutas: list[Path]) -> tuple[list[Clip], int]:
+    """El material de la sonda, con su verdad pegada."""
+    clips: list[Clip] = []
+
+    for ruta in rutas:
+        audio, frecuencia, _ = leer_wav(ruta)
+        if frecuencia != FRECUENCIA:
+            print(f"  (saltada {ruta.name}: {frecuencia} Hz, no 16 kHz)")
+            continue
+        corto = ruta.stem.replace("muestra-", "")
+        clips.append(Clip(corto, audio, True, "habla"))
+        clips.append(Clip(f"{corto}@tel",
+                          a_linea_telefonica(audio, frecuencia).astype(np.float32),
+                          True, "habla-telefono"))
+        propia = ventana_mas_callada(audio)
+        if propia is not None:
+            clips.append(Clip(f"{corto}/tapada",
+                              mezclar_a_snr(audio, propia, SNR_TAPADA_DB),
+                              True, "habla-tapada"))
+
+    tramos = banco_de_sala(rutas)
+    generador = np.random.default_rng(20260924)
+    if tramos:
+        for duracion in DURACIONES_SALA_S:
+            for i in range(CLIPS_POR_DURACION):
+                sala = coser(tramos, duracion, generador)
+                clips.append(Clip(f"sala-{duracion:g}s-{i}", sala, False, "sala"))
+                clips.append(Clip(f"sala-{duracion:g}s-{i}@tel",
+                                  a_linea_telefonica(sala, FRECUENCIA).astype(np.float32),
+                                  False, "sala-telefono"))
+
+    for duracion in (2.0, 8.0):
+        n = int(duracion * FRECUENCIA)
+        clips.append(Clip(f"digital-{duracion:g}s", np.zeros(n, dtype=np.float32),
+                          False, "sintetico"))
+        clips.append(Clip(f"blanco-{duracion:g}s",
+                          (generador.standard_normal(n) * 0.01).astype(np.float32),
+                          False, "sintetico"))
+    return clips, len(tramos)
+
+
+def guardar_wav(clip: Clip) -> None:
+    destino = ARTEFACTOS / f"clip-{clip.nombre.replace('/', '_').replace('@', '-')}.wav"
+    datos = np.clip(clip.audio, -1.0, 1.0)
+    with wave.open(str(destino), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(FRECUENCIA)
+        w.writeframes((datos * 32767).astype(np.int16).tobytes())
+
+
+# ---------------------------------------------------------------- la lectura
+
 def leer(modelo, clip: Clip, vad: bool) -> Lectura:
-    import time
     arranque = time.perf_counter()
     segmentos, info = modelo.transcribe(clip.audio, language="es", beam_size=1,
                                         vad_filter=vad)
@@ -171,6 +259,7 @@ def leer(modelo, clip: Clip, vad: bool) -> Lectura:
     texto = "".join(s.text for s in segs).strip()
     return Lectura(
         clip=clip.nombre, familia=clip.familia, hay_voz=clip.hay_voz, vad=vad,
+        duracion_s=round(clip.duracion_s, 2), rms=round(rms(clip.audio), 5),
         texto=texto, segmentos=len(segs),
         no_speech_max=max((s.no_speech_prob for s in segs), default=None),
         avg_logprob_min=min((s.avg_logprob for s in segs), default=None),
@@ -179,57 +268,27 @@ def leer(modelo, clip: Clip, vad: bool) -> Lectura:
     )
 
 
-def construir_clips(rutas: list[Path]) -> list[Clip]:
-    """El material de la sonda, con su verdad pegada."""
-    clips: list[Clip] = []
-    salas: list[np.ndarray] = []
-    for ruta in rutas:
-        audio, frecuencia, _ = leer_wav(ruta)
-        if frecuencia != 16000:
-            print(f"  (saltado {ruta.name}: {frecuencia} Hz, no 16 kHz)")
-            continue
-        corto = ruta.stem.replace("muestra-", "")
-        clips.append(Clip(f"{corto}", audio, True, "habla"))
-        clips.append(Clip(f"{corto}@tel", a_linea_telefonica(audio, frecuencia).astype(np.float32),
-                          True, "habla-telefono"))
-        sala = ventana_mas_callada(audio, frecuencia)
-        if sala is None:
-            continue
-        salas.append(sala)
-        clips.append(Clip(f"{corto}/sala", sala, False, "sala"))
-        clips.append(Clip(f"{corto}/sala@tel",
-                          a_linea_telefonica(sala, frecuencia).astype(np.float32),
-                          False, "sala-telefono"))
-        clips.append(Clip(f"{corto}/tapada",
-                          mezclar_a_snr(audio, sala, SNR_TAPADA_DB), True, "habla-tapada"))
-
-    clips.append(Clip("silencio-digital", np.zeros(int(2.0 * 16000), dtype=np.float32),
-                      False, "sintetico"))
-    generador = np.random.default_rng(20260924)
-    clips.append(Clip("ruido-blanco",
-                      (generador.standard_normal(int(2.0 * 16000)) * 0.01).astype(np.float32),
-                      False, "sintetico"))
-    return clips
-
-
 def separa(lecturas: list[Lectura], senal: str, direccion: str) -> dict:
     """¿Separa esta señal el material sin voz del material con voz?
 
     `direccion` dice de qué lado está la sospecha: "alta" si valores altos
     significan "aquí no habló nadie" (no_speech_prob), "baja" si es al revés
     (avg_logprob). El punto de corte se elige con la restricción dura: no
-    tocar ni un clip con voz. Lo que se devuelve incluye el solapamiento
-    aunque sea malo, porque esa es la respuesta interesante.
+    tocar ni un clip con voz. Solo se miran los clips que produjeron algún
+    segmento, porque de los mudos no hay señal que mirar y ya los caza el
+    guardia que existe.
     """
-    con_voz = [getattr(l, senal) for l in lecturas if l.hay_voz and getattr(l, senal) is not None]
+    con_voz = [getattr(l, senal) for l in lecturas
+               if l.hay_voz and getattr(l, senal) is not None]
     sin_voz = [(l, getattr(l, senal)) for l in lecturas
                if not l.hay_voz and getattr(l, senal) is not None]
     if not con_voz or not sin_voz:
-        return {"senal": senal, "veredicto": "sin material suficiente"}
+        return {"senal": senal, "direccion": direccion,
+                "veredicto": f"sin material: {len(con_voz)} con voz, "
+                             f"{len(sin_voz)} sin voz dieron segmentos"}
 
     if direccion == "alta":
-        # El corte más agresivo que no toca ningún clip con voz.
-        corte = max(con_voz)
+        corte = max(con_voz)            # el corte más agresivo que no toca el habla
         cazados = [l.clip for l, v in sin_voz if v > corte]
     else:
         corte = min(con_voz)
@@ -254,17 +313,25 @@ def main() -> int:
     parser.add_argument("--repeticiones", type=int, default=3,
                         help="pasadas sobre los clips de habla, para el coste en ms")
     parser.add_argument("--audio", default="muestra-*.wav")
+    parser.add_argument("--guardar-clips", action="store_true",
+                        help="deja los WAV en artifacts/ para poder escucharlos")
     args = parser.parse_args()
 
     rutas = [r for r in sorted(ARTEFACTOS.glob(args.audio)) if "telefono" not in r.stem]
     if not rutas:
         print(f"No hay grabaciones en {ARTEFACTOS}.", file=sys.stderr)
         return 2
-    print(f"Grabaciones de partida: {', '.join(r.stem for r in rutas)}\n")
+    print(f"Grabaciones de partida: {', '.join(r.stem for r in rutas)}")
 
-    clips = construir_clips(rutas)
-    con, sin = sum(c.hay_voz for c in clips), sum(not c.hay_voz for c in clips)
-    print(f"{len(clips)} clips: {con} con voz, {sin} sin voz\n")
+    clips, tramos = construir_clips(rutas)
+    con = sum(c.hay_voz for c in clips)
+    print(f"Banco de sala: {tramos} tramos de {TRAMO_S} s por debajo del "
+          f"{UMBRAL_SALA:.0%} de la energía de su fichero")
+    print(f"{len(clips)} clips: {con} con voz, {len(clips) - con} sin voz\n")
+    if args.guardar_clips:
+        for clip in clips:
+            guardar_wav(clip)
+        print(f"  WAV escritos en {ARTEFACTOS} (los .wav no se versionan)\n")
 
     print(f"Cargando faster-whisper '{args.modelo}'...")
     modelo, dispositivo, carga_ms, _ = cargar_modelo(args.modelo)
@@ -272,29 +339,46 @@ def main() -> int:
 
     lecturas: list[Lectura] = []
     for vad in (False, True):
-        print(f"--- vad_filter={vad} " + "-" * 52)
-        print(f"  {'clip':<22} {'voz':<4} {'segs':>4} {'no_speech':>10} "
+        print(f"--- vad_filter={vad} " + "-" * 50)
+        print(f"  {'clip':<20} {'voz':<4} {'s':>5} {'segs':>4} {'no_speech':>10} "
               f"{'avg_logp':>9} {'ms':>6}  texto")
         for clip in clips:
             lectura = leer(modelo, clip, vad)
             lecturas.append(lectura)
-            ns = f"{lectura.no_speech_max:.3f}" if lectura.no_speech_max is not None else "   -"
-            lp = f"{lectura.avg_logprob_min:.3f}" if lectura.avg_logprob_min is not None else "   -"
-            print(f"  {lectura.clip:<22} {'sí' if clip.hay_voz else 'NO':<4} "
-                  f"{lectura.segmentos:>4} {ns:>10} {lp:>9} {lectura.ms:>6.0f}  "
-                  f"{lectura.texto[:52]}")
-        print()
+            if not lectura.dijo_algo and not clip.hay_voz:
+                continue            # los mudos sin voz son el caso bueno: no se listan
+            ns = (f"{lectura.no_speech_max:.3f}"
+                  if lectura.no_speech_max is not None else "-")
+            lp = (f"{lectura.avg_logprob_min:.3f}"
+                  if lectura.avg_logprob_min is not None else "-")
+            print(f"  {lectura.clip:<20} {'sí' if clip.hay_voz else 'NO':<4} "
+                  f"{lectura.duracion_s:>5.1f} {lectura.segmentos:>4} {ns:>10} "
+                  f"{lp:>9} {lectura.ms:>6.0f}  {lectura.texto[:44]}")
+        print("  (los clips sin voz que salen mudos no se listan: son el caso bueno)\n")
 
     # ------------------------------------------------------------- el veredicto
     print("=" * 74)
     print("LO QUE HOY SE LE ESCAPA AL GUARDIA DEL TURNO VACÍO")
+    resumen_alucinacion = {}
     for vad in (False, True):
         mudos = [l for l in lecturas if not l.hay_voz and l.vad is vad]
         hablan = [l for l in mudos if l.dijo_algo]
+        resumen_alucinacion[f"vad={vad}"] = {
+            "sin_voz": len(mudos), "producen_texto": len(hablan),
+            "por_duracion": {
+                f"{d:g}s": sum(1 for l in hablan if abs(l.duracion_s - d) < 0.01)
+                for d in DURACIONES_SALA_S
+            },
+        }
         print(f"  vad_filter={str(vad):<5} {len(hablan)} de {len(mudos)} clips sin voz "
               f"producen texto con letras")
         for l in hablan:
-            print(f"      {l.clip:<22} -> {l.texto[:60]!r}")
+            print(f"      {l.clip:<20} {l.duracion_s:>4.1f} s -> {l.texto[:56]!r}")
+        # Y la otra cara: habla que se queda sin transcribir.
+        sordos = [l for l in lecturas if l.hay_voz and l.vad is vad and not l.dijo_algo]
+        print(f"  {'':<18} {len(sordos)} de "
+              f"{sum(1 for l in lecturas if l.hay_voz and l.vad is vad)} clips CON voz "
+              f"se quedan sin transcribir")
 
     analisis = {}
     for vad in (False, True):
@@ -313,8 +397,9 @@ def main() -> int:
                 print(f"    {senal:<18} {r['veredicto']}")
                 continue
             print(f"    {senal:<18} corte {r['corte']:>8}   "
-                  f"con voz [{r['con_voz']['min']}, {r['con_voz']['max']}]   "
-                  f"sin voz [{r['sin_voz']['min']}, {r['sin_voz']['max']}]")
+                  f"con voz [{r['con_voz']['min']}, {r['con_voz']['max']}] n={r['con_voz']['n']}"
+                  f"   sin voz [{r['sin_voz']['min']}, {r['sin_voz']['max']}] "
+                  f"n={r['sin_voz']['n']}")
             print(f"    {'':<18} caza {len(r['cazados'])}/{r['sin_voz']['n']} sin voz, "
                   f"y {len(r['cazados_de_los_que_hablan'])}/"
                   f"{len(r['sin_voz_que_hablan'])} de los que alucinan")
@@ -337,8 +422,10 @@ def main() -> int:
                 m.muestras_ms.append(leer(modelo, clip, vad).ms)
         mediciones.append(m)
         print(m.linea())
-    delta = percentil(mediciones[1].muestras_ms, 0.50) - percentil(mediciones[0].muestras_ms, 0.50)
-    print(f"  diferencia de medianas: {delta:+.0f} ms sobre un presupuesto de turno de 3000 ms")
+    delta = (percentil(mediciones[1].muestras_ms, 0.50)
+             - percentil(mediciones[0].muestras_ms, 0.50))
+    print(f"  diferencia de medianas: {delta:+.0f} ms sobre un presupuesto de "
+          f"turno de 3000 ms")
 
     destino = guardar(mediciones, f"confianza-asr-coste-{args.modelo}")
     fecha = datetime.now(timezone.utc).astimezone()
@@ -346,7 +433,9 @@ def main() -> int:
     crudo.write_text(json.dumps({
         "fecha": fecha.isoformat(), "host": describe_host(), "modelo": args.modelo,
         "dispositivo": dispositivo, "snr_tapada_db": SNR_TAPADA_DB,
+        "umbral_sala": UMBRAL_SALA, "tramos_de_sala": tramos,
         "criterio": "el corte no puede rechazar ningún clip con voz",
+        "alucinacion": resumen_alucinacion,
         "lecturas": [asdict(l) for l in lecturas], "analisis": analisis,
     }, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nGuardado en {crudo.name} y {destino.name}")

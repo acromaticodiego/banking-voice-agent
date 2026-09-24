@@ -1,0 +1,59 @@
+{
+  "fecha": "2026-09-24T15:40:00.426045-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "asr",
+      "implementacion": "faster-whisper small (cuda/float16) vad=False",
+      "que_mide": "transcribir el clip entero de habla, de llamada a resultado",
+      "muestras_ms": [
+        734.375,
+        1407.341499987524,
+        667.1563999843784,
+        510.64610001049004,
+        673.8763999892399,
+        802.4376000103075
+      ],
+      "unidad": "ms",
+      "notas": "Clips: documento, libre-bloqueo, libre-cobro, libre-datos, monto, titubeos. Va en la ruta crítica del turno.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 6,
+        "p50": 704.1,
+        "p95": 1256.1,
+        "min": 510.6,
+        "max": 1407.3
+      }
+    },
+    {
+      "etapa": "asr",
+      "implementacion": "faster-whisper small (cuda/float16) vad=True",
+      "que_mide": "transcribir el clip entero de habla, de llamada a resultado",
+      "muestras_ms": [
+        977.2863000107463,
+        1214.6747999940999,
+        780.860600003507,
+        649.8972999979742,
+        742.6716999907512,
+        972.6403999957256
+      ],
+      "unidad": "ms",
+      "notas": "Clips: documento, libre-bloqueo, libre-cobro, libre-datos, monto, titubeos. Va en la ruta crítica del turno.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 6,
+        "p50": 876.8,
+        "p95": 1155.3,
+        "min": 649.9,
+        "max": 1214.7
+      }
+    }
+  ]
+}
