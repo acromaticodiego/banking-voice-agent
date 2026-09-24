@@ -36,7 +36,7 @@ levantado, no solo compilando.
 | llamada en vivo | `app/vivo.py` | consume audio según llega, detecta fin de turno, orquesta |
 | pasarela | `app/gateway.py` | sirve la página y atiende el WebSocket. No guarda estado |
 | pantalla | `app/web/index.html` | micrófono con AudioWorklet, remuestreo a 16 kHz en el navegador, cola de reproducción, conversación y llamadas a herramientas en vivo |
-| bucle del agente | `app/agent/loop.py` | decide, llama herramientas, se recupera, frase puente, presupuesto por turno, idempotencia |
+| bucle del agente | `app/agent/loop.py` | decide, llama herramientas, se recupera, frase puente, presupuesto por turno, idempotencia, y un turno vacío no llega al modelo |
 | herramientas | `app/tools/service.py` | FastAPI, una por capacidad. `X-Fallar` y `X-Tardar-Ms` para provocar fallo y latencia |
 | fin de turno | `app/fin_de_turno.py` | decide si la frase está a medias, por contenido y no solo por silencio |
 | números hablados | `probe/numeros_es.py` | "setenta, veintitrés, cuatro..." → `70234567`. Pieza del sistema, no solo de medición |
@@ -55,6 +55,7 @@ levantado, no solo compilando.
 .\.venv\Scripts\python.exe -m app.tools.prueba_servicio      # 10/10
 .\.venv\Scripts\python.exe -m app.agent.prueba_bucle         # 5 escenarios. Si acaba en 3, hubo 429: repite
 .\.venv\Scripts\python.exe -m app.agent.prueba_fundamento    # 17/17, y no gasta peticiones
+.\.venv\Scripts\python.exe -m app.agent.prueba_silencio      # el turno vacío, sin gastar peticiones
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
@@ -369,16 +370,21 @@ describe lo que se ve en la demo. Eso se arregla haciendo el turno más rápido
 —no relajando el reloj—, y el turno son dos llamadas al modelo con una
 herramienta en medio. Mientras tanto, las dos cifras van juntas.
 
-### 4. Silencio y documento equivocado: dos comportamientos por arreglar
-Los dos salieron del conjunto nuevo y los dos son estables, o sea que no son
-ruido:
-- **Silencio total**: el agente contesta a la nada con un saludo completo y
-  pide el documento. La transcripción vacía llega al modelo como un turno
-  normal. Se arregla antes del modelo, en `vivo.py` o en `fin_de_turno.py`: un
-  turno vacío no es un turno.
+### 4. Documento equivocado: el comportamiento que queda
+El del silencio está hecho (24/09): un turno vacío ya no llega al modelo, se
+contesta con dos preguntas distintas y al tercer silencio se pasa a un humano
+con su ticket. Cuesta cero tokens y cero espera, y `prueba_silencio.py` lo
+cubre con un modelo que revienta si alguien lo llama. **Lo que ese arreglo no
+tapa:** Whisper alucina sobre el silencio y devuelve "Gracias." o un trozo de
+subtítulos; eso no es una cadena vacía y el guardia no lo ve.
+
+Queda el otro, y también es estable:
+
 - **Documento equivocado una vez**: escala al PRIMER documento que no
   aparece, y abre un ticket. Al teléfono la gente se equivoca de dígito; darse
-  por vencido a la primera es peor servicio, y el ticket tiene efecto.
+  por vencido a la primera es peor servicio, y el ticket tiene efecto. Es el
+  caso `documento-mal-dos-veces`, que falla igual en las tres corridas de los
+  dos brazos del prompt.
 
 ### 5. Voz de verdad: varias personas, ruido y línea telefónica
 La tasa de transcripción tiene n=3 y un solo hablante en una habitación
