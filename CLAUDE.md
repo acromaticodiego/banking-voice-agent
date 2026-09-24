@@ -58,6 +58,7 @@ levantado, no solo compilando.
 .\.venv\Scripts\python.exe -m app.agent.prueba_fundamento    # 17/17, y no gasta peticiones
 .\.venv\Scripts\python.exe -m app.agent.prueba_silencio      # el turno vacío, sin gastar peticiones
 .\.venv\Scripts\python.exe -m app.agent.prueba_consumo       # el contador de tokens, exacto y sin cuota
+.\.venv\Scripts\python.exe -m app.agent.prueba_reintentos    # tres documentos antes de escalar, sin cuota
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
@@ -155,6 +156,13 @@ desenlace no es suyo: por eso una casilla tiene n=2.
 | reloj de 3000 ms (el de la demo) | mediana 6,5/12, rango 5–8 (n=2) | **mediana 4/12, rango 3–5** |
 | reloj holgado, 15000 ms | mediana 7/12, rango 6–9 | mediana 8/12, rango 6–9 |
 | línea base sin modelo | 7/12, determinista, 12/12 estables | — |
+
+**AVISO: estos números son de un agente que ya no existe.** Se midieron antes
+de dos cambios de comportamiento del 24/09 —el turno vacío y los tres intentos
+de documento—, así que no son comparables con lo que salga mañana. Una medición
+sin la versión del agente al lado es una medición a medias, y esta lo era. Por
+eso la primera cosa de mañana son 3 corridas de calibración **antes** del
+reservado: para tener con qué comparar.
 
 Estos números son con la **rúbrica del 24/09**, que añadió el desenlace
 `resuelve_y_escala`. Antes de ella el clasificador describía con la palabra
@@ -402,7 +410,7 @@ describe lo que se ve en la demo. Eso se arregla haciendo el turno más rápido
 —no relajando el reloj—, y el turno son dos llamadas al modelo con una
 herramienta en medio. Mientras tanto, las dos cifras van juntas.
 
-### 4. Documento equivocado: el comportamiento que queda
+### ~~4. Silencio y documento equivocado~~ LOS DOS HECHOS el 2026-09-24
 El del silencio está hecho (24/09): un turno vacío ya no llega al modelo, se
 contesta con dos preguntas distintas y al tercer silencio se pasa a un humano
 con su ticket. Cuesta cero tokens y cero espera, y `prueba_silencio.py` lo
@@ -410,13 +418,17 @@ cubre con un modelo que revienta si alguien lo llama. **Lo que ese arreglo no
 tapa:** Whisper alucina sobre el silencio y devuelve "Gracias." o un trozo de
 subtítulos; eso no es una cadena vacía y el guardia no lo ve.
 
-Queda el otro, y también es estable:
+El del documento equivocado también: ahora se prueban **tres documentos
+distintos** antes de pasar a un humano, y la cuenta no la lleva el prompt —que
+no sabe contar— sino el agente, que se la da masticada al modelo en el
+resultado de la herramienta (`_intentos_en_esta_llamada`, `_que_hacer`). Se
+cuentan documentos distintos y no llamadas, porque el adelanto de consultas y
+la insistencia del modelo repiten la misma cédula; y una herramienta caída no
+cuenta como documento malo, porque eso no es un documento mal dicho, es que no
+se pudo preguntar.
 
-- **Documento equivocado una vez**: escala al PRIMER documento que no
-  aparece, y abre un ticket. Al teléfono la gente se equivoca de dígito; darse
-  por vencido a la primera es peor servicio, y el ticket tiene efecto. Es el
-  caso `documento-mal-dos-veces`, que falla igual en las tres corridas de los
-  dos brazos del prompt.
+**Lo determinista está comprobado; que el modelo obedezca, no.** Eso se mide
+con el conjunto y cuesta cuota.
 
 ### 5. Voz de verdad: varias personas y ruido (la línea ya está)
 El canal telefónico está hecho (24/09) y **el resultado fue que no importa**:
