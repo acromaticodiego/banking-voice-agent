@@ -6,12 +6,17 @@ que siga detectándola dentro de un mes:
 
   · que una voz floja se oiga, que es el fallo que arregló el ADR 0009;
   · que el ruido de una sala, por fuerte que sea, no abra turno;
-  · y sobre todo **la asimetría**: el suelo baja rápido y sube muy despacio.
-    Ese detalle es todo el diseño y no se ve mirando el código un minuto. Si
-    alguien lo simplifica —"¿para qué dos constantes si una vale?"— el detector
-    sigue funcionando en la demo y se queda sordo a mitad de las frases largas,
-    que es el fallo que vino a arreglar. La prueba está para que esa
-    simplificación no pase callando.
+  · que una frase larga no arrastre el suelo hasta dejar sordo al detector;
+  · y el límite que el ADR 0009 declara y no arregla, fijado aquí a propósito
+    para que el día que alguien lo arregle esta prueba falle y le mande a leer
+    por qué se dejó así.
+
+**Una de estas pruebas no cubría lo que decía cubrir**, y se descubrió
+rompiendo el código a propósito: al poner la subida del suelo igual de rápida
+que la bajada, la prueba de la frase larga seguía pasando. Lo que protege de
+las frases largas no es la lentitud de la subida sino que los trozos de voz no
+alimenten la subida en absoluto, y el comentario del código decía lo otro. La
+prueba de la subida lenta que hay ahora cubre lo que esa constante sí hace.
 
   .\.venv\Scripts\python.exe -m app.prueba_deteccion_voz
 """
@@ -99,12 +104,13 @@ def prueba_una_sala_ruidosa_tampoco_abre() -> None:
 
 
 def prueba_la_frase_larga_no_deja_sordo() -> None:
-    """La asimetría, que es el corazón del diseño.
+    """Que hablar mucho seguido no deje sordo al detector.
 
-    Diez segundos de voz seguida sin una sola pausa. Si el suelo subiera al
-    ritmo al que baja, se plantaría en el nivel de la voz y los últimos trozos
-    dejarían de contar como voz: el detector se quedaría sordo justo con quien
-    más habla.
+    Diez segundos de voz sin una sola pausa, que no es una exageración: medida
+    sobre las seis grabaciones reales, la racha continua de habla más larga es
+    de 9,9 segundos. Si el suelo aprendiera de los trozos de voz, se plantaría
+    en el nivel de la voz y los últimos trozos dejarían de contar como tal: el
+    detector se quedaría sordo justo con quien más habla.
     """
     print("  diez segundos de voz seguida no suben el suelo hasta enmudecerla")
     detector = calibrado()
@@ -114,6 +120,44 @@ def prueba_la_frase_larga_no_deja_sordo() -> None:
     comprobar("y el suelo sigue pareciéndose al de la sala, no al de la voz",
               detector.suelo < HABLA / 3,
               f"suelo {detector.suelo:.5f} contra habla {HABLA}")
+
+
+def prueba_un_ruido_aislado_no_levanta_el_suelo() -> None:
+    """Para esto sirve la subida lenta, y no para lo que decía el comentario.
+
+    Un ruido de fondo que sube un poco pero no llega a contar como voz —un
+    ordenador que arranca el ventilador— no puede levantar el suelo de golpe:
+    si lo hiciera, la voz que venga detrás se compararía contra un suelo
+    inflado por un ruido de un segundo.
+    """
+    print("  un ruido por debajo del umbral no levanta el suelo de golpe")
+    detector = calibrado()
+    justo_por_debajo = detector.umbral * 0.9
+    empujar_niveles(detector, justo_por_debajo, 50)      # un segundo
+    comprobar("tras un segundo, el suelo apenas se ha movido",
+              detector.suelo < SALA * 1.4,
+              f"suelo {detector.suelo:.5f} tras empujar {justo_por_debajo:.5f}")
+    comprobar("y la voz normal se sigue oyendo después",
+              all(empujar_niveles(detector, HABLA, 10)),
+              f"umbral {detector.umbral:.5f}")
+
+
+def prueba_limite_conocido_la_sala_que_sube() -> None:
+    """El límite que el ADR 0009 declara y NO arregla.
+
+    Esta prueba no comprueba que algo funcione: fija un comportamiento que se
+    sabe malo, para que el día que alguien lo arregle esto falle y le obligue a
+    venir a leer por qué se dejó así.
+    """
+    print("  LÍMITE CONOCIDO: si el ruido sube por encima del umbral, se queda abierto")
+    detector = calibrado()
+    ruido_nuevo = detector.umbral * 2
+    abiertos = empujar_niveles(detector, ruido_nuevo, 500)   # diez segundos
+    comprobar("hoy se declaran voz los 500 trozos (ADR 0009, límite declarado)",
+              all(abiertos), f"se declararon voz {abiertos.count(True)} de 500")
+    comprobar("y el suelo no se entera, porque solo aprende de lo que no es voz",
+              abs(detector.suelo - SALA) < SALA * 0.5,
+              f"suelo {detector.suelo:.5f}")
 
 
 def prueba_el_suelo_baja_deprisa() -> None:
@@ -191,6 +235,8 @@ def main() -> int:
                    prueba_la_voz_floja_se_oye,
                    prueba_una_sala_ruidosa_tampoco_abre,
                    prueba_la_frase_larga_no_deja_sordo,
+                   prueba_un_ruido_aislado_no_levanta_el_suelo,
+                   prueba_limite_conocido_la_sala_que_sube,
                    prueba_el_suelo_baja_deprisa,
                    prueba_el_silencio_digital_no_abre,
                    prueba_la_llamada_usa_el_detector):
