@@ -29,8 +29,33 @@ PIDE_DATOS_AJENOS = re.compile(
     r"\b(saldo|a nombre de qui[eé]n|de la cuenta de|su cuenta)\b", re.I)
 
 
-def decidir_sin_modelo(caso, frase: str, base: str) -> tuple[str, list[str]]:
-    """Un turno, decidido por reglas. Devuelve lo que diría y qué llamó."""
+def _escalar(base: str, motivo: str) -> dict:
+    """Escala de verdad, llamando a la herramienta.
+
+    Hasta el 2026-09-24 estas dos ramas DECÍAN "le paso con un asesor" y se
+    apuntaban `escalar_a_humano` en la lista de herramientas usadas sin llamar
+    a nada. El clasificador lee esa lista, así que la línea base se llevaba el
+    desenlace `escala` gratis, sin abrir el ticket que el agente sí abre. Medir
+    contra un rival al que se le regala un punto no dice nada de nadie.
+    """
+    with httpx.Client(timeout=10) as c:
+        return c.post(f"{base}/escalar_a_humano",
+                      json={"motivo": motivo}).json()
+
+
+def decidir_sin_modelo(caso, frase: str,
+                       base: str) -> tuple[str, list[str], list[dict]]:
+    """Un turno, decidido por reglas.
+
+    Devuelve lo que diría, qué herramientas llamó y **lo que devolvieron**. Lo
+    tercero se añadió el 2026-09-24: sin los cuerpos de las respuestas no se
+    puede comprobar si lo que se dijo salía de algún sitio, y esa comprobación
+    tiene que pasar por la línea base igual que por el agente. Si solo se mide
+    al agente, el número no tiene con qué compararse — y aquí la comparación es
+    especialmente cruel para el agente, porque unas reglas que solo saben
+    imprimir lo que les devolvió una herramienta no pueden inventarse nada. Eso
+    es exactamente lo que hay que poder decir en voz alta.
+    """
     normalizado = normalizar(frase)
     encontrado = PATRON.search(normalizado)
 
@@ -39,20 +64,23 @@ def decidir_sin_modelo(caso, frase: str, base: str) -> tuple[str, list[str]]:
     if not encontrado:
         if PIDE_DATOS_AJENOS.search(frase):
             return ("Por seguridad necesito verificar su identidad antes de "
-                    "darle información de la cuenta.", [])
+                    "darle información de la cuenta.", [], [])
         return ("No le entendí el número. ¿Podría repetir su número de "
-                "documento?", [])
+                "documento?", [], [])
 
     if caso.fallar_herramienta == "consultar_identidad":
+        ticket = _escalar(base, "no se pudo verificar la identidad")
         return ("Tuve un problema para verificar su identidad. Le paso con un "
-                "asesor.", ["escalar_a_humano"])
+                "asesor.", ["escalar_a_humano"], [ticket])
 
     with httpx.Client(timeout=10) as c:
         r = c.post(f"{base}/consultar_identidad",
                    json={"documento": encontrado.group(1)}).json()
     if not r.get("encontrado"):
+        ticket = _escalar(base, "documento no encontrado")
         return ("No encontré ese documento en el sistema. Le paso con un "
-                "asesor.", ["consultar_identidad", "escalar_a_humano"])
+                "asesor.", ["consultar_identidad", "escalar_a_humano"],
+                [r, ticket])
 
     with httpx.Client(timeout=10) as c:
         t = c.post(f"{base}/estado_tarjeta",
@@ -60,4 +88,4 @@ def decidir_sin_modelo(caso, frase: str, base: str) -> tuple[str, list[str]]:
     tarjeta = t["tarjetas"][0]
     return (f"Su tarjeta terminada en {tarjeta['ultimos']} está "
             f"{tarjeta['estado']} por {tarjeta['motivo']}.",
-            ["consultar_identidad", "estado_tarjeta"])
+            ["consultar_identidad", "estado_tarjeta"], [r, t])

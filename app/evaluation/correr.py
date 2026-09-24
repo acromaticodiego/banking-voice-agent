@@ -38,6 +38,7 @@ sys.path.insert(0, str(RAIZ / "probe"))
 from common import cargar_env  # noqa: E402
 
 from app.agent.loop import Agente  # noqa: E402
+from app.agent.fundamento import revisar  # noqa: E402
 from app.evaluation.catalogo import Caso  # noqa: E402
 from app.evaluation.linea_base import decidir_sin_modelo  # noqa: E402
 from app.evaluation.particion import calibracion, reservado  # noqa: E402
@@ -114,10 +115,12 @@ def correr_caso(caso: Caso, hacer_turno) -> dict:
     """Ejecuta los turnos del caso y devuelve qué pasó."""
     dicho_por_agente: list[str] = []
     herramientas: list[str] = []
+    resultados: list[dict] = []
     for frase in caso.turnos:
-        texto, usadas = hacer_turno(caso, frase)
+        texto, usadas, devueltos = hacer_turno(caso, frase)
         dicho_por_agente.append(texto)
         herramientas.extend(usadas)
+        resultados.extend(devueltos)
 
     todo = " ".join(dicho_por_agente)
     obtenido = clasificar(todo, herramientas)
@@ -129,6 +132,11 @@ def correr_caso(caso: Caso, hacer_turno) -> dict:
     # significa algo si no se le mezcla otra cosa dentro.
     promesas = [p for p in caso.no_debe_prometer
                 if re.search(re.escape(p), todo, re.I)]
+    # Y esto no es una lista por caso: no hay que haber visto el invento antes
+    # para cazarlo. Se compara lo dicho con lo que devolvieron las
+    # herramientas y con lo que dijo quien llama, que son las dos únicas
+    # fuentes legítimas que tiene el agente.
+    revision = revisar(todo, resultados, caso.turnos, herramientas)
     return {
         "id": caso.id,
         "esperado": caso.desenlace,
@@ -136,7 +144,10 @@ def correr_caso(caso: Caso, hacer_turno) -> dict:
         "acierta": obtenido == caso.desenlace,
         "filtraciones": filtraciones,
         "promesas": promesas,
+        "numeros_sin_fundamento": revision.numeros,
+        "acciones_sin_fundamento": revision.acciones,
         "herramientas": herramientas,
+        "resultados": resultados,
         "dijo": todo,
         "motivo_del_caso": caso.motivo,
     }
@@ -215,7 +226,12 @@ def main() -> int:
                     incidencias.append({"caso": caso.id, "error": p.error})
             usadas = [p.detalle.split(" ")[0] for p in turno.rastro
                       if p.tipo == "herramienta"]
-            return turno.texto, usadas
+            # El rastro ya guardaba lo que devolvió cada herramienta; hasta
+            # ahora nadie lo leía. Es lo único contra lo que se puede
+            # contrastar lo que el agente afirma.
+            devueltos = [p.resultado for p in turno.rastro
+                         if p.tipo == "herramienta" and p.resultado is not None]
+            return turno.texto, usadas, devueltos
 
     print(f"{quien} sobre {cual}: {len(casos)} casos\n")
     resultados = [correr_caso(c, hacer_turno) for c in casos]
@@ -224,17 +240,27 @@ def main() -> int:
         marca = "ok " if r["acierta"] else "MAL"
         print(f"  {marca} {r['id']:<34} esperado {r['esperado']:<13} "
               f"obtenido {r['obtenido']}")
-        if not r["acierta"] or r["filtraciones"] or r["promesas"]:
+        if (not r["acierta"] or r["filtraciones"] or r["promesas"]
+                or r["numeros_sin_fundamento"] or r["acciones_sin_fundamento"]):
             print(f"        motivo del caso: {r['motivo_del_caso']}")
             print(f"        dijo: {r['dijo'][:150]}")
         if r["filtraciones"]:
             print(f"        FILTRÓ: {r['filtraciones']}")
         if r["promesas"]:
             print(f"        PROMETIÓ SIN HERRAMIENTA: {r['promesas']}")
+        if r["numeros_sin_fundamento"]:
+            print(f"        NÚMEROS QUE NO SALEN DE NINGUNA FUENTE: "
+                  f"{r['numeros_sin_fundamento']}")
+        if r["acciones_sin_fundamento"]:
+            print(f"        SE ATRIBUYE ACCIONES QUE NO HIZO: "
+                  f"{r['acciones_sin_fundamento']}")
 
     aciertos = sum(1 for r in resultados if r["acierta"])
     con_fuga = [r["id"] for r in resultados if r["filtraciones"]]
     con_promesa = [r["id"] for r in resultados if r["promesas"]]
+    sin_fundamento = [r["id"] for r in resultados
+                      if r["numeros_sin_fundamento"]
+                      or r["acciones_sin_fundamento"]]
     sin_clasificar = [r["id"] for r in resultados
                       if r["obtenido"] == "sin_clasificar"]
 
@@ -243,6 +269,8 @@ def main() -> int:
           (f"  -> {con_fuga}" if con_fuga else ""))
     print(f"  promesas sin base  : {len(con_promesa)}" +
           (f"  -> {con_promesa}" if con_promesa else ""))
+    print(f"  dijo lo que no le consta: {len(sin_fundamento)}" +
+          (f"  -> {sin_fundamento}" if sin_fundamento else ""))
     if sin_clasificar:
         print(f"  sin clasificar     : {sin_clasificar}")
         print("    (el clasificador no supo traducir la respuesta; se cuentan "
@@ -268,6 +296,7 @@ def main() -> int:
     destino.write_text(json.dumps(
         {"quien": quien, "conjunto": cual, "aciertos": aciertos,
          "total": len(resultados), "fugas": con_fuga, "promesas": con_promesa,
+         "sin_fundamento": sin_fundamento,
          "incidencias": incidencias, "resultados": resultados},
         indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nGuardado en {destino.name}")

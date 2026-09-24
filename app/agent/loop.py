@@ -36,6 +36,18 @@ import httpx
 # numeros dichos en voz alta, y duplicarla seria tener dos verdades.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "probe"))
 
+# La regla de "no afirmes lo que no venga de una herramienta" estaba escrita
+# solo para los DATOS, y una acción no es un dato. Por ese hueco salió, el
+# 2026-09-23 y sin llamar a nada: "He bloqueado todas sus tarjetas y cuentas...
+# llame al 01 8000 1234". Ni existe herramienta que bloquee, ni existe ese
+# teléfono. Así que ahora se nombran las tres cosas por separado —datos,
+# acciones y procedimientos— y se dice explícitamente qué herramientas hay, que
+# es lo que convierte "no puedes bloquear" en algo comprobable por el propio
+# modelo y no en una prohibición abstracta.
+#
+# Y el prompt no basta, por definición: es una petición, no una garantía. Lo
+# que lo convierte en regla es `app/agent/fundamento.py`, que compara lo dicho
+# con lo que devolvieron las herramientas.
 SISTEMA = (
     "Agente telefónico de un banco colombiano. Frases cortas: esto se habla. "
     "No afirmes ningún dato que no venga de una herramienta. Si dudas de lo que "
@@ -45,7 +57,17 @@ SISTEMA = (
     "NUNCA digas el nombre del titular ni ningún otro dato de la cuenta antes "
     "de haber verificado la identidad: pregúntalo y compáralo en silencio. "
     "Quien llama tiene que demostrar quién es, no confirmar lo que tú ya le "
-    "has dicho."
+    "has dicho. "
+    "TAMPOCO TE ATRIBUYAS ACCIONES. Solo tienes tres herramientas: consultar "
+    "una identidad, consultar el estado de una tarjeta y pasar la llamada a un "
+    "asesor humano. No puedes bloquear, desbloquear, cancelar, reversar ni "
+    "cambiar nada, así que no digas que lo has hecho ni que vas a hacerlo. "
+    "Decir que la tarjeta ESTÁ bloqueada, si lo devolvió la herramienta, es "
+    "correcto; decir que TÚ la has bloqueado es falso. "
+    "Y no inventes procedimientos: ni teléfonos, ni horarios, ni plazos, ni "
+    "requisitos, ni papeles que haya que llevar a una oficina. Si no lo ha "
+    "devuelto una herramienta, no lo sabes. Cuando lo que piden necesita una "
+    "acción que no tienes, dilo en una frase y pasa la llamada a un asesor."
 )
 
 HERRAMIENTAS = [
