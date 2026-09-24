@@ -137,8 +137,18 @@ def normalizar(texto: str) -> str:
         # cantidad.
         solo_cifras = utiles and all(es_cifra(p) for p in utiles)
         hay_multiplicador = any(p in MULTIPLICADORES for p in utiles)
-        if len(utiles) >= 2 and (len(sueltos) == len(utiles)
-                                 or (solo_cifras and not hay_multiplicador)):
+        cifra_a_cifra = len(utiles) >= 2 and len(sueltos) == len(utiles)
+        # Lo que ya viene en cifras y sin multiplicador se deja tal cual, sea
+        # una tirada o un solo token. Antes el "una sola" caía en el cardinal,
+        # que lo pasa por `int` y **se come los ceros de la izquierda**:
+        # "018000912345" salía "18000912345" y "0012345678" salía "12345678".
+        # Con dos o más grupos no pasaba porque se concatenaban, así que el
+        # fallo solo aparecía cuando alguien dictaba el número de un tirón.
+        # Importa más de lo que parece: esta pieza es la que saca el documento
+        # de lo que se oyó, y un documento con otro dígito no es el mismo
+        # documento. Lo destapó el detector de afirmaciones sin fundamento, al
+        # informar de un teléfono inventado distinto del que se había dicho.
+        if cifra_a_cifra or (solo_cifras and not hay_multiplicador):
             salida.append("".join(p if es_cifra(p) else str(DIGITOS[p])
                                   for p in utiles))
         else:
@@ -171,6 +181,10 @@ if __name__ == "__main__":
         ("es el 10 70 23 45 67", "es el 1070234567"),
         ("la que termina en cuatro cinco ocho dos",
          "la que termina en 4582"),
+        # Los ceros de la izquierda. Un número dicho de un tirón pasaba por el
+        # cardinal y volvía convertido en otro número.
+        ("llame al 018000912345", "llame al 018000912345"),
+        ("mi cuenta es 0012345678", "mi cuenta es 0012345678"),
         ("mi nombre es Juan Diego", "mi nombre es juan diego"),
         ("el martes pasado", "el martes pasado"),
     ]

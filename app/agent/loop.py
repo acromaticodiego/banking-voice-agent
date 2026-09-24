@@ -36,6 +36,18 @@ import httpx
 # numeros dichos en voz alta, y duplicarla seria tener dos verdades.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "probe"))
 
+# La regla de "no afirmes lo que no venga de una herramienta" estaba escrita
+# solo para los DATOS, y una acción no es un dato. Por ese hueco salió, el
+# 2026-09-23 y sin llamar a nada: "He bloqueado todas sus tarjetas y cuentas...
+# llame al 01 8000 1234". Ni existe herramienta que bloquee, ni existe ese
+# teléfono. Así que ahora se nombran las tres cosas por separado —datos,
+# acciones y procedimientos— y se dice explícitamente qué herramientas hay, que
+# es lo que convierte "no puedes bloquear" en algo comprobable por el propio
+# modelo y no en una prohibición abstracta.
+#
+# Y el prompt no basta, por definición: es una petición, no una garantía. Lo
+# que lo convierte en regla es `app/agent/fundamento.py`, que compara lo dicho
+# con lo que devolvieron las herramientas.
 SISTEMA = (
     "Agente telefónico de un banco colombiano. Frases cortas: esto se habla. "
     "No afirmes ningún dato que no venga de una herramienta. Si dudas de lo que "
@@ -45,7 +57,17 @@ SISTEMA = (
     "NUNCA digas el nombre del titular ni ningún otro dato de la cuenta antes "
     "de haber verificado la identidad: pregúntalo y compáralo en silencio. "
     "Quien llama tiene que demostrar quién es, no confirmar lo que tú ya le "
-    "has dicho."
+    "has dicho. "
+    "TAMPOCO TE ATRIBUYAS ACCIONES. Solo tienes tres herramientas: consultar "
+    "una identidad, consultar el estado de una tarjeta y pasar la llamada a un "
+    "asesor humano. No puedes bloquear, desbloquear, cancelar, reversar ni "
+    "cambiar nada, así que no digas que lo has hecho ni que vas a hacerlo. "
+    "Decir que la tarjeta ESTÁ bloqueada, si lo devolvió la herramienta, es "
+    "correcto; decir que TÚ la has bloqueado es falso. "
+    "Y no inventes procedimientos: ni teléfonos, ni horarios, ni plazos, ni "
+    "requisitos, ni papeles que haya que llevar a una oficina. Si no lo ha "
+    "devuelto una herramienta, no lo sabes. Cuando lo que piden necesita una "
+    "acción que no tienes, dilo en una frase y pasa la llamada a un asesor."
 )
 
 HERRAMIENTAS = [
@@ -119,16 +141,86 @@ PATRON_DOCUMENTO = re.compile(r"\b(\d{6,11})\b")
 # sabe que va a haber espera.
 FRASE_PUENTE = "Permítame un momento, lo estoy revisando."
 
+# Un turno vacío no es un turno.
+#
+# La transcripción de un silencio es la cadena vacía, y hasta el 2026-09-24
+# llegaba al modelo como un turno normal. El modelo, obediente, contestaba a la
+# nada con un saludo completo: "¡Hola! Soy el asistente virtual del banco. Para
+# poder ayudarle, necesito verificar su identidad. ¿Podría indicarme su número
+# de documento?" — a alguien que no ha dicho nada. Sale igual en las tres
+# corridas del caso `silencio-total`, o sea que no es ruido: es el
+# comportamiento.
+#
+# Se arregla antes del modelo, y no solo por elegancia: al teléfono, el silencio
+# es información —se cortó la llamada, la persona se apartó, el micrófono está
+# muteado— y la respuesta correcta no depende de nada que haya que razonar. Es
+# siempre la misma, así que no hace falta gastar un modelo, ni un token, ni
+# esperar 2,4 segundos para decirla.
+#
+# Lo que NO se arregla aquí: Whisper a veces alucina sobre el silencio y
+# devuelve "Gracias." o un trozo de subtítulos. Eso no es una cadena vacía y
+# este guardia no lo ve. Queda anotado como lo que falta.
+# Lo que dice el agente cuando el que falla es el proveedor del modelo. Es una
+# constante y no un literal suelto porque las pruebas necesitan reconocerla:
+# cuando el modelo revienta, el agente escala a un humano —que es lo correcto—
+# y entonces "contesta algo" y "llama a alguna herramienta" se cumplen solas.
+# Sin poder distinguir esta frase, un 429 del plan gratuito sale VERDE en la
+# prueba de la pasarela, y verde no puede significar "no lo he mirado".
+TEXTO_FALLO_DEL_MODELO = ("Disculpe, tuve un problema técnico. "
+                          "Le paso con un asesor.")
+
+PREGUNTAS_POR_SILENCIO = [
+    "¿Sigue ahí? No le escucho.",
+    "Sigo sin escucharle. Si me oye, dígame algo, por favor.",
+]
+
+# Al tercero se pasa a un humano. Dos preguntas son insistir; tres son
+# encerrar a alguien en un bucle con una máquina que no le oye. Y se escala de
+# verdad, con su ticket: el ADR 0005 está para no volver a prometer lo que no
+# se hace.
+SILENCIOS_ANTES_DE_ESCALAR = len(PREGUNTAS_POR_SILENCIO) + 1
+
+
+def es_silencio(dicho: str) -> bool:
+    """¿Esto que llegó del ASR es 'nada'?
+
+    No basta con `not dicho`: el ASR devuelve espacios, y a veces un punto o
+    una coma sueltos. Lo que decide es si hay alguna letra o algún dígito.
+    """
+    return not any(c.isalnum() for c in dicho)
+
+
+def _consumo(respuesta) -> tuple[int, int]:
+    """Tokens de entrada y de salida de una respuesta del modelo.
+
+    Groq los pone en `usage` cuando la respuesta no va en streaming, y en
+    `x_groq.usage` cuando sí (ahí llegan en el último trozo). Se miran los dos
+    sitios porque el bucle podría pasar a streaming cualquier día, y un
+    contador que devuelve cero en silencio es peor que no tenerlo: el coste
+    saldría gratis y nadie lo dudaría.
+    """
+    for fuente in (getattr(respuesta, "usage", None),
+                   getattr(getattr(respuesta, "x_groq", None), "usage", None)):
+        if fuente is None:
+            continue
+        entrada = getattr(fuente, "prompt_tokens", None)
+        salida = getattr(fuente, "completion_tokens", None)
+        if entrada is not None or salida is not None:
+            return int(entrada or 0), int(salida or 0)
+    return 0, 0
+
 
 @dataclass
 class Paso:
     """Una cosa que pasó en el turno, con su instante y su duración."""
-    tipo: str            # "modelo" | "herramienta" | "limite"
+    tipo: str            # "modelo" | "herramienta" | "limite" | "silencio"
     detalle: str
     ms: float
     argumentos: dict | None = None
     resultado: dict | None = None
     error: str | None = None
+    tokens_entrada: int = 0
+    tokens_salida: int = 0
 
 
 @dataclass
@@ -138,6 +230,10 @@ class Turno:
     ms_primer_hablable: float | None = None
     ms_total: float = 0.0
     agotado: bool = False
+    silencio: int = 0             # si fue un turno vacío, el cuántos seguidos
+    tokens_entrada: int = 0
+    tokens_salida: int = 0
+    peticiones: int = 0           # llamadas al modelo que costaron dinero
     puente: str = ""              # lo que se dijo mientras la herramienta corría
     adelantada: bool = False      # se disparó una consulta antes de que el modelo la pidiera
     adelantos_usados: int = 0     # cuántas de esas consultas acabó usando el modelo
@@ -154,18 +250,33 @@ class Turno:
 class Agente:
     def __init__(self, cliente_groq, modelo: str, base_herramientas: str,
                  presupuesto_ms: float = 3000.0, adelantar: bool = False,
-                 tardanza_herramienta_ms: int = 0) -> None:
+                 tardanza_herramienta_ms: int = 0,
+                 sistema: str = SISTEMA) -> None:
         self.groq = cliente_groq
         self.modelo = modelo
         self.base = base_herramientas.rstrip("/")
         self.presupuesto_ms = presupuesto_ms
-        self.historia: list[dict] = [{"role": "system", "content": SISTEMA}]
+        # El prompt entra por parámetro para poder correr los mismos casos con
+        # dos versiones el mismo día. Cambiar el prompt cambia a la vez lo que
+        # el agente decide y lo que tarda en decidirlo, y sin poder alternar
+        # entre los dos no hay forma de separar las dos cosas.
+        self.historia: list[dict] = [{"role": "system", "content": sistema}]
         self.adelantar = adelantar
         # Lo que tardaría un core bancario de verdad. La herramienta de mentira
         # contesta en 5 ms, y con eso el problema que se quiere medir no existe.
         self.tardanza_ms = tardanza_herramienta_ms
         self._adelantadas: dict[tuple, dict] = {}
         self._hilos_vivos: list = []
+        # Silencios seguidos. Se pone a cero en cuanto alguien dice algo: dos
+        # silencios con una frase en medio son dos incidentes, no una racha.
+        self.silencios = 0
+        # Y el consumo de TODA la conversación, que es la unidad en la que se
+        # factura una llamada. Por turno no dice nada: lo que le cuesta a un
+        # banco es la llamada entera, y crece más que linealmente porque cada
+        # turno reenvía la historia anterior.
+        self.tokens_entrada = 0
+        self.tokens_salida = 0
+        self.peticiones = 0
 
     # ------------------------------------------------------ adelantar consulta
 
@@ -242,6 +353,32 @@ class Agente:
             return {"error": f"no se pudo llamar a la herramienta: "
                              f"{type(exc).__name__}", "reintentable": True}, ms
 
+    def _preguntar_al_modelo(self, reintentos: int = 1):
+        """Una petición al modelo, con un reintento para los fallos de forma.
+
+        Los `tool_use_failed` son del generador, no de la red: el modelo emitió
+        una llamada a herramienta que no valida. Volver a pedirlo suele salir
+        bien porque la temperatura no es cero. Un solo reintento: dos ya se
+        comen el presupuesto del turno, y para eso está la salida a un humano.
+        """
+        ultimo = None
+        for intento in range(reintentos + 1):
+            try:
+                return self.groq.chat.completions.create(
+                    model=self.modelo,
+                    messages=self.historia,
+                    tools=HERRAMIENTAS,
+                    tool_choice="auto",
+                    temperature=0.2,
+                    max_tokens=400,
+                    reasoning_effort="low",
+                )
+            except Exception as exc:  # noqa: BLE001
+                ultimo = exc
+                if "tool_use_failed" not in str(exc):
+                    raise
+        raise ultimo
+
     # ------------------------------------------------------------------ turno
 
     def turno(self, dicho: str, max_pasos: int = 4, al_hablar=None) -> Turno:
@@ -255,6 +392,41 @@ class Agente:
         """
         turno = Turno()
         arranque = time.perf_counter()
+
+        # Antes que nada: si no ha llegado nada, esto no es un turno. No se
+        # llama al modelo, no se ensucia la historia con un mensaje vacío, y
+        # se contesta lo único que se puede contestar a un silencio. Cuesta
+        # cero tokens y cero espera.
+        if es_silencio(dicho):
+            self.silencios += 1
+            turno.silencio = self.silencios
+            if self.silencios >= SILENCIOS_ANTES_DE_ESCALAR:
+                turno.texto = ("No consigo escucharle. Le paso con un asesor "
+                               "para que le devuelva la llamada.")
+                resultado, ms = self._llamar(
+                    "escalar_a_humano",
+                    {"motivo": f"{self.silencios} silencios seguidos"},
+                    turno.clave)
+                turno.rastro.append(Paso("herramienta", "escalar_a_humano", ms,
+                                         argumentos={"motivo": "silencio"},
+                                         resultado=resultado,
+                                         error=resultado.get("error")))
+            else:
+                turno.texto = PREGUNTAS_POR_SILENCIO[self.silencios - 1]
+            turno.rastro.insert(0, Paso("silencio",
+                                        f"turno vacío ({self.silencios})",
+                                        0.0))
+            # La historia NO se toca: no se dijo nada, así que para el modelo
+            # del turno siguiente no ha pasado nada. Meter aquí el mensaje
+            # vacío y la pregunta sería enseñarle a conversar con el silencio.
+            if al_hablar:
+                al_hablar(turno.texto, "respuesta")
+            turno.ms_primer_hablable = (time.perf_counter() - arranque) * 1000
+            turno.ms_total = turno.ms_primer_hablable
+            return turno
+
+        # Alguien ha dicho algo: la racha de silencios se acabó.
+        self.silencios = 0
 
         # Lo primero, antes incluso de preguntarle al modelo: si en lo que
         # dijo la persona ya hay un documento, la consulta sale ahora y corre
@@ -281,21 +453,52 @@ class Agente:
                 break
 
             t0 = time.perf_counter()
-            respuesta = self.groq.chat.completions.create(
-                model=self.modelo,
-                messages=self.historia,
-                tools=HERRAMIENTAS,
-                tool_choice="auto",
-                temperature=0.2,
-                max_tokens=400,
-                reasoning_effort="low",
-            )
+            try:
+                respuesta = self._preguntar_al_modelo()
+            except Exception as exc:  # noqa: BLE001
+                # El modelo puede generar una llamada a herramienta mal formada
+                # —vista de verdad: `functions/escalar_a_humano` con el prefijo
+                # pegado— y entonces la API devuelve un 400 y se lleva el turno
+                # por delante. Un fallo del proveedor no puede dejar a alguien
+                # escuchando silencio al teléfono: se anota y se sale por la
+                # salida honesta, que es un humano.
+                turno.rastro.append(Paso("modelo", "el modelo falló",
+                                         (time.perf_counter() - t0) * 1000,
+                                         error=f"{type(exc).__name__}: {exc}"))
+                turno.texto = TEXTO_FALLO_DEL_MODELO
+                resultado, ms = self._llamar("escalar_a_humano",
+                                             {"motivo": "fallo del modelo"},
+                                             turno.clave)
+                turno.rastro.append(Paso("herramienta", "escalar_a_humano", ms,
+                                         argumentos={"motivo": "fallo del modelo"},
+                                         resultado=resultado))
+                if al_hablar:
+                    al_hablar(turno.texto, "respuesta")
+                break
             ms_modelo = (time.perf_counter() - t0) * 1000
             mensaje = respuesta.choices[0].message
+            # El consumo viene en la respuesta y hasta el 2026-09-24 nadie lo
+            # leía. Es la métrica 5 —coste por conversación— casi gratis: los
+            # tokens son un hecho que devuelve el proveedor, y lo único que
+            # hay que añadir después es el precio.
+            #
+            # Se anota por PASO y no solo por turno, porque un turno con
+            # herramienta son dos llamadas y la segunda lleva dentro todo lo
+            # que devolvió la herramienta: si el core bancario contesta un
+            # JSON grande, el coste se va por ahí y en el total no se ve.
+            entrada, salida = _consumo(respuesta)
             turno.rastro.append(Paso("modelo",
                                      "decide llamar herramienta" if mensaje.tool_calls
                                      else "contesta",
-                                     ms_modelo))
+                                     ms_modelo,
+                                     tokens_entrada=entrada,
+                                     tokens_salida=salida))
+            turno.tokens_entrada += entrada
+            turno.tokens_salida += salida
+            turno.peticiones += 1
+            self.tokens_entrada += entrada
+            self.tokens_salida += salida
+            self.peticiones += 1
             if turno.ms_primer_hablable is None:
                 turno.ms_primer_hablable = (time.perf_counter() - arranque) * 1000
 
@@ -353,6 +556,23 @@ class Agente:
                 })
 
         if not turno.texto:
+            # Esta frase prometía un asesor y no llamaba a nadie. Lo destapó
+            # `fundamento.py` el 2026-09-24, y no en el modelo: en este
+            # fichero. El agente se quedaba sin pasos, decía "le paso con un
+            # asesor" y colgaba la promesa en el aire, sin ticket, sin
+            # expediente y sin nadie al otro lado. Es la misma mentira que se
+            # le prohíbe al modelo, escrita a mano.
+            #
+            # Ahora se escala de verdad antes de decirlo. Lleva la clave del
+            # turno, así que un reintento no abre dos tickets.
+            resultado, ms = self._llamar(
+                "escalar_a_humano",
+                {"motivo": "el turno acabó sin respuesta del modelo"},
+                turno.clave)
+            turno.rastro.append(Paso("herramienta", "escalar_a_humano", ms,
+                                     argumentos={"motivo": "turno sin respuesta"},
+                                     resultado=resultado,
+                                     error=resultado.get("error")))
             turno.texto = ("Disculpe, no pude completar la consulta. "
                            "Le paso con un asesor.")
         self.historia.append({"role": "assistant", "content": turno.texto})
