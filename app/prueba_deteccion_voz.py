@@ -1,4 +1,16 @@
-r"""El detector de voz, sin cuota, sin GPU y sin micrófono.
+r"""El detector de voz que NO está en uso, y las pruebas que lo describen.
+
+**Este módulo no corre en el sistema.** El detector adaptativo se puso en la
+ruta del turno el 2026-09-24 y se revirtió el mismo día: la medición que lo
+justificaba modelaba mal `app/vivo.py`, y con el sistema de verdad el umbral
+fijo oye lo que se decía que no oía, mientras que el adaptativo **rompía el
+cierre del turno** en el caso normal. La historia entera está en el ADR 0009,
+que quedó como decisión revertida.
+
+Se conserva, con sus pruebas, porque el hallazgo vale más que el código: la
+tabla de cuánto oye cada factor sigue siendo válida para el día que haya
+grabaciones de otras salas, y estas pruebas documentan un diseño que alguien
+volverá a proponer.
 
 Lo que estas pruebas protegen no es "que detecte voz" —eso lo mide
 `probe/umbral_voz.py` sobre audio real— sino los invariantes de los que depende
@@ -26,7 +38,7 @@ from __future__ import annotations
 import numpy as np
 
 from app.deteccion_voz import UMBRAL_FIJO_ANTERIOR, DetectorDeVoz
-from app.vivo import FRECUENCIA, MUESTRAS_POR_TROZO, TROZO_MS, Llamada
+from app.vivo import FRECUENCIA, TROZO_MS
 
 fallos = 0
 
@@ -43,14 +55,6 @@ def comprobar(nombre: str, condicion: bool, detalle: str = "") -> None:
     else:
         fallos += 1
         print(f"    FALLA  {nombre}" + (f" -> {detalle}" if detalle else ""))
-
-
-def tono(nivel: float, ms: int, semilla: int = 7) -> np.ndarray:
-    """Ruido blanco a un nivel dado. Sirve igual: el detector mira energía."""
-    generador = np.random.default_rng(semilla)
-    n = int(FRECUENCIA * ms / 1000)
-    bruto = generador.standard_normal(n)
-    return (bruto / np.abs(bruto).mean() * nivel).astype(np.float32)
 
 
 def empujar_niveles(detector: DetectorDeVoz, nivel: float, trozos: int) -> list[bool]:
@@ -182,52 +186,6 @@ def prueba_el_silencio_digital_no_abre() -> None:
               not detector.hay_voz(0.0002), f"umbral {detector.umbral}")
 
 
-def prueba_la_llamada_usa_el_detector() -> None:
-    """De punta a punta: que `Llamada` abra turno con voz floja."""
-    print("  una llamada de verdad abre turno con voz floja")
-
-    class Segmento:
-        # Un segmento cualquiera con una frase entera. Tiene que estar
-        # COMPLETA: con texto vacío o a medias, `parece_incompleto` manda
-        # seguir escuchando —que es lo correcto— y el turno no se cierra, y
-        # entonces esta prueba mediría el fin de turno y no el detector.
-        text = "Buenas tardes, llamo por mi tarjeta."
-        no_speech_prob = 0.1
-        avg_logprob = -0.3
-        compression_ratio = 1.1
-
-    class ASRDeMentira:
-        def transcribe(self, audio, **kwargs):
-            class Info:
-                language_probability = 0.9
-            return [Segmento()], Info()
-
-    class VozDeMentira:
-        def synthesize(self, texto):
-            return []
-
-    class AgenteDeMentira:
-        def turno(self, dicho, al_hablar=None, **kwargs):
-            class T:
-                texto = ""
-                rastro: list = []
-            return T()
-
-    llamada = Llamada(ASRDeMentira(), VozDeMentira(), AgenteDeMentira())
-    llamada.empujar(tono(SALA / 4, 1000))                 # la sala, floja
-    avisos = llamada.empujar(tono(HABLA / 4, 800))        # alguien habla, flojo
-    avisos += llamada.empujar(tono(SALA / 4, 500))        # y se calla
-    comprobar("el turno se cerró", any(a.tipo == "oido" for a in avisos),
-              f"avisos: {[a.tipo for a in avisos]}")
-
-    # Y la comprobación que da sentido a la anterior: con el umbral de antes,
-    # ese mismo audio no habría abierto turno nunca.
-    nivel = float(np.abs(tono(HABLA / 4, 800)[:MUESTRAS_POR_TROZO]).mean())
-    comprobar("y con el umbral fijo de antes no se habría abierto",
-              nivel < UMBRAL_FIJO_ANTERIOR,
-              f"nivel {nivel:.5f} contra {UMBRAL_FIJO_ANTERIOR}")
-
-
 def main() -> int:
     print("El detector de voz, contra el ruido de cada llamada\n")
     for prueba in (prueba_la_sala_no_es_voz,
@@ -238,8 +196,7 @@ def main() -> int:
                    prueba_un_ruido_aislado_no_levanta_el_suelo,
                    prueba_limite_conocido_la_sala_que_sube,
                    prueba_el_suelo_baja_deprisa,
-                   prueba_el_silencio_digital_no_abre,
-                   prueba_la_llamada_usa_el_detector):
+                   prueba_el_silencio_digital_no_abre):
         try:
             prueba()
         except Exception as exc:  # noqa: BLE001

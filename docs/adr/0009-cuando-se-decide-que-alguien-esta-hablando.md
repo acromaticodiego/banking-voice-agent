@@ -1,115 +1,125 @@
 # ADR 0009 — Cuándo se decide que alguien está hablando
 
 - **Fecha:** 2026-09-24
-- **Estado:** aceptada
-- **Contexto:** el umbral que abre un turno era una constante, y la constante
-  describía la habitación en la que se escribió.
+- **Estado:** **REVERTIDA el mismo día.** Se implementó, rompió el sistema, y
+  al buscar por qué resultó que la medición que la justificaba estaba mal.
+- **Contexto:** el umbral que abre un turno es una constante, y parecía que la
+  constante describía la habitación en la que se escribió.
 
-## El problema
+> Este ADR se deja entero, con lo que se creyó y con lo que resultó ser, porque
+> **la decisión equivocada y su desmontaje valen más que la decisión**. El
+> código vive en `app/deteccion_voz.py`, fuera de la ruta del turno, con sus
+> pruebas.
 
-`app/vivo.py` abría turno cuando la media absoluta de un trozo de 20 ms pasaba
-de `UMBRAL_VOZ = 0.005`. Funcionaba, y **funcionaba por una coincidencia**: el
-ruido de la habitación de desarrollo mide 0,0011, así que había 13 dB de margen
-y nunca se abría un turno de más.
+## Lo que parecía el problema
 
-Medido en `probe/sordera_asr.py` sobre las seis grabaciones degradadas:
+`app/vivo.py` abre turno cuando se acumulan 600 ms de trozos cuya media
+absoluta pasa de `UMBRAL_VOZ = 0.005`. Midiendo en `probe/sordera_asr.py` salió
+esto:
 
 | | ¿abre turno? |
 |---|---|
 | original | 6 de 6 |
 | voz a la mitad de volumen | **0 de 6** |
-| voz al 25% | **0 de 6** |
 | por línea telefónica | **1 de 6** |
 
-**Alguien que habla bajito no es oído. Y alguien que llama por teléfono,
-tampoco.** Eso último hace inviable el punto 7 del plan —telefonía real con
-Twilio— porque el audio de una llamada llega más flojo que un micrófono de
-portátil a 20 cm.
+De ahí salía una conclusión alarmante y una consecuencia: *quien hable bajito
+no es oído, quien llame por teléfono tampoco, y el punto 7 del plan —telefonía
+real con Twilio— está apoyado en algo que no puede funcionar*. Y encima el
+fallo no deja rastro: sin turno cerrado no hay transcripción vacía, así que ni
+el guardia del turno vacío se entera.
 
-Lo peor no es que no se oiga: es que **nadie se entera**. El turno no llega a
-cerrarse, así que no hay transcripción vacía, así que el guardia del turno
-vacío tampoco actúa. Alguien habla, el agente calla, y no queda ni rastro de
-que hubiera alguien al otro lado. De los fallos de este proyecto, es el único
-que no deja huella.
+## Lo que se hizo
 
-## La decisión
+Un detector que calibra el umbral con el ruido de la propia llamada
+(`app/deteccion_voz.py`): un suelo de ruido que baja rápido y sube despacio, y
+el umbral es ese suelo por un factor. El factor se eligió con `probe/umbral_voz.py`
+y con el criterio escrito antes de ver la tabla —*ningún clip de silencio puede
+abrir turno; dentro de eso, oír toda la voz que el ASR entiende*—: **2,5**, que
+oía 63 de 72 clips de habla degradada sin abrir ninguno de 48 silencios, contra
+40 de 72 y 15 de 48 del umbral fijo.
 
-**El umbral se calibra con el ruido de la propia llamada** (`app/deteccion_voz.py`):
-se sigue un suelo de ruido y el umbral es ese suelo por un factor, con un
-mínimo absoluto para que un canal digitalmente mudo no abra turno con cualquier
-bit suelto.
+Sobre el papel ganaba en las dos direcciones a la vez. Se puso en `vivo.py` y
+en `pipeline.py`, con pruebas deterministas, y las pruebas pasaron.
 
-El suelo **baja rápido y sube despacio**, y —esto se escribe así porque el
-comentario original decía otra cosa y era falso— lo que impide que una frase
-larga deje sordo al detector no es la lentitud de la subida: es que **los
-trozos declarados voz no alimentan la subida en absoluto**. La subida lenta
-sirve para otra cosa: que un ruido que no llega a contar como voz no levante el
-suelo de golpe.
+## Lo que pasó
 
-### El factor, elegido con el criterio escrito antes de la tabla
+**`app/prueba_pasarela.py` se puso roja**: el turno dejó de cerrarse. Las cinco
+comprobaciones del stack levantado fallaron a la vez.
 
-`probe/umbral_voz.py`, 2026-09-24, 72 clips de habla degradada que el ASR
-entiende y 48 de silencio. El criterio, fijado antes de mirar: *ningún clip de
-silencio puede abrir turno; dentro de eso, oír toda la voz que el ASR entiende*.
+El mecanismo, medido: sobre una grabación real, el detector adaptativo declara
+voz en el **96-97% de los trozos** —el fijo, en el 38-47%— y el silencio
+seguido más largo cae de 2520 ms a **380 ms**. Como tras una reanudación la
+ventana de cierre es de 1200 ms, **el turno no termina nunca**. El agente se
+queda escuchando para siempre.
 
-| | oye voz | abre silencios |
+Y al ir a buscar por qué las sondas no lo habían visto, aparecieron tres cosas,
+cada una peor que la anterior.
+
+### 1. Las sondas medían si el turno se ABRE, nunca si se CIERRA
+
+Un detector de voz sirve para las dos cosas. `probe/umbral_voz.py` solo
+preguntaba si se acumulaban 600 ms de voz; con eso, un detector que declare
+voz *siempre* saca la puntuación perfecta. Medía media función.
+
+### 2. El material de silencio y el parámetro estaban acoplados
+
+Los clips de silencio se seleccionaban exigiendo que su pico no pasara de **3
+veces** el suelo del fichero. Después se barrió el factor y se eligió **2,5**.
+Cualquier factor igual o mayor que 3 habría dado cero falsos **por
+construcción**: la tabla no medía el detector, medía el criterio de selección.
+El ruido de una grabación real —respiraciones, roces, ruidos de boca— pasa de
+ese 3× con frecuencia, y por eso el 0 de 48 se convirtió en 96% de trozos
+declarados voz en cuanto tocó audio de verdad.
+
+### 3. Y la premisa era falsa: la sonda modelaba mal el sistema
+
+`probe/sordera_asr.py` decidía "¿abre turno?" comparando **el nivel medio del
+clip entero** contra el umbral. El sistema no hace eso: acumula `voz_ms` trozo
+a trozo **y no lo reinicia** cuando hay un silencio en medio, así que una voz
+floja acumula sus 600 ms a lo largo de la intervención aunque su nivel medio
+esté por debajo del umbral. Y `probe/umbral_voz.py` hacía una tercera cosa
+distinta: reiniciaba la racha en cada silencio.
+
+**Tres modelos del sistema y ninguno era el sistema.** Medido con la clase
+`Llamada` de verdad:
+
+| caso | umbral fijo | adaptativo |
 |---|---|---|
-| umbral fijo 0,005 (hasta hoy) | 40 / 72 | 15 / 48 |
-| factor 2,0 | 70 / 72 | 1 / 48 |
-| **factor 2,5 (elegido)** | **63 / 72** | **0 / 48** |
-| factor 3,0 | 57 / 72 | 0 / 48 |
+| original | **6 / 6** | **0 / 6** |
+| voz a la mitad | **6 / 6** | 5 / 6 |
+| voz al 25% | **6 / 6** | 6 / 6 |
+| por línea telefónica | **6 / 6** | 5 / 6 |
 
-El 2,0 oye siete clips más y **se descarta igual**, porque el criterio se fijó
-antes y manda no abrir silencios. Los nueve clips a los que el 2,5 se queda
-sordo son degradaciones extremas —voz al 10%, ruido al mismo nivel que la voz—
-donde el ASR tampoco acierta gran cosa.
+El umbral fijo oye perfectamente la voz a la mitad, al 25% y la telefónica. **El
+problema que este ADR venía a resolver no existía**, y la solución rompía el
+caso normal.
 
-Lo que hace fácil esta decisión es que **el adaptativo gana al fijo en las dos
-direcciones a la vez**: oye un 58% más de voz y abre cero silencios en vez de
-quince. No hay intercambio que discutir.
+## La decisión, entonces
 
-El detector va también en `app/pipeline.py`, que tenía su propia copia de la
-constante. Una tubería de medir con su propio detector mide su propio detector.
-Y vive en la llamada, no en el turno: el suelo de ruido es una propiedad de la
-sala desde la que llaman, y tirarlo en cada turno obligaría a reaprenderlo cada
-vez que alguien contesta.
+**Se revierte.** `app/vivo.py` y `app/pipeline.py` vuelven al umbral fijo de
+0,005, y `app/prueba_pasarela.py` vuelve a pasar 5 de 5 contra el stack
+levantado.
 
-## El límite que esto NO arregla, y por qué no se arregla hoy
+`app/deteccion_voz.py` y sus pruebas se conservan **fuera de la ruta**, junto
+con `probe/umbral_voz.py`, porque el diseño no es malo: es que no estaba
+medido. Si algún día el umbral fijo falla de verdad —otra sala, otro
+micrófono, Twilio— el punto de partida está escrito, y también lo está la
+forma correcta de medirlo, que es la de la tabla de arriba: **contra la clase
+`Llamada`, no contra una idea de la clase `Llamada`**.
 
-Si el ruido de fondo sube **por encima del umbral** a mitad de llamada —alguien
-enciende un ventilador, sale a la calle— todos los trozos se declaran voz, el
-suelo deja de aprender, y el detector se queda abierto: **500 de 500 trozos**,
-comprobado en `app/prueba_deteccion_voz.py`. El agente abriría turnos que nadie
-dijo; con el filtro del ADR 0008 puesto llegan vacíos, caen en el guardia del
-turno vacío y acaban en un humano. Degrada mal, pero degrada, y deja rastro.
+## Lo que queda aprendido, que es lo que vale
 
-El arreglo evidente es *"nadie habla N segundos seguidos sin una sola pausa, así
-que una racha más larga significa que el suelo está mal calibrado"*. **No se
-hace, y el motivo está medido:** la racha continua de habla más larga en las
-seis grabaciones reales es de **9,9 segundos**. Entre eso y un ruido sostenido
-no queda hueco que separe con seis grabaciones de un solo hablante, y elegir un
-umbral con ese margen es exactamente el error que el ADR 0008 rechazó dos horas
-antes para la señal de confianza. Aplicar allí una vara y aquí otra, porque
-este arreglo apetece más, sería peor que no arreglarlo.
-
-Se arregla cuando haya grabaciones de otras salas y otras voces, que es el
-punto 5 del plan.
-
-## Lo demás que sigue sin estar medido
-
-- **Una sola sala y un solo micrófono**, otra vez. Las degradaciones son
-  atenuación y ruido añadido, no una sala distinta: la atenuación no trae la
-  reverberación que sí trae alejarse de verdad de un micrófono.
-- **El arranque de la llamada está medido y no es un problema.** El suelo se
-  inicializa con el primer trozo que llega, así que si alguien empieza a hablar
-  en el instante en que se conecta, nace en el nivel de la voz. Parecía que eso
-  costaría el primer turno; **no lo cuesta**: de los 72 clips con voz abren
-  turno 63 con un segundo de sala por delante y **los mismos 63 sin él**. El
-  motivo es que la energía del habla sube y baja entre sílabas, y el suelo, que
-  baja rápido, se planta en los valles en unas décimas.
-
-  Esto salió de un sitio inesperado: al cambiar el detector, una prueba de otro
-  módulo empezó a fallar porque su audio sintético era ruido de nivel
-  perfectamente **constante**. Un tono plano no es voz, y contra él el detector
-  sí se queda sordo. La prueba se arregló y la lección se queda: los dobles de
-  audio tienen que fluctuar, o miden algo que no existe.
+1. **Una sonda que reimplementa la lógica del sistema mide la
+   reimplementación.** Las tres sondas de este ADR copiaron la regla de
+   "cuándo hay voz suficiente" y las tres la copiaron distinta. La que acertó
+   fue la que importó `Llamada` y le empujó audio.
+2. **Un criterio de selección de material que usa la misma magnitud que el
+   parámetro a elegir no mide nada.** Elegir el silencio por "pico < 3× suelo"
+   y luego preguntar si un factor de 2,5 lo abre es preguntarle a la respuesta.
+3. **Un detector de voz se mide por las dos puertas.** Abrir turno y cerrarlo
+   son la misma decisión tomada dos veces, y una sonda que solo mira una puede
+   aprobar un detector que no calla nunca.
+4. **La prueba que lo cazó fue la del stack levantado**, no las deterministas.
+   Las seis pruebas del detector estaban en verde mientras el sistema no podía
+   terminar un turno.

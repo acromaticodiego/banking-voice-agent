@@ -20,12 +20,23 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from app.confianza import resumir
-from app.deteccion_voz import DetectorDeVoz
 from app.fin_de_turno import parece_incompleto
 
 FRECUENCIA = 16000
 TROZO_MS = 20
 MUESTRAS_POR_TROZO = FRECUENCIA * TROZO_MS // 1000
+
+# Amplitud media por encima de la cual un trozo de 20 ms cuenta como voz, en la
+# escala del audio normalizado a ±1.
+#
+# El 2026-09-24 esto se sustituyó por un umbral que se calibraba con el ruido
+# de cada llamada, y se revirtió el mismo día: la medición que lo justificaba
+# modelaba mal este archivo —daba por hecho que la racha de voz se reiniciaba
+# con cada silencio, cuando `voz_ms` acumula durante toda la intervención— y
+# con el sistema de verdad el umbral fijo oye lo que se decía que no oía. El
+# ADR 0009 lo cuenta entero, y `app/deteccion_voz.py` se conserva sin usar
+# como material de ese hallazgo.
+UMBRAL_VOZ = 0.005
 
 
 @dataclass
@@ -60,22 +71,11 @@ class Llamada:
         # ambiguo; sabiendo que se pidió el documento, es una cédula a medias.
         self.esperando: str | None = None
         self.hablando = False
-        # El detector es de la LLAMADA y no del turno: el suelo de ruido es una
-        # propiedad de la sala desde la que llaman, y tirarlo en cada turno
-        # obligaría a reaprenderlo desde cero cada vez que alguien contesta.
-        self.detector = DetectorDeVoz()
 
     # ------------------------------------------------------------------ audio
 
     def _hay_voz(self, trozo: np.ndarray) -> bool:
-        """Contra el ruido de esta llamada, no contra una constante.
-
-        El umbral fijo de 0,005 que había aquí describía esta habitación: con
-        la voz a la mitad no abría turno en ninguna de las 6 grabaciones, y por
-        línea telefónica en 1 de 6, sin que nadie se enterara de que alguien
-        había hablado. ADR 0009.
-        """
-        return self.detector.hay_voz(float(np.abs(trozo).mean()))
+        return bool(np.abs(trozo).mean() > UMBRAL_VOZ)
 
     def empujar(self, muestras: np.ndarray):
         """Recibe audio del navegador. Devuelve avisos si hay turno que cerrar.

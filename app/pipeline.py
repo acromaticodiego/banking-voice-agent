@@ -34,7 +34,6 @@ from pathlib import Path
 
 import numpy as np
 
-from app.deteccion_voz import DetectorDeVoz
 from app.fin_de_turno import parece_incompleto
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -44,10 +43,15 @@ FRECUENCIA = 16000
 TROZO_MS = 20
 MUESTRAS_POR_TROZO = FRECUENCIA * TROZO_MS // 1000
 
-# El detector de voz es el mismo objeto que usa `app/vivo.py`, importado y no
-# copiado. Aquí había una constante propia de 0,005 y eso es justo lo que no
-# puede ser: una tubería de medir con su propio detector mide su propio
-# detector. ADR 0009.
+# Amplitud media por encima de la cual un trozo de 20 ms cuenta como voz, en la
+# escala del audio normalizado a ±1. Equivale a unas 165 unidades de entero de
+# 16 bits, por debajo del 500 que las sondas usan para "hay señal" porque aquí
+# se mira la MEDIA de un trozo corto y no el pico de la grabación entera.
+#
+# Tiene que ser el mismo número que el de `app/vivo.py`. Lo fue por copia hasta
+# el 2026-09-24, cuando los dos pasaron a un detector compartido y volvieron
+# aquí el mismo día: ver el ADR 0009.
+UMBRAL_VOZ = 0.005
 
 
 @dataclass
@@ -114,7 +118,6 @@ class Tuberia:
         self.ventana_larga_ms = ventana_larga_ms
         self.esperando = esperando
         self.max_reanudaciones = max_reanudaciones
-        self.detector = DetectorDeVoz()
 
     # ------------------------------------------------------------------ VAD
 
@@ -129,7 +132,7 @@ class Tuberia:
         entero de 16 bits. Ponerlo en la escala equivocada no da un detector
         malo: da uno que no oye absolutamente nada, que fue lo que pasó.
         """
-        return self.detector.hay_voz(float(np.abs(trozo).mean()))
+        return bool(np.abs(trozo).mean() > UMBRAL_VOZ)
 
     # --------------------------------------------------------------- turno
 
