@@ -171,13 +171,36 @@ def main() -> int:
         sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "probe"))
         from precios import Precio, para  # noqa: PLC0415
 
-        sin_confirmar = para("openai/gpt-oss-20b")
-        comprobar("el precio de hoy está sin confirmar",
-                  not sin_confirmar.confirmado, sin_confirmar.fuente)
-        comprobar("y por eso no devuelve coste",
-                  sin_confirmar.coste(1000, 1000) is None)
+        # Lo que se comprueba es el MECANISMO, con un precio de mentira. Aquí
+        # había una comprobación de que el precio del proyecto estaba "sin
+        # confirmar", y eso no era un invariante sino un estado pasajero: el
+        # 2026-09-24 se confirmó y la prueba se puso roja sin que nada se
+        # hubiera roto. Una prueba que se rompe cuando el trabajo avanza está
+        # comprobando el calendario, no el código.
+        a_medias = Precio(modelo="y", entrada_por_millon=None,
+                          salida_por_millon=None, fecha="-",
+                          fuente="prueba", confirmado=False)
+        comprobar("un precio sin confirmar no devuelve coste",
+                  a_medias.coste(1000, 1000) is None)
+        con_numeros_pero_sin_confirmar = Precio(
+            modelo="z", entrada_por_millon=0.10, salida_por_millon=0.50,
+            fecha="-", fuente="prueba", confirmado=False)
+        comprobar("ni aunque lleve números dentro, si nadie los ha confirmado",
+                  con_numeros_pero_sin_confirmar.coste(1000, 1000) is None,
+                  "la bandera manda sobre los números: es la diferencia entre "
+                  "un dato y un apunte a medias")
         comprobar("un modelo que no está en la tabla tampoco",
                   para("inventado/xxx").coste(10, 10) is None)
+
+        # Y el precio que de verdad usa el proyecto, con su fuente.
+        real = para("openai/gpt-oss-20b")
+        coste_real = real.coste(1_000_000, 0)
+        comprobar("el modelo del proyecto tiene precio y fuente",
+                  real.confirmado and real.fuente.startswith("http"),
+                  f"{real.fuente} ({real.fecha})")
+        comprobar("un millón de tokens de entrada cuesta lo que dice la ficha",
+                  coste_real is not None and abs(coste_real - 0.075) < 1e-12,
+                  f"{coste_real} $")
         puesto = Precio(modelo="x", entrada_por_millon=0.10,
                         salida_por_millon=0.50, fecha="hoy",
                         fuente="prueba", confirmado=True)

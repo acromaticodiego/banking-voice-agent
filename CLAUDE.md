@@ -208,11 +208,24 @@ Los tokens ya se cuentan por paso, por turno y por conversación (24/09). **El
 número todavía no existe** porque hace falta una corrida con cuota, y llega
 gratis con la medición del reservado.
 
-Y el precio está **SIN CONFIRMAR** a propósito: `groq.com/pricing` no listaba
-`openai/gpt-oss-20b` el 24/09, así que `probe/precios.py` devuelve `None` y el
-corredor dice "no se puede decir" en vez de imprimir un dólar inventado. Para
-cerrarlo hacen falta dos números de la consola de Groq (entrada y salida por
-millón), y quedan anotados con su fecha.
+**El precio ya está confirmado (24/09):** 0,075 $ por millón de tokens de
+entrada y 0,30 $ por millón de salida, de la ficha del modelo en la
+documentación de Groq. `groq.com/pricing` sigue sin listar el modelo —por eso
+el primer intento se quedó sin número—, pero la ficha lo publica por partida
+doble (el precio y cuántos tokens da un dólar) y las dos columnas cuadran, que
+es lo que permite fiarse. En `probe/precios.py`, con fuente y fecha.
+
+**Lo que se paga HOY es cero**, porque se desarrolla en el plan gratuito. Eso
+no hace inútil la métrica: el coste por conversación no mide la factura del
+desarrollo, mide **cuánto costaría operarlo**, que es la pregunta que decide si
+el sistema es viable. En producción nadie corre sobre el plan gratuito, donde
+8000 tokens por minuto dan para una conversación a la vez.
+
+Y hay un tercer precio que aquí no es un detalle: **la entrada ya vista se
+cobra a 0,037 $ por millón, la mitad.** Como el crecimiento superlineal del
+coste viene de que cada turno reenvía la conversación entera, la caché de
+prompt ataca exactamente esa parte. Queda anotado para cuando haya un número
+con el que comparar.
 
 Lo que sí está comprobado, y es lo que cambia la lectura: **el coste de una
 conversación crece más que linealmente**, porque cada turno reenvía la historia
@@ -761,9 +774,11 @@ tokens ya se cuentan.
   commit. **Y decir que el reservado está quemado**: a partir de ahí todo lo
   que se toque está informado por ese resultado, y hay que escribirlo cada vez
   que se cite la cifra.
-- Rellenar `probe/precios.py` con los dos números de la consola de Groq
-  (entrada y salida por millón) para cerrar el coste en dólares. Sin ellos se
-  publican los tokens y se dice que el precio falta.
+- ~~Rellenar `probe/precios.py`~~ HECHO el 24/09: 0,075 $/M de entrada y
+  0,30 $/M de salida, de la ficha del modelo en la documentación de Groq, con
+  su fuente y su fecha. **El corredor ya imprime el coste en dólares solo**, y
+  la corrida del reservado lo dará de regalo: es la métrica 5 cerrada sin
+  gastar una petición de más.
 
 ### Si no hay cuota, esto avanza sin gastar nada
 

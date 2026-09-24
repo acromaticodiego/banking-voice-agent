@@ -29,6 +29,10 @@ class Precio:
     fecha: str                         # cuándo se miró
     fuente: str                        # dónde
     confirmado: bool = False
+    # Entrada ya vista antes, que el proveedor cobra más barata. En este
+    # proyecto no es un detalle: cada turno reenvía la conversación entera, así
+    # que la entrada repetida es justo la que más crece.
+    entrada_cacheada_por_millon: float | None = None
 
     def coste(self, tokens_entrada: int, tokens_salida: int) -> float | None:
         """Dólares, o None si el precio no está confirmado."""
@@ -40,17 +44,27 @@ class Precio:
 
 
 PRECIOS: dict[str, Precio] = {
-    # SIN CONFIRMAR. El 2026-09-24 se intentó leer de groq.com/pricing y la
-    # página no listaba el modelo, así que no se pone un número de memoria:
-    # un precio inventado convertiría la métrica de coste en una opinión con
-    # cuatro decimales. Los tokens se miden igual; el dólar espera.
+    # Confirmado el 2026-09-24 en la ficha del modelo de la documentación de
+    # Groq. `groq.com/pricing` sigue SIN listar este modelo —por eso el primer
+    # intento se quedó sin número—, pero la ficha del modelo sí lo publica, y
+    # lo hace por partida doble: el precio por millón y cuántos tokens da un
+    # dólar. Las dos columnas cuadran entre sí, que es lo que permite fiarse:
+    #
+    #     Input         $0.075   13M / $1     (1 / 0,075 = 13,3M)
+    #     Cached Input  $0.037   27M / $1     (1 / 0,037 = 27,0M)
+    #     Output        $0.30    3.3M / $1    (1 / 0,30  =  3,3M)
+    #
+    # Lo que se paga HOY en este proyecto es cero: se desarrolla en el plan
+    # gratuito. Estos precios no son la factura, son lo que costaría operarlo,
+    # que es la pregunta que decide si el sistema es viable.
     "openai/gpt-oss-20b": Precio(
         modelo="openai/gpt-oss-20b",
-        entrada_por_millon=None,
-        salida_por_millon=None,
+        entrada_por_millon=0.075,
+        salida_por_millon=0.30,
+        entrada_cacheada_por_millon=0.037,
         fecha="2026-09-24",
-        fuente="pendiente: consola de Groq > Settings > Billing",
-        confirmado=False,
+        fuente="https://console.groq.com/docs/model/openai/gpt-oss-20b",
+        confirmado=True,
     ),
 }
 
@@ -70,4 +84,8 @@ if __name__ == "__main__":
         print(f"{nombre}: {estado}  ({precio.fuente}, {precio.fecha})")
         if precio.confirmado:
             print(f"  entrada {precio.entrada_por_millon} $/M, "
-                  f"salida {precio.salida_por_millon} $/M")
+                  f"salida {precio.salida_por_millon} $/M", end="")
+            if precio.entrada_cacheada_por_millon is not None:
+                print(f", entrada cacheada {precio.entrada_cacheada_por_millon} $/M")
+            else:
+                print()
