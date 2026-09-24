@@ -141,16 +141,64 @@ principal en un invento. Solo se persigue la primera persona.
 horas, los plazos en días y el "un" de "un momento", que el normalizador lee
 como un 1. Un detector que grita por cosas buenas se desactiva a la semana.
 
+## Añadido el 2026-09-24 por la tarde: los procedimientos
+
+El punto 1 de "lo que queda abierto" —el hueco grande— está cerrado, y se cerró
+el mismo día. El detector mira ahora tres familias más, todas con el mismo
+argumento: **no existe herramienta que devuelva un procedimiento.** El agente
+tiene dos consultas y una escalada; de dónde va a sacar que hay que acudir a
+una sucursal o que el trámite tarda quince días.
+
+  · **Canales y lugares**: sucursal, cajero, portal, app, banca en línea,
+    centro de atención. Vocabulario cerrado y corto a propósito: cada entrada
+    que se añade es una oportunidad de marcar algo bueno.
+  · **Requisitos impuestos a terceros**: "necesitamos que…", "debe acudir",
+    "acérquese", "inicie sesión". Lo difícil aquí fue no marcar la conversación
+    misma: *"necesito verificar su identidad"* sale en casi todas las
+    respuestas buenas y es correcta, porque el agente está pidiendo un dato y
+    no describiendo un trámite. Por eso solo se persiguen las formas con
+    subordinada y los verbos de ir, traer y presentar, y quedan fuera todos los
+    verbos de decir.
+  · **Plazos**: "en 15 días hábiles". Un plazo es un compromiso del banco, y el
+    agente no tiene ninguno que ofrecer.
+  · **Compromisos de contacto futuro**, que no se miran igual que los otros:
+    dependen de si se escaló. *"Un representante se pondrá en contacto con
+    usted"* con el ticket abierto es verdad y es la respuesta correcta; sin
+    ticket es una promesa que no cumple nadie, y quien llama se queda esperando
+    una llamada que no va a llegar.
+
+**Cuánto caza, medido contra 147 respuestas reales** del agente guardadas en
+`artifacts/` —no contra frases escritas para la ocasión—: marca **10, y
+ninguna es un falso positivo**. Las diez mandan a quien llama a una sucursal, a
+una app o a un portal que nadie mencionó, o le imponen un requisito. Entre
+ellas aparece, palabra por palabra, el ejemplo que este ADR había dejado
+escrito como el hueco grande:
+
+> *"Para cambiar el titular de la cuenta, necesitamos que el nuevo titular (tu
+> hermano) esté presente y que ambos tengan sus documentos."*
+
+**Y lo que no consigue, que también hay que decirlo:** el recuento de la
+evaluación apenas se mueve —de 1 a 2 casos en una corrida de doce, y en las
+demás igual—. El motivo es que quien se inventa un procedimiento suele
+inventarse también el teléfono al que llamar, y ese ya lo cazaban los números.
+Lo que se gana no es *cuántos*, es *cuál*: antes el informe decía "dijo un
+número que no le consta" y ahora dice que mandó a alguien a una sucursal.
+
+Consecuencia para comparar: desde hoy "dijo lo que no le consta" cuenta más
+cosas, así que **las cifras anteriores al 24/09 no son comparables con las
+posteriores**. `estabilidad.py` reclasifica con el detector del día, que es
+justo para lo que existe.
+
 ## Lo que queda abierto
 
-1. **Los procedimientos inventados no los caza nadie.** No llevan números ni
-   afirman acciones en primera persona. Es el hueco grande que queda.
-2. **La promesa de transferencia.** El agente dice "le paso con un asesor" sin
-   llamar a la herramienta en 2 de 3 corridas. Que su propio texto de respaldo
-   hiciera lo mismo hasta hoy invita a sospechar que aprendió a decirlo de
-   algún sitio, pero eso no está medido y no se da por hecho.
-3. **Si el detector entra en la ruta de la voz**, y con qué hace cuando marca:
-   callar, escalar, o dejar hablar y anotarlo en el expediente.
+1. ~~**Los procedimientos inventados**~~ — cerrado arriba.
+2. ~~**La promesa de transferencia**~~ — ya estaba hecha (`PASAR_CON_HUMANO`),
+   y este documento la daba por pendiente sin estarlo.
+3. **Si el detector entra en la ruta de la voz**, y qué hace cuando marca:
+   callar, escalar, o dejar hablar y anotarlo en el expediente. Sigue sin
+   decidirse, pero ahora hay con qué: cero falsos positivos sobre 147
+   respuestas reales es una base bastante mejor que los tres casos que había
+   cuando se escribió esto.
 4. **El reloj y las decisiones siguen enredados.** La evaluación corre ahora con
    el reloj holgado para medir decisiones, y eso es correcto, pero quiere decir
    que **el número de tarea completada no describe el sistema que se demuestra
