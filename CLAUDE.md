@@ -42,7 +42,7 @@ levantado, no solo compilando.
 | números hablados | `probe/numeros_es.py` | "setenta, veintitrés, cuatro..." → `70234567`. Pieza del sistema, no solo de medición |
 | tubería sobre fichero | `app/pipeline.py` | el mismo turno pero alimentado desde un WAV en tiempo real, para medir |
 | evaluación | `app/evaluation/` | 20 casos con su rúbrica y su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas, protocolo de la medición final |
-| fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números y acciones. Determinista, sin modelo |
+| fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números, acciones y —desde el 24/09— procedimientos inventados. Determinista, sin modelo |
 | confianza del ASR | `app/confianza.py` | resume lo que el modelo sabe de su propia transcripción. Se anota, no decide. ADR 0008 |
 | detector adaptativo | `app/deteccion_voz.py` | **NO está en uso.** Se puso y se revirtió el 24/09: ver ADR 0009. Se conserva con sus pruebas por el hallazgo |
 | canal telefónico | `probe/linea_telefonica.py` | 300–3400 Hz, 8 kHz y µ-law: el audio como llega por una llamada. Se comprueba solo |
@@ -57,7 +57,7 @@ levantado, no solo compilando.
 ```powershell
 .\.venv\Scripts\python.exe -m app.tools.prueba_servicio      # 10/10
 .\.venv\Scripts\python.exe -m app.agent.prueba_bucle         # 5 escenarios. Si acaba en 3, hubo 429: repite
-.\.venv\Scripts\python.exe -m app.agent.prueba_fundamento    # 17/17, y no gasta peticiones
+.\.venv\Scripts\python.exe -m app.agent.prueba_fundamento    # 28/28, y no gasta peticiones
 .\.venv\Scripts\python.exe -m app.agent.prueba_silencio      # el turno vacío, sin gastar peticiones
 .\.venv\Scripts\python.exe -m app.agent.prueba_consumo       # el contador de tokens, exacto y sin cuota
 .\.venv\Scripts\python.exe -m app.agent.prueba_reintentos    # tres documentos antes de escalar, sin cuota
@@ -529,14 +529,27 @@ no necesita haber visto antes la frase.
 
 Lo que queda, y está en el ADR 0005:
 
-- **Los procedimientos inventados no los caza nadie.** "Necesitamos que el
-  nuevo titular esté presente" no lleva números ni afirma acciones en primera
-  persona. Es el hueco grande.
-- **La promesa de transferencia**, que es el fallo nuevo.
+- ~~**Los procedimientos inventados no los caza nadie.**~~ HECHO el 24/09.
+  Tres familias —canales y lugares, requisitos impuestos a terceros, plazos—
+  más los compromisos de que alguien llamará después, que se miran contra la
+  escalada: con el ticket abierto son verdad y sin él no.
+  **Medido sobre 147 respuestas reales del agente: marca 10, y ninguna es un
+  falso positivo.** Entre ellas, palabra por palabra, el ejemplo que este
+  documento tenía escrito como el hueco grande. Lo que no cambia es el
+  recuento —sube de 1 a 2 casos en una corrida de doce— porque quien se
+  inventa un procedimiento suele inventarse también el teléfono, y ese ya lo
+  cazaban los números; lo que se gana es saber **cuál**.
+- ~~**La promesa de transferencia**~~ ya estaba hecha (`PASAR_CON_HUMANO`).
+  Este documento la daba por pendiente y no lo estaba.
 - **Si el detector entra en la ruta de la voz**, revisando la frase antes de
-  decirla, y qué hace cuando marca: callar, escalar, o hablar y anotarlo. No
-  se decide hasta saber cuántos falsos positivos deja; los tres conocidos ya
-  están arreglados, pero tres es un rato de datos, no una base.
+  decirla, y qué hace cuando marca: callar, escalar, o hablar y anotarlo. Esto
+  sigue sin decidirse, y ahora hay con qué: cero falsos positivos sobre 147
+  respuestas es una base bastante mejor que los tres casos de ayer.
+
+**AVISO para comparar números:** desde el 24/09, "dijo lo que no le consta"
+cuenta también los procedimientos. Las cifras anteriores a esa fecha miden
+menos cosas y no son comparables. `estabilidad.py` reclasifica con el detector
+de hoy, así que releer lo guardado sí compara bien.
 
 ### ~~2. Decidir CÓMO se mide el reservado~~ DECIDIDO Y ESCRITO el 2026-09-24
 Las dos decisiones están tomadas con el reservado **sin tocar**, que era la
