@@ -117,12 +117,11 @@ class Llamada:
         # `vad_filter=True` le quita a Whisper el audio sin voz antes de
         # transcribirlo, y no es una optimización: es lo único que impide que
         # se invente. Medido el 2026-09-24 sobre 64 clips de silencio real de
-        # esta sala, sin el filtro 7 producen texto —"¿Qué pasa?",
-        # "¡Suscríbete!", un trozo de subtítulos— y con él, ninguno. El buffer
-        # que llega aquí lleva además la cola de silencio que cerró el turno,
-        # y sin filtro Whisper llegó a repetir la frase entera detrás de sí
-        # misma: 15 palabras de más en un turno de verdad. Cuesta +24 ms sobre
-        # un turno de 2389. ADR 0008.
+        # esta sala, sin el filtro 16 producen texto —"¿Qué pasa?",
+        # "¡Suscríbete!", un trozo de subtítulos— y con él, ninguno. Y el
+        # buffer que llega aquí lleva además la cola de silencio que cerró el
+        # turno, que es más silencio del que parece: hasta 3,6 s con las dos
+        # reanudaciones. Cuesta +24 ms sobre un turno de 2389. ADR 0008.
         segmentos, info = self.asr.transcribe(completo, language="es",
                                               beam_size=1, vad_filter=True)
         segmentos = list(segmentos)     # el generador es perezoso: aquí se ejecuta

@@ -12,10 +12,12 @@ aplazada**. El motivo está medido y es el ADR 0008:
 
   · Sobre 64 clips sin voz de esta sala y este micrófono, un corte por
     `avg_logprob` cazaba 7 de 7 inventos... hasta que entraron seis clips de
-    habla más. Con ellos dentro el corte baja a -0,98 y caza 5 de 7. Un
-    guardia que se degrada al ver material nuevo no se pone en la ruta de
-    nadie con n=7.
-  · `no_speech_prob` no separa: hay habla de verdad que llega a 0,93.
+    habla más, y bajó a 5 de 7; y al arreglar el material de silencio, que
+    estaba mal construido, quedó en 6 de 16. Tres medidas, cada una peor, y
+    ninguna por un error de medición: el umbral nunca había sido bueno, solo
+    había visto poco.
+  · `no_speech_prob` no separa: hay habla de verdad que llega a 0,78 y los
+    inventos van de 0,50 a 0,83, o sea que los rangos se solapan casi enteros.
   · El invento más peligroso —repetir el final de la frase que sí se dijo—
     tiene `avg_logprob` -0,386, que es BUENO. Repetir lo que uno acaba de
     decir es lo más probable del mundo para un modelo de lenguaje, así que

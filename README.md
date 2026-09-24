@@ -142,10 +142,12 @@ propias grabaciones y no sintetizado:
 
 | | sin filtro de voz | con `vad_filter=True` |
 |---|---|---|
-| clips sin voz que producen texto | **7 de 64** | **0 de 64** |
+| clips sin voz que producen texto | **16 de 64** | **0 de 64** |
 | clips con voz que se quedan mudos | 0 de 42 | 0 de 42 |
-| turnos que ganan palabras por la cola de silencio | 1 de 18 (+15) | 0 de 18 |
 | coste en el turno (3 s + 1,2 s), mediana n=18 | 178 ms | 202 ms |
+
+Ya inventa con un solo segundo de silencio, y cuanto más largo, más: 1 de 13 a
+1 s, 4 de 15 a 2 s, 5 de 15 a 4 s, 6 de 17 a 8 s.
 
 Lo que sale: *"¡Suscríbete!"*, *"Este es el canal de subtítulos en español de
 la Iglesia…"* y *"¿Qué pasa?"*. Las dos primeras delatan de dónde vienen. **La
@@ -154,12 +156,58 @@ bancario le contesta a una habitación vacía.
 
 Dos cosas más, que son las que hacen falta para decidir. **Qué clip alucina se
 repite entre corridas; qué dice, no** — es el fallback de temperatura de
-Whisper. Y **el umbral de confianza, que parecía la solución elegante, no lo
-es**: `no_speech_prob` no separa (hay habla de verdad que llega a 0,93), y un
-corte por `avg_logprob` cazaba 7 de 7 hasta que entraron seis clips de habla
-más, con los que pasó a cazar 5 de 7. El razonamiento completo, con lo que se
+Whisper, que es aleatorio por dentro. Y **el umbral de confianza, que parecía
+la solución elegante, no lo es**: `no_speech_prob` no separa (los rangos del
+habla y del invento se solapan casi enteros) y un corte por `avg_logprob`
+cazaba 7 de 7... hasta que entraron seis clips de habla más y bajó a 5 de 7, y
+al arreglar el material de silencio quedó en 6 de 16. Tres medidas, cada una
+peor que la anterior, y ninguna por un error de medición: el umbral nunca había
+sido bueno, solo había visto poco.
+
+**El primer número de esta tabla fue 7 de 64 y estaba mal**, por cómo se
+construía el silencio: se cogían los tramos de menos energía de cada
+grabación, y los de menos energía son los ceros que el grabador deja al
+principio y al final. El banco se llenaba de tramos medio mudos y el problema
+salía por la mitad de su tamaño. El razonamiento completo, con lo que se
 descartó, está en
 [ADR 0008](docs/adr/0008-que-hace-el-agente-cuando-la-transcripcion-no-es-de-fiar.md).
+
+### El umbral que describía una habitación
+
+Mientras se comprobaba que el filtro de voz no dejara sordo al agente apareció
+algo peor, y no era del filtro. El sistema abría turno cuando un trozo de 20 ms
+pasaba de una constante, `0.005`. Funcionaba **por una coincidencia**: el ruido
+de la habitación de desarrollo mide 0,0011, trece decibelios por debajo.
+
+| | ¿abre turno? |
+|---|---|
+| grabación original | 6 de 6 |
+| la misma voz a la mitad de volumen | **0 de 6** |
+| la misma voz por línea telefónica | **1 de 6** |
+
+Quien hablara bajito no era oído, y quien llamara por teléfono tampoco — lo que
+dejaba el siguiente paso del proyecto, telefonía real, construido sobre algo que
+no podía funcionar. Y el fallo **no deja rastro**: el turno no llega a cerrarse,
+así que no hay transcripción vacía y el guardia del turno vacío tampoco se
+entera. De todos los fallos de este proyecto es el único invisible.
+
+Ahora el umbral se calibra contra el ruido de la propia llamada. El factor se
+eligió con un criterio escrito **antes** de ver la tabla —ningún clip de
+silencio puede abrir turno; dentro de eso, oír toda la voz que el ASR entiende—
+sobre 72 clips de habla degradada y 48 de silencio:
+
+| | oye voz | abre silencios |
+|---|---|---|
+| umbral fijo 0,005 | 40 / 72 | 15 / 48 |
+| factor 2,0 | 70 / 72 | 1 / 48 |
+| **factor 2,5 (elegido)** | **63 / 72** | **0 / 48** |
+
+El 2,0 oye siete clips más y se descartó igual, porque el criterio estaba
+fijado de antemano. Lo que hace fácil el cambio es que el adaptativo gana al
+fijo **en las dos direcciones a la vez**: no hay intercambio que discutir.
+Razonado, con el límite que no arregla, en
+[ADR 0009](docs/adr/0009-cuando-se-decide-que-alguien-esta-hablando.md).
+
 
 ---
 

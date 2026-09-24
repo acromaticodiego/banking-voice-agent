@@ -1,6 +1,6 @@
 r"""La otra cara del filtro de voz: ¿cuándo deja sordo al agente? (cero tokens)
 
-`probe/confianza_asr.py` midió lo que el filtro arregla: 7 de 64 clips de
+`probe/confianza_asr.py` midió lo que el filtro arregla: 16 de 64 clips de
 silencio dejan de transcribirse como frases. Esta sonda mide lo que el filtro
 puede romper, que es un fallo peor.
 

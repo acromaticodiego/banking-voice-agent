@@ -65,7 +65,7 @@ class ASRQueExigeElFiltro:
         if kwargs.get("vad_filter") is not True:
             raise AssertionError(
                 "transcribe() sin vad_filter=True. Sin ese filtro Whisper se "
-                "inventa turnos sobre el silencio: medido el 2026-09-24, 7 de "
+                "inventa turnos sobre el silencio: medido el 2026-09-24, 16 de "
                 "64 clips de sala real producen texto. ADR 0008.")
         # El generador perezoso de verdad se consume una sola vez: si el
         # sistema no lo materializa, el texto sale vacío y la prueba lo caza.
@@ -107,10 +107,22 @@ def llamada_con(segmentos):
 
 
 def empujar_un_turno(llamada: Llamada):
-    """Voz suficiente para abrir turno y silencio suficiente para cerrarlo."""
+    """Sala, voz suficiente para abrir turno, y silencio suficiente para cerrarlo.
+
+    El segundo de sala del principio no es decorado: desde el ADR 0009 el
+    detector se calibra con el ruido de la llamada, y una llamada empieza por
+    el ruido de la sala —se descuelga y luego se habla—. Sin él, este audio
+    sintético de nivel perfectamente constante deja el suelo clavado en el
+    nivel de la voz y no se abre turno. Con voz de verdad no pasa, porque la
+    energía del habla sube y baja entre sílabas: medido, 63 de 72 clips abren
+    turno igual con o sin ese segundo previo. O sea que lo irreal es el tono
+    plano de esta prueba, no el detector.
+    """
     generador = np.random.default_rng(7)
+    sala = (generador.standard_normal(int(1.0 * FRECUENCIA)) * 0.001).astype(np.float32)
     voz = (generador.standard_normal(int(0.8 * FRECUENCIA)) * 0.05).astype(np.float32)
     silencio = np.zeros(int(0.5 * FRECUENCIA), dtype=np.float32)
+    llamada.empujar(sala)
     llamada.empujar(voz)
     return llamada.empujar(silencio)
 
