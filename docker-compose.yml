@@ -31,7 +31,10 @@ services:
       retries: 20
 
   redis:
-    image: redis:7-alpine
+    # 8 y no 7: la 7 no se pudo descargar (el DNS de esta máquina se
+    # cae cada pocos minutos) y la 8 ya estaba aquí. Para lo que se usa
+    # —guardar el estado de una llamada— da igual la mayor.
+    image: redis:8-alpine
     container_name: agente_redis
     ports:
       - "56379:6379"

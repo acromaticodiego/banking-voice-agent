@@ -44,11 +44,14 @@ levantado, no solo compilando.
 | evaluación | `app/evaluation/` | 20 casos con su rúbrica y su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas, protocolo de la medición final |
 | fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números, acciones y —desde el 24/09— procedimientos inventados. Determinista, sin modelo |
 | confianza del ASR | `app/confianza.py` | resume lo que el modelo sabe de su propia transcripción. Se anota, no decide. ADR 0008 |
+| expediente | `app/expediente/` | lo que queda al colgar en PostgreSQL: qué se dijo, qué herramienta con qué argumentos, qué devolvió y qué se revisó. Se lee con `-m app.expediente.leer` |
 | detector adaptativo | `app/deteccion_voz.py` | **NO está en uso.** Se puso y se revirtió el 24/09: ver ADR 0009. Se conserva con sus pruebas por el hallazgo |
 | canal telefónico | `probe/linea_telefonica.py` | 300–3400 Hz, 8 kHz y µ-law: el audio como llega por una llamada. Se comprueba solo |
 
 **Levantar la demo:**
 ```powershell
+docker compose up -d       # PostgreSQL (expediente) y Redis. Sin esto el
+                           # sistema corre igual, pero el expediente se pierde
 .\.venv\Scripts\python.exe -m uvicorn app.gateway:app --port 8000
 # y abrir http://127.0.0.1:8000/   (NO por la IP: el micrófono solo va en localhost o https)
 ```
@@ -63,6 +66,7 @@ levantado, no solo compilando.
 .\.venv\Scripts\python.exe -m app.agent.prueba_reintentos    # tres documentos antes de escalar, sin cuota
 .\.venv\Scripts\python.exe -m app.prueba_confianza          # el filtro de voz sigue puesto, sin cuota ni GPU
 .\.venv\Scripts\python.exe -m app.prueba_deteccion_voz     # el detector de voz y su limite conocido, sin cuota ni GPU
+.\.venv\Scripts\python.exe -m app.prueba_expediente        # el expediente. SIN Postgres sale con codigo 2, no con 0
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
@@ -659,13 +663,23 @@ Es el patrón de la industria y lo que convierte "una página web" en "llamé al
 número desde mi móvil". Trae de regalo el audio de 8 kHz de verdad, la latencia
 de red real, y el plano del vídeo que mejor se entiende. Crédito de prueba.
 
-### 8. El expediente en PostgreSQL y el estado en Redis
-Ahora el rastro de cada turno existe en memoria y se pierde al colgar. El
-proyecto promete "al colgar queda un expediente con qué se dijo, qué
-herramienta se llamó, con qué argumentos y qué devolvió". Eso hay que
-escribirlo. Y mover el estado de `Llamada` a Redis es lo que permite defender
-la frase de que la pasarela no guarda nada y escala horizontal — **hoy es
-verdad por diseño pero no está demostrado**.
+### ~~8. El expediente en PostgreSQL~~ HECHO el 2026-09-24. Redis sigue pendiente
+El expediente está y **verificado contra Postgres de verdad**, no compilando:
+tres tablas (`llamada`, `turno`, `paso`), lo que devolvió cada herramienta
+guardado entero y sin resumir, más la confianza del ASR (ADR 0008), la clave
+de idempotencia (ADR 0007) y lo que el detector marcó sin fundamento. Una
+llamada real de `prueba_pasarela` queda leíble con
+`python -m app.expediente.leer <id>`.
+
+La decisión que lo gobierna, escrita en la cabecera del módulo: **una base de
+datos caída no puede tumbar una llamada en curso**. Se sigue atendiendo y se
+anota la pérdida; `fallos` y `ultimo_error` son parte de la interfaz, porque un
+expediente que se pierde en silencio es peor que no tenerlo.
+
+**Lo que queda: el estado en Redis.** Mover el estado de `Llamada` a Redis es
+lo que permitiría defender que la pasarela no guarda nada y escala horizontal
+—hoy es verdad por diseño pero **sigue sin estar demostrado**—. El contenedor
+ya está en `docker-compose.yml` y no lo usa nadie todavía.
 
 ### ~~9. Coste por conversación~~ INSTRUMENTADO el 2026-09-24, falta medirlo
 Los tokens se cuentan por paso, por turno y por conversación, y el contador

@@ -2,14 +2,14 @@
 
 Agente de voz telefónico para verificación de identidad y atención al cliente:
 mantiene una conversación, decide qué preguntar, llama herramientas, se recupera
-cuando algo falla, y trabaja contra un reloj. De cada turno queda un rastro con
-qué se dijo, qué herramienta se llamó, con qué argumentos y qué devolvió
-—hoy en memoria; persistirlo es de lo que falta, y está dicho abajo—.
+cuando algo falla, y trabaja contra un reloj. Al colgar queda un expediente en
+PostgreSQL con qué se dijo, qué herramienta se llamó, con qué argumentos, qué
+devolvió y qué se revisó de lo que el agente contestó.
 
 **Estado (2026-09-24): el sistema funciona de punta a punta y está medido.**
 Se habla por el micrófono del navegador, el agente decide, llama herramientas,
 se recupera cuando fallan y contesta hablando. Lo que falta está al final, sin
-adornos: el expediente todavía vive en memoria y se pierde al colgar, no hay
+adornos: el estado de la llamada en curso todavía vive en memoria, no hay
 telefonía real, y la evaluación sobre el conjunto reservado no se ha hecho
 —el reservado sigue **sin tocar**, que es lo que le da valor—.
 
@@ -507,9 +507,11 @@ Sin adornos, y por orden de lo que más acerca esto a una llamada de verdad:
 3. **Barge-in**: hoy, mientras el agente habla, se ignora la entrada. Es una
    decisión declarada —sin cancelación de eco el micrófono capta la propia voz
    del agente— y es la métrica que falta.
-4. **El expediente en PostgreSQL y el estado en Redis.** El rastro de cada
-   turno existe y se pierde al colgar. Es la mayor distancia entre lo que el
-   proyecto promete y lo que hace.
+4. **El estado en Redis.** El expediente en PostgreSQL ya está —de cada
+   llamada queda qué se dijo, qué herramienta se llamó con qué argumentos, qué
+   devolvió y qué se revisó—, pero el estado de la llamada en curso sigue en
+   memoria, así que la frase "la pasarela no guarda nada y escala horizontal"
+   es verdad por diseño y no está demostrada.
 5. **Telefonía real** (Twilio Media Streams), que trae de regalo el audio de
    8 kHz de verdad y la latencia de red real.
 
@@ -527,4 +529,4 @@ la corrección de llamadas a herramientas y el barge-in.
 | modelo | `openai/gpt-oss-20b` en Groq | entra en el presupuesto del turno |
 | fin de habla | Silero VAD + fin de turno por contenido | ver `docs/adr/0002` |
 | estado | Redis | **previsto, no implementado.** La pasarela no guarda nada suyo, así que escala horizontal *por diseño* — pero eso hoy no está demostrado |
-| expediente | PostgreSQL | **previsto, no implementado.** Hoy el rastro vive en memoria |
+| expediente | PostgreSQL | tres tablas, lo que devolvió cada herramienta guardado entero. Si la base cae, la llamada sigue y la pérdida se cuenta |
