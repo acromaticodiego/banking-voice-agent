@@ -1,0 +1,83 @@
+{
+  "fecha": "2026-09-24T16:28:18.428569-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "asr",
+      "implementacion": "faster-whisper small (cuda/float16) vad=False",
+      "que_mide": "transcribir el clip entero de habla, de llamada a resultado",
+      "muestras_ms": [
+        157.27190001052804,
+        189.77590001304634,
+        180.97109999507666,
+        176.39340000459924,
+        195.79889997839928,
+        170.61300002387725,
+        157.66169998096302,
+        206.77300001261756,
+        179.1679000016302,
+        167.0367999759037,
+        187.71600001491606,
+        149.24190001329407,
+        151.02150000166148,
+        229.13039999548346,
+        205.1148999889847,
+        169.38460001256317,
+        190.7968999876175,
+        150.60570000787266
+      ],
+      "unidad": "ms",
+      "notas": "Clips: documento~turno, libre-bloqueo~turno, libre-cobro~turno, libre-datos~turno, monto~turno, titubeos~turno. Va en la ruta crítica del turno.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 18,
+        "p50": 177.8,
+        "p95": 210.1,
+        "min": 149.2,
+        "max": 229.1
+      }
+    },
+    {
+      "etapa": "asr",
+      "implementacion": "faster-whisper small (cuda/float16) vad=True",
+      "que_mide": "transcribir el clip entero de habla, de llamada a resultado",
+      "muestras_ms": [
+        162.94949999428354,
+        203.54469999438152,
+        193.73719999566674,
+        166.74159999820404,
+        214.2057000019122,
+        149.12069999263622,
+        161.77350000361912,
+        229.22469998593442,
+        266.72829999006353,
+        188.51529998937622,
+        246.09380000038072,
+        197.81089999014512,
+        199.1930000076536,
+        253.4835000114981,
+        250.9470000222791,
+        242.9571999819018,
+        253.10990001889877,
+        166.8059999938123
+      ],
+      "unidad": "ms",
+      "notas": "Clips: documento~turno, libre-bloqueo~turno, libre-cobro~turno, libre-datos~turno, monto~turno, titubeos~turno. Va en la ruta crítica del turno.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 18,
+        "p50": 201.4,
+        "p95": 255.5,
+        "min": 149.1,
+        "max": 266.7
+      }
+    }
+  ]
+}

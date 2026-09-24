@@ -146,6 +146,10 @@ class Lectura:
     compresion_max: float | None
     prob_idioma: float
     ms: float
+    # Las señales segmento a segmento y no solo el agregado: la alucinación
+    # pegada al final de una frase de verdad es UN segmento malo entre buenos,
+    # y un máximo sobre todo el turno no la distingue de nada.
+    detalle: list[dict] = field(default_factory=list)
 
     @property
     def dijo_algo(self) -> bool:
@@ -179,6 +183,15 @@ def coser(tramos: list[np.ndarray], duracion_s: float,
     cuantos = int(np.ceil(duracion_s * FRECUENCIA / (TRAMO_S * FRECUENCIA)))
     elegidos = [tramos[i] for i in generador.integers(0, len(tramos), cuantos)]
     return np.concatenate(elegidos)[:int(duracion_s * FRECUENCIA)]
+
+
+def primer_indice_con_voz(audio: np.ndarray) -> int:
+    """Dónde empieza a oírse algo, con el mismo criterio que usa `app/vivo.py`."""
+    trozo = int(0.02 * FRECUENCIA)
+    for i in range(0, len(audio) - trozo, trozo):
+        if float(np.abs(audio[i:i + trozo]).mean()) > UMBRAL_VOZ:
+            return i
+    return 0
 
 
 def ventana_mas_callada(audio: np.ndarray, ventana_s: float = 2.0) -> np.ndarray | None:
@@ -273,6 +286,16 @@ def construir_clips(rutas: list[Path]) -> tuple[list[Clip], int]:
                                   np.concatenate([audio.astype(np.float32), cola]),
                                   True, "habla-con-cola", base=corto))
 
+            # Un turno de verdad, para medir el coste sobre algo que se le
+            # parezca: las grabaciones duran 17-30 s y nadie contesta eso por
+            # teléfono. Tres segundos desde que se empieza a oír voz, más la
+            # cola larga que cierra el turno.
+            inicio = primer_indice_con_voz(audio)
+            trozo = audio[inicio:inicio + int(3.0 * FRECUENCIA)].astype(np.float32)
+            clips.append(Clip(f"{corto}~turno",
+                              np.concatenate([trozo, coser(tramos, 1.2, generador)]),
+                              True, "turno"))
+
     for duracion in (2.0, 8.0):
         n = int(duracion * FRECUENCIA)
         clips.append(Clip(f"digital-{duracion:g}s", np.zeros(n, dtype=np.float32),
@@ -311,6 +334,10 @@ def leer(modelo, clip: Clip, vad: bool) -> Lectura:
         avg_logprob_min=min((s.avg_logprob for s in segs), default=None),
         compresion_max=max((s.compression_ratio for s in segs), default=None),
         prob_idioma=info.language_probability, ms=ms,
+        detalle=[{"inicio": round(s.start, 2), "fin": round(s.end, 2),
+                  "texto": s.text.strip(), "no_speech": round(s.no_speech_prob, 4),
+                  "avg_logprob": round(s.avg_logprob, 4),
+                  "compresion": round(s.compression_ratio, 3)} for s in segs],
     )
 
 
@@ -490,6 +517,44 @@ def main() -> int:
             "avg_logprob_min": separa(subconjunto, "avg_logprob_min", "baja"),
         }
 
+    # ------------------------------------------------- el guardia por segmento
+    # El otro guardia posible, y no es el mismo: en vez de tirar el turno
+    # entero, tirar el segmento que es aire. Los segmentos de los clips sin voz
+    # son todos inventados; los de los clips de habla sin cola son todos
+    # legítimos. Con esas dos poblaciones se puede preguntar si hay corte.
+    por_segmento = {}
+    for vad in (False, True):
+        malos = [s for l in lecturas if l.vad is vad and not l.hay_voz for s in l.detalle]
+        buenos = [s for l in lecturas if l.vad is vad
+                  and l.familia in ("habla", "habla-telefono", "turno")
+                  for s in l.detalle]
+        if not malos or not buenos:
+            por_segmento[f"vad={vad}"] = {"veredicto": f"{len(buenos)} segmentos de habla, "
+                                                       f"{len(malos)} inventados"}
+            continue
+        corte = max(s["no_speech"] for s in buenos)   # no tocar ni un segmento de habla
+        por_segmento[f"vad={vad}"] = {
+            "corte_no_speech": round(corte, 4),
+            "habla": {"n": len(buenos),
+                      "max_no_speech": round(corte, 4)},
+            "inventados": {"n": len(malos),
+                           "min_no_speech": round(min(s["no_speech"] for s in malos), 4),
+                           "max_no_speech": round(max(s["no_speech"] for s in malos), 4)},
+            "cazados": sum(1 for s in malos if s["no_speech"] > corte),
+        }
+
+    print("\n" + "=" * 74)
+    print("EL OTRO GUARDIA: tirar el SEGMENTO que es aire, no el turno entero")
+    for etiqueta, r in por_segmento.items():
+        if "corte_no_speech" not in r:
+            print(f"  {etiqueta:<10} {r['veredicto']}")
+            continue
+        print(f"  {etiqueta:<10} corte no_speech {r['corte_no_speech']} "
+              f"(el máximo de {r['habla']['n']} segmentos de habla)")
+        print(f"  {'':<10} inventados: n={r['inventados']['n']}, no_speech en "
+              f"[{r['inventados']['min_no_speech']}, {r['inventados']['max_no_speech']}]"
+              f"  -> caza {r['cazados']}/{r['inventados']['n']}")
+
     print("\n" + "=" * 74)
     print("¿SEPARA ALGUNA SEÑAL? (corte = el más agresivo que no toca ningún clip con voz)")
     for etiqueta, bloque in analisis.items():
@@ -508,8 +573,11 @@ def main() -> int:
 
     # ------------------------------------------------ el coste del vad_filter
     print("\n" + "=" * 74)
-    print(f"COSTE DEL vad_filter, {args.repeticiones} pasadas sobre los clips de habla")
-    habla = [c for c in clips if c.familia == "habla"]
+    print(f"COSTE DEL vad_filter, {args.repeticiones} pasadas sobre turnos de 3 s + "
+          f"1,2 s de cola")
+    print("  (NO sobre las grabaciones enteras: duran 17-30 s y nadie contesta "
+          "eso por teléfono)")
+    habla = [c for c in clips if c.familia == "turno"]
     mediciones = []
     for vad in (False, True):
         m = Medicion(
@@ -539,6 +607,7 @@ def main() -> int:
         "criterio": "el corte no puede rechazar ningún clip con voz",
         "umbral_voz_del_sistema": UMBRAL_VOZ, "colas_s": list(COLAS_S),
         "alucinacion": resumen_alucinacion, "colas": colas,
+        "por_segmento": por_segmento,
         "lecturas": [asdict(l) for l in lecturas], "analisis": analisis,
     }, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nGuardado en {crudo.name} y {destino.name}")
