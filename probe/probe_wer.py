@@ -35,6 +35,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from common import ARTEFACTOS, Medicion, guardar  # noqa: E402
 from numeros_es import normalizar, sin_tildes  # noqa: E402
+from linea_telefonica import a_linea_telefonica  # noqa: E402
 from probe_whisper_local import cargar_modelo, leer_wav  # noqa: E402
 
 
@@ -75,7 +76,16 @@ def cifras(texto: str) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--modelo", default="small")
+    # La tasa de error del proyecto esta medida con un microfono de portatil en
+    # una habitacion callada, a 16 kHz y con todo el espectro. Nada de eso
+    # llega por telefono, asi que ese numero no es optimista: es de otro
+    # problema. Con esto se pasa el MISMO audio por la banda de 300-3400 Hz, se
+    # muestrea a 8 kHz y se cuantiza en mu-law, que es lo que hace una linea.
+    parser.add_argument("--linea-telefonica", action="store_true",
+                        help="pasa el audio por el canal de una llamada antes "
+                             "de transcribirlo")
     args = parser.parse_args()
+    canal = "linea telefonica (300-3400 Hz, 8 kHz, mu-law)" if args.linea_telefonica else "microfono, 16 kHz"
 
     muestras = []
     for json_ruta in sorted(ARTEFACTOS.glob("muestra-*.json")):
@@ -108,7 +118,9 @@ def main() -> int:
 
     aciertos_datos = fallos_datos = 0
     for fichero, verdad, wav in muestras:
-        audio, _fr, _dur = leer_wav(wav)
+        audio, frecuencia, _dur = leer_wav(wav)
+        if args.linea_telefonica:
+            audio = a_linea_telefonica(audio, frecuencia)
         segmentos, _ = modelo.transcribe(audio, language="es", beam_size=5)
         dicho = "".join(s.text for s in segmentos).strip()
 
@@ -140,13 +152,16 @@ def main() -> int:
         print(f"  datos  números recuperados exactos: {aciertos_datos}/{total_datos} "
               f"({aciertos_datos / total_datos * 100:.0f}%)")
 
-    print(f"\nTamaño de muestra: {len(muestras)} grabaciones de una sola persona.")
+    print(f"\nTamaño de muestra: {len(muestras)} grabaciones de una sola persona, por {canal}.")
     print("Calibra el orden de magnitud. NO es una tasa de error representativa:")
     print("para eso harían falta varias voces, ruido de fondo y línea telefónica.")
 
-    normal.notas = (f"{len(muestras)} grabaciones, un solo hablante, sin ruido. "
+    normal.notas = (f"{len(muestras)} grabaciones, un solo hablante, sin ruido, "
+                    f"por {canal}. "
                     f"Números recuperados exactos: {aciertos_datos}/{total_datos}.")
-    destino = guardar([normal, literal], f"wer-{args.modelo}")
+    literal.notas += f" Canal: {canal}."
+    sufijo = "-telefono" if args.linea_telefonica else ""
+    destino = guardar([normal, literal], f"wer-{args.modelo}{sufijo}")
     print(f"\nGuardado en {destino}")
     return 0
 

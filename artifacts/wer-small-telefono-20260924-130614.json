@@ -1,0 +1,53 @@
+{
+  "fecha": "2026-09-24T13:06:14.094832-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "wer",
+      "implementacion": "faster-whisper small (cuda/float16) [normalizado]",
+      "que_mide": "lo mismo, con los números pasados a cifras en los dos lados",
+      "muestras_ms": [
+        0.0,
+        0.0,
+        13.333333333333334
+      ],
+      "unidad": "%",
+      "notas": "3 grabaciones, un solo hablante, sin ruido, por linea telefonica (300-3400 Hz, 8 kHz, mu-law). Números recuperados exactos: 3/3.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 0.0,
+        "p95": 12.0,
+        "min": 0.0,
+        "max": 13.3
+      }
+    },
+    {
+      "etapa": "wer",
+      "implementacion": "faster-whisper small (cuda/float16) [literal]",
+      "que_mide": "errores de palabra sobre palabras de la referencia, sin tocar los números",
+      "muestras_ms": [
+        32.25806451612903,
+        20.0,
+        15.151515151515152
+      ],
+      "unidad": "%",
+      "notas": "Castiga escribir 1070234567 donde la referencia dice las cifras en letra. Canal: linea telefonica (300-3400 Hz, 8 kHz, mu-law).",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 3,
+        "p50": 20.0,
+        "p95": 31.0,
+        "min": 15.2,
+        "max": 32.3
+      }
+    }
+  ]
+}
