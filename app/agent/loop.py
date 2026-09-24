@@ -176,12 +176,17 @@ class Turno:
 class Agente:
     def __init__(self, cliente_groq, modelo: str, base_herramientas: str,
                  presupuesto_ms: float = 3000.0, adelantar: bool = False,
-                 tardanza_herramienta_ms: int = 0) -> None:
+                 tardanza_herramienta_ms: int = 0,
+                 sistema: str = SISTEMA) -> None:
         self.groq = cliente_groq
         self.modelo = modelo
         self.base = base_herramientas.rstrip("/")
         self.presupuesto_ms = presupuesto_ms
-        self.historia: list[dict] = [{"role": "system", "content": SISTEMA}]
+        # El prompt entra por parámetro para poder correr los mismos casos con
+        # dos versiones el mismo día. Cambiar el prompt cambia a la vez lo que
+        # el agente decide y lo que tarda en decidirlo, y sin poder alternar
+        # entre los dos no hay forma de separar las dos cosas.
+        self.historia: list[dict] = [{"role": "system", "content": sistema}]
         self.adelantar = adelantar
         # Lo que tardaría un core bancario de verdad. La herramienta de mentira
         # contesta en 5 ms, y con eso el problema que se quiere medir no existe.
@@ -415,6 +420,23 @@ class Agente:
                 })
 
         if not turno.texto:
+            # Esta frase prometía un asesor y no llamaba a nadie. Lo destapó
+            # `fundamento.py` el 2026-09-24, y no en el modelo: en este
+            # fichero. El agente se quedaba sin pasos, decía "le paso con un
+            # asesor" y colgaba la promesa en el aire, sin ticket, sin
+            # expediente y sin nadie al otro lado. Es la misma mentira que se
+            # le prohíbe al modelo, escrita a mano.
+            #
+            # Ahora se escala de verdad antes de decirlo. Lleva la clave del
+            # turno, así que un reintento no abre dos tickets.
+            resultado, ms = self._llamar(
+                "escalar_a_humano",
+                {"motivo": "el turno acabó sin respuesta del modelo"},
+                turno.clave)
+            turno.rastro.append(Paso("herramienta", "escalar_a_humano", ms,
+                                     argumentos={"motivo": "turno sin respuesta"},
+                                     resultado=resultado,
+                                     error=resultado.get("error")))
             turno.texto = ("Disculpe, no pude completar la consulta. "
                            "Le paso con un asesor.")
         self.historia.append({"role": "assistant", "content": turno.texto})

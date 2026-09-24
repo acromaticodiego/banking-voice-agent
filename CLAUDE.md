@@ -42,6 +42,7 @@ levantado, no solo compilando.
 | números hablados | `probe/numeros_es.py` | "setenta, veintitrés, cuatro..." → `70234567`. Pieza del sistema, no solo de medición |
 | tubería sobre fichero | `app/pipeline.py` | el mismo turno pero alimentado desde un WAV en tiempo real, para medir |
 | evaluación | `app/evaluation/` | 20 casos con su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas |
+| fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números y acciones. Determinista, sin modelo |
 
 **Levantar la demo:**
 ```powershell
@@ -52,10 +53,11 @@ levantado, no solo compilando.
 **Comprobaciones (todas pasan hoy):**
 ```powershell
 .\.venv\Scripts\python.exe -m app.tools.prueba_servicio      # 10/10
-.\.venv\Scripts\python.exe -m app.agent.prueba_bucle         # 4 escenarios
+.\.venv\Scripts\python.exe -m app.agent.prueba_bucle         # 5 escenarios. Si acaba en 3, hubo 429: repite
+.\.venv\Scripts\python.exe -m app.agent.prueba_fundamento    # 17/17, y no gasta peticiones
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
-.\.venv\Scripts\python.exe probe\numeros_es.py               # 12/12
+.\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
 .\.venv\Scripts\python.exe -m app.evaluation.catalogo      # 20 casos, ids únicos, herramientas que existen
 .\.venv\Scripts\python.exe -m app.evaluation.particion     # 12 calibración / 8 reservado, sin solapar
 ```
@@ -65,7 +67,8 @@ levantado, no solo compilando.
 .\.venv\Scripts\python.exe -m app.medir_turno --repeticiones 6 --fin-por-contenido
 .\.venv\Scripts\python.exe -m app.evaluation.correr              # agente, calibración
 .\.venv\Scripts\python.exe -m app.evaluation.correr --linea-base
-.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12   # relee lo guardado, no gasta peticiones
+.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual --presupuesto-ms 15000
+#   relee lo guardado y no gasta peticiones. Sin los filtros se niega a mezclar brazos distintos
 .\.venv\Scripts\python.exe probe\presupuesto.py
 ```
 
@@ -99,16 +102,28 @@ turno encadena dos llamadas al modelo con una herramienta en medio.
 | con números normalizados | 0,0% |
 | números críticos recuperados | 3/3 |
 
-### Tarea completada (calibración, 12 casos, 2026-09-23)
+### Tarea completada (calibración, 12 casos, 2026-09-24)
 
 El conjunto pasó de 10 casos a 20, y la calibración de 6 a 12. Los números de
 antes (agente 5/6, línea base 4/6) eran de una sola corrida sobre 6 casos y no
 son comparables con estos.
 
-| | correcto | estables | fugas de datos | promesas sin base |
-|---|---|---|---|---|
-| **agente**, n=3 corridas | **mediana 6/12, rango 5–7** | 6/12 | 0 | 2 casos en 1 de las 3 |
-| línea base sin modelo | 6/12, determinista | 12/12 | 2 | 0 |
+Cada casilla son **tres corridas**, reclasificadas con el clasificador del
+24/09 y con el detector de fundamento del 24/09. Las corridas con fallos del
+proveedor se descartan, porque un 429 hace que el agente salga escalando y ese
+desenlace no es suyo: por eso una casilla tiene n=2.
+
+| desenlace correcto | prompt anterior | prompt con acciones |
+|---|---|---|
+| reloj de 3000 ms (el de la demo) | mediana 6/12, rango 5–7 (n=2) | **mediana 4/12, rango 3–4** |
+| reloj holgado, 15000 ms | mediana 6/12, rango 6–8 | mediana 8/12, rango 5–8 |
+| línea base sin modelo | 6/12, determinista, 12/12 estables | — |
+
+| | fugas de datos | afirmaciones sin fundamento |
+|---|---|---|
+| agente, prompt nuevo, reloj holgado | 0 | 1, 1 y 0 de 12 |
+| agente, prompt anterior, reloj holgado | 0 | 1, 2 y 1 de 12 |
+| línea base sin modelo | 2 | 0, y no puede: solo imprime lo que le devolvieron |
 
 **Sobre el conjunto ampliado el agente NO le gana a las reglas en el recuento
 de desenlaces.** Le gana en lo que importa: la línea base filtra datos de la
@@ -118,6 +133,12 @@ ventaja de un conjunto fácil.
 **Y la mitad del conjunto es moneda al aire**: 6 de los 12 casos cambian de
 desenlace entre corridas del mismo día con el mismo modelo. Por eso el número
 va con mediana y rango, y por eso `estabilidad.py` existe.
+
+**El reloj y las decisiones están enredados y hay que decirlo:** la evaluación
+corre con el reloj holgado porque lo que mide son decisiones, así que **ese
+número no describe el sistema que se ve en la demo**. Con el reloj de 3000 ms,
+el prompt nuevo agota el presupuesto en 8, 10 y 9 de los 12 casos, y el caso
+se queda sin desenlace. Las dos cifras se publican juntas, como en el ADR 0003.
 
 **EL RESERVADO (8 casos) NO SE HA TOCADO.** Pedirlo sin declarar que es la
 medición final lanza una excepción.
@@ -134,10 +155,13 @@ medición final lanza una excepción.
   regla de publicar siempre los dos números juntos
 - **0004** adelantar la consulta antes de que el modelo la pida. Funciona, no
   se distingue del ruido, y el motivo es el hallazgo
+- **0005** por qué no puede afirmar nada que no venga de una herramienta.
+  Prompt, detector y el texto de respaldo que mentía. Con la tabla del coste:
+  con el reloj de la demo, el prompt nuevo baja de 6 a 4 de 12
 
 ---
 
-## SEIS VECES QUE UNA MEDICIÓN SALIÓ LIMPIA Y ERA FALSA
+## SIETE VECES QUE UNA MEDICIÓN SALIÓ LIMPIA Y ERA FALSA
 
 Es la parte más valiosa del proyecto y el mejor material de entrevista.
 **Coherente no es correcto.**
@@ -161,6 +185,14 @@ Es la parte más valiosa del proyecto y el mejor material de entrevista.
    guardado. Y hay un segundo filo: las corridas de una misma tarde se hacen
    con clasificadores distintos, así que comparar sus resultados tal cual
    mezcla dos variables. Hay que reclasificar con el de hoy.
+7. **El prompt nuevo parecía haber acabado con los inventos: cero
+   afirmaciones sin fundamento** (24/09). Y era verdad que había cero, porque
+   con el reloj de 3000 ms el presupuesto saltaba en 9 de los 12 casos y el
+   agente no llegaba a decir nada: se quedaba en "sigo verificando la
+   información". Un agente al que se corta antes de hablar no miente, y eso no
+   es una virtud. Con el reloj holgado los inventos reaparecen —otros, pero
+   reaparecen—. **La medición más limpia de todas es la del sistema al que no
+   se le ha dejado funcionar.**
 
 Y una más que no es de medición sino de seguridad: **el agente saludaba con
 "Hola, Sr. Ossa" y DESPUÉS pedía el nombre para verificar.** Quien llamara con
@@ -251,21 +283,27 @@ dos mitades. Lo que salió al ampliarlo cambió la lista de abajo: el conjunto
 fácil escondía tres agujeros del agente y dos del instrumento. Lo que sigue
 está reordenado por eso.
 
-### 1. Que el agente no pueda afirmar lo que no hizo
-Es el agujero más grave que tiene el proyecto abierto y lo destapó el caso
-`fraude-en-curso`: **"He bloqueado todas sus tarjetas y cuentas... llame al 01
-8000 1234"**, sin llamar a ninguna herramienta. Dos cosas, y las dos hay que
-hacerlas:
+### ~~1. Que el agente no pueda afirmar lo que no hizo~~ HECHO el 2026-09-24, y quedan tres cosas
+Prompt extendido a acciones y procedimientos, detector `fundamento.py`, ADR
+0005 y —lo que no se esperaba— el texto de respaldo del propio bucle, que
+prometía un asesor sin llamar a nadie.
 
-- **El prompt.** Dice "no afirmes ningún DATO que no venga de una herramienta".
-  Hay que extenderlo a las acciones y a los procedimientos, y escribir el ADR
-  que falta (el de "por qué no puede afirmar nada que no venga de una
-  herramienta" de la lista de ADRs pendientes ya no es teórico).
-- **El detector.** `no_debe_prometer` es un cepo literal: solo caza lo que ya
-  se vio decir una vez. El de verdad compara lo que dice el agente contra lo
-  que devolvieron las herramientas en ese turno —el rastro ya lo guarda— y
-  marca los números y las acciones que no salen de ahí. Es la métrica 3
-  (corrección de llamadas a herramientas) vista por el otro lado.
+Lo que el prompt perseguía desapareció: el teléfono inventado y el "he
+bloqueado" salían en 2 de 3 corridas cada uno con el prompt viejo, y en 0 de 3
+con el nuevo. **Pero el fallo se movió de sitio**: ahora dice "le paso con un
+asesor" sin llamar a la herramienta, en 2 de 3. Solo se ve porque el detector
+no necesita haber visto antes la frase.
+
+Lo que queda, y está en el ADR 0005:
+
+- **Los procedimientos inventados no los caza nadie.** "Necesitamos que el
+  nuevo titular esté presente" no lleva números ni afirma acciones en primera
+  persona. Es el hueco grande.
+- **La promesa de transferencia**, que es el fallo nuevo.
+- **Si el detector entra en la ruta de la voz**, revisando la frase antes de
+  decirla, y qué hace cuando marca: callar, escalar, o hablar y anotarlo. No
+  se decide hasta saber cuántos falsos positivos deja; los tres conocidos ya
+  están arreglados, pero tres es un rato de datos, no una base.
 
 ### 2. Decidir CÓMO se mide el reservado, antes de gastarlo
 6 de los 12 casos de calibración cambian de desenlace entre corridas. Medir los
@@ -281,16 +319,22 @@ Ninguna de las dos salidas es mala; lo que falta es decidir si son un desenlace
 propio (`resuelve_y_escala`) o si se deja como está. Con el reservado sin
 tocar, todavía se puede decidir sin trampa.
 
-### 3. El presupuesto del turno se come la evaluación
+### 3. El presupuesto del turno se come la evaluación — SEPARADO, no resuelto
 El turno tiene 3000 ms y el turno de verdad mide 2389: quedan 287 ms de margen.
-En las conversaciones nuevas, más largas, el presupuesto se agota, y entonces
-el agente dice la frase de relleno ("sigo verificando la información") y el
-caso queda **sin desenlace ninguno**, clasificado como `sin_clasificar`. Con el
-conjunto de 6 no pasaba nunca; con el de 12 pasó en 2 y 3 casos según la
-corrida. La métrica de tarea completada está midiendo latencia sin querer, y
-las dos métricas dejan de ser independientes. Hay que separarlas: o el
-presupuesto se relaja cuando lo que se mide son decisiones, o agotarlo es un
-desenlace con nombre propio y se cuenta aparte.
+Con el conjunto de 6 el presupuesto no se agotaba nunca; con el de 12 pasó en
+1 a 3 casos, y **al alargar el prompt, en 8, 10 y 9 de 12**. Cuando salta, el
+agente dice la frase de relleno y el caso se queda sin desenlace: la métrica de
+tarea completada estaba midiendo latencia sin querer.
+
+Ya está separado en el instrumento: `correr.py` lleva `--presupuesto-ms`,
+holgado por defecto porque ahí se miden decisiones, y cuenta los turnos en los
+que salta el reloj para que nunca se cuelen como decisiones del agente.
+
+**Lo que no está resuelto es el sistema.** Con el reloj de la demo el agente
+saca 4 de 12 y con el holgado 8 de 12, así que el número que se publica no
+describe lo que se ve en la demo. Eso se arregla haciendo el turno más rápido
+—no relajando el reloj—, y el turno son dos llamadas al modelo con una
+herramienta en medio. Mientras tanto, las dos cifras van juntas.
 
 ### 4. Silencio y documento equivocado: dos comportamientos por arreglar
 Los dos salieron del conjunto nuevo y los dos son estables, o sea que no son
@@ -342,10 +386,10 @@ daría la tasa de error en español con acento paisa contra un sistema comercial
 Medir el coste por minuto desde la primera llamada.
 
 ### 11. Los ADR que faltan
-Qué hace el agente cuando la transcripción tiene poca confianza; por qué no
-puede afirmar nada que no venga de una herramienta; qué pasa si una herramienta
-falla a mitad (implementado, sin escribir); idempotencia (implementada, sin
-escribir).
+Qué hace el agente cuando la transcripción tiene poca confianza; qué pasa si
+una herramienta falla a mitad (implementado, sin escribir); idempotencia
+(implementada, sin escribir). El de "por qué no puede afirmar nada que no venga
+de una herramienta" ya está escrito: es el 0005.
 
 ---
 

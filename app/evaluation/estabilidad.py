@@ -74,10 +74,21 @@ def main() -> int:
                         help="solo las corridas con esta versión del prompt")
     parser.add_argument("--presupuesto-ms", type=float, default=None,
                         help="solo las corridas con este reloj de turno")
+    parser.add_argument("--incluir-contaminadas", action="store_true",
+                        help="incluir corridas con fallos del proveedor. Por "
+                             "defecto se descartan: un 429 hace que el agente "
+                             "salga escalando, así que el desenlace no es suyo")
     args = parser.parse_args()
 
     patron = f"evaluacion-{args.conjunto}-{args.quien}-*.json"
     corridas = []
+    # Una corrida con 429 del proveedor NO es una corrida mala: es una corrida
+    # de otra cosa. El agente sale de un fallo del modelo escalando a un
+    # humano, así que esos casos tienen un desenlace que él no decidió, y
+    # promediarlos con los buenos baja la mediana y sube la inestabilidad sin
+    # que nada de eso sea del agente. Pasó el 2026-09-24: una corrida con 22
+    # fallos dio 3/12 y se habría colado en la comparación de los prompts.
+    contaminadas = 0
     for fichero in sorted((RAIZ / "artifacts").glob(patron)):
         datos = json.loads(fichero.read_text(encoding="utf-8"))
         if args.casos and datos["total"] != args.casos:
@@ -92,7 +103,14 @@ def main() -> int:
             continue
         if args.presupuesto_ms and presupuesto != args.presupuesto_ms:
             continue
+        if datos.get("incidencias") and not args.incluir_contaminadas:
+            contaminadas += 1
+            continue
         corridas.append((fichero.name, datos))
+
+    if contaminadas:
+        print(f"({contaminadas} corrida(s) descartadas por llevar fallos del "
+              f"proveedor. --incluir-contaminadas para verlas de todos modos)\n")
 
     if not corridas:
         print(f"No hay corridas guardadas que encajen con {patron}"
