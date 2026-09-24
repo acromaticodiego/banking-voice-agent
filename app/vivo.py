@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from app.confianza import resumir
 from app.fin_de_turno import parece_incompleto
 
 FRECUENCIA = 16000
@@ -102,9 +103,23 @@ class Llamada:
 
         t = time.perf_counter()
         completo = np.concatenate(self.buffer)
-        segmentos, _ = self.asr.transcribe(completo, language="es", beam_size=1)
+        # `vad_filter=True` le quita a Whisper el audio sin voz antes de
+        # transcribirlo, y no es una optimización: es lo único que impide que
+        # se invente. Medido el 2026-09-24 sobre 64 clips de silencio real de
+        # esta sala, sin el filtro 7 producen texto —"¿Qué pasa?",
+        # "¡Suscríbete!", un trozo de subtítulos— y con él, ninguno. El buffer
+        # que llega aquí lleva además la cola de silencio que cerró el turno,
+        # y sin filtro Whisper llegó a repetir la frase entera detrás de sí
+        # misma: 15 palabras de más en un turno de verdad. Cuesta +24 ms sobre
+        # un turno de 2389. ADR 0008.
+        segmentos, info = self.asr.transcribe(completo, language="es",
+                                              beam_size=1, vad_filter=True)
+        segmentos = list(segmentos)     # el generador es perezoso: aquí se ejecuta
         dicho = "".join(s.text for s in segmentos).strip()
         ms_asr = (time.perf_counter() - t) * 1000
+        # Lo que el modelo sabe de su propia transcripción. Se anota y no se
+        # actúa sobre ello: el porqué está en `app/confianza.py` y en el ADR.
+        senales = resumir(segmentos, getattr(info, "language_probability", None))
 
         motivo = parece_incompleto(dicho, self.esperando)
         if motivo and self.reanudaciones < self.max_reanudaciones:
@@ -115,9 +130,11 @@ class Llamada:
             self.ventana_actual = self.ventana_larga_ms
             self.silencio_ms = 0
             return [Aviso("estado", "sigo escuchando",
-                          {"motivo": motivo, "parcial": dicho})]
+                          {"motivo": motivo, "parcial": dicho,
+                           "confianza": senales})]
 
-        avisos.append(Aviso("oido", dicho, {"ms_asr": round(ms_asr)}))
+        avisos.append(Aviso("oido", dicho, {"ms_asr": round(ms_asr),
+                                            "confianza": senales}))
         avisos.append(Aviso("estado", "pensando"))
 
         salida: list[dict] = []

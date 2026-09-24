@@ -189,8 +189,12 @@ class Tuberia:
             # escuchando, lo que cuenta es cuándo se calló del todo.
             t_cero = ultimo_con_voz
             t = time.perf_counter()
+            # Con `vad_filter=True`, igual que en vivo: si la tubería de medir
+            # no lleva el mismo filtro que la de correr, el número que sale no
+            # es el del sistema. Cuesta +24 ms y va dentro de `ms_asr`. ADR 0008.
             segmentos, _ = self.asr.transcribe(np.concatenate(acumulado),
-                                               language="es", beam_size=1)
+                                               language="es", beam_size=1,
+                                               vad_filter=True)
             resultado.dicho = "".join(s.text for s in segmentos).strip()
             ms_asr = (time.perf_counter() - t) * 1000
 
