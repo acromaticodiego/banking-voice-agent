@@ -82,7 +82,7 @@ sys.path.insert(0, str(RAIZ))
 from app.vivo import UMBRAL_VOZ  # noqa: E402
 
 FRECUENCIA = 16000
-TRAMO_S = 0.5
+TRAMO_S = 0.25
 DURACIONES_SALA_S = (1.0, 2.0, 4.0, 8.0)
 CLIPS_POR_DURACION = 6
 SNR_TAPADA_DB = 0.0
@@ -102,10 +102,15 @@ COLAS_S = (0.3, 1.2, 3.6)
 # en la que el silencio llegaría a Whisper sin que nadie haya hablado.
 FACTOR_SALA_FUERTE = 1.2
 
-# Un tramo cuenta como sala si su energía está por debajo de esta fracción de
-# la energía del fichero entero. Conservador a propósito: con un umbral alto
-# entrarían colas de palabras y la verdad de la sonda dejaría de ser verdad.
-UMBRAL_SALA = 0.10
+# Por debajo de esto un trozo es silencio DIGITAL, no sala: son los ceros que
+# deja el grabador. No valen como ruido de fondo —una sala nunca suena a cero—
+# y encima envenenan cualquier cosa que aprenda el suelo de ruido mirándolos.
+MUDO = 0.00005
+
+# Un tramo cuenta como sala si ni su pico pasa de tantas veces el suelo real
+# del fichero. Conservador a propósito: con un margen mayor entrarían colas de
+# palabras y respiraciones, y la verdad de la sonda dejaría de ser verdad.
+VECES_SOBRE_EL_SUELO = 3.0
 
 
 def rms(audio: np.ndarray) -> float:
@@ -160,21 +165,48 @@ class Lectura:
 # --------------------------------------------------------------- el material
 
 def banco_de_sala(rutas: list[Path]) -> list[np.ndarray]:
-    """Todos los tramos de medio segundo que son ruido de fondo, de todas las
-    grabaciones. Cosidos después, dan silencio largo que no se repite a sí
-    mismo: un mismo tramo en bucle sería periódico, y la periodicidad es
-    exactamente la clase de estructura que un modelo se inventa."""
+    """Los tramos que son ruido de fondo de verdad, de todas las grabaciones.
+
+    Cosidos después, dan silencio largo que no se repite a sí mismo: un mismo
+    tramo en bucle sería periódico, y la periodicidad es exactamente la clase
+    de estructura que un modelo se inventa.
+
+    **Este criterio es el segundo, y el primero estaba mal.** El primero cogía
+    los tramos cuya energía bajara del 10% de la del fichero, y resultó que lo
+    que más baja la energía de un tramo no es el silencio de la sala: son los
+    ceros exactos que el grabador deja al principio y al final —18 trozos de
+    20 ms en cada una de las seis grabaciones—. Así que el banco se llenaba
+    justo de los tramos contaminados: 10 tramos, la mitad medio mudos. Cosidos,
+    cada clip alternaba silencio digital con ruido real, y un detector que
+    aprende el suelo del tramo mudo ve el ruido normal 100 veces por encima.
+    Eso no es una sala: es un artefacto de cómo se construyó el material.
+
+    El criterio de ahora es relativo al suelo real de cada fichero —el
+    percentil 5 de los trozos que no son ceros— y pide dos cosas: que el tramo
+    no lleve ni un trozo mudo dentro, y que ni su pico pase de tres veces ese
+    suelo. Con tramos de 0,25 s salen unos 140, más de medio minuto de sala de
+    verdad, en vez de cinco segundos reciclados.
+    """
     tramos: list[np.ndarray] = []
     n = int(TRAMO_S * FRECUENCIA)
+    paso_trozo = int(0.02 * FRECUENCIA)
     for ruta in rutas:
         audio, frecuencia, _ = leer_wav(ruta)
         if frecuencia != FRECUENCIA:
             continue
-        umbral = rms(audio) * UMBRAL_SALA
-        for i in range(0, len(audio) - n + 1, n):
-            trozo = audio[i:i + n]
-            if rms(trozo) < umbral:
-                tramos.append(trozo.astype(np.float32))
+        niveles = np.array([np.abs(audio[k:k + paso_trozo]).mean()
+                            for k in range(0, len(audio) - paso_trozo + 1, paso_trozo)])
+        vivos = niveles[niveles >= MUDO]
+        if not len(vivos):
+            continue
+        suelo = float(np.percentile(vivos, 5))
+        por_tramo = n // paso_trozo
+        for k in range(0, len(niveles) - por_tramo + 1, por_tramo):
+            ventana = niveles[k:k + por_tramo]
+            if ventana.min() < MUDO or ventana.max() >= suelo * VECES_SOBRE_EL_SUELO:
+                continue
+            inicio = k * paso_trozo
+            tramos.append(audio[inicio:inicio + n].astype(np.float32))
     return tramos
 
 
@@ -429,7 +461,7 @@ def main() -> int:
     clips, tramos = construir_clips(rutas)
     con = sum(c.hay_voz for c in clips)
     print(f"Banco de sala: {tramos} tramos de {TRAMO_S} s por debajo del "
-          f"{UMBRAL_SALA:.0%} de la energía de su fichero")
+          f"{VECES_SOBRE_EL_SUELO:g}x el suelo real de su fichero, sin ceros dentro")
     print(f"{len(clips)} clips: {con} con voz, {len(clips) - con} sin voz\n")
     if args.guardar_clips:
         for clip in clips:
@@ -603,7 +635,7 @@ def main() -> int:
     crudo.write_text(json.dumps({
         "fecha": fecha.isoformat(), "host": describe_host(), "modelo": args.modelo,
         "dispositivo": dispositivo, "snr_tapada_db": SNR_TAPADA_DB,
-        "umbral_sala": UMBRAL_SALA, "tramos_de_sala": tramos,
+        "veces_sobre_el_suelo": VECES_SOBRE_EL_SUELO, "tramos_de_sala": tramos,
         "criterio": "el corte no puede rechazar ningún clip con voz",
         "umbral_voz_del_sistema": UMBRAL_VOZ, "colas_s": list(COLAS_S),
         "alucinacion": resumen_alucinacion, "colas": colas,
