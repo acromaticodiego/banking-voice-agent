@@ -43,8 +43,8 @@ levantado, no solo compilando.
 | tubería sobre fichero | `app/pipeline.py` | el mismo turno pero alimentado desde un WAV en tiempo real, para medir |
 | evaluación | `app/evaluation/` | 20 casos con su rúbrica y su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas, protocolo de la medición final |
 | fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números y acciones. Determinista, sin modelo |
-| detector de voz | `app/deteccion_voz.py` | decide si un trozo lleva voz contra el ruido de ESA llamada, no contra una constante. ADR 0009 |
 | confianza del ASR | `app/confianza.py` | resume lo que el modelo sabe de su propia transcripción. Se anota, no decide. ADR 0008 |
+| detector adaptativo | `app/deteccion_voz.py` | **NO está en uso.** Se puso y se revirtió el 24/09: ver ADR 0009. Se conserva con sus pruebas por el hallazgo |
 | canal telefónico | `probe/linea_telefonica.py` | 300–3400 Hz, 8 kHz y µ-law: el audio como llega por una llamada. Se comprueba solo |
 
 **Levantar la demo:**
@@ -176,27 +176,31 @@ días distintos y el componente que manda en ese número es el modelo remoto
 filtro no ha empeorado el turno de forma medible, y que los +24 ms que cuesta
 medido aparte caben dentro del ruido de esta cifra.
 
-### Quién abre un turno (2026-09-24, 72 clips con voz y 48 de silencio)
+### Quién abre un turno: el umbral fijo se queda (2026-09-24)
 
-El umbral que abría turno era la constante `0.005`, y describía esta habitación.
+El 24/09 pareció que el umbral fijo de `0.005` describía esta habitación y no
+una llamada, se sustituyó por un detector adaptativo, y **se revirtió el mismo
+día**. Medido con la clase `Llamada` de verdad, 6 grabaciones por caso:
 
-| | oye voz | abre silencios |
+| caso | umbral fijo | detector adaptativo |
 |---|---|---|
-| umbral fijo 0,005 (hasta el 24/09) | 40 / 72 | 15 / 48 |
-| factor 2,0 sobre el suelo de ruido | 70 / 72 | 1 / 48 |
-| **factor 2,5 (el que corre)** | **63 / 72** | **0 / 48** |
+| original | **6 / 6** | **0 / 6** |
+| voz a la mitad de volumen | **6 / 6** | 5 / 6 |
+| voz al 25% | **6 / 6** | 6 / 6 |
+| por línea telefónica | **6 / 6** | 5 / 6 |
 
-Con el fijo, la misma voz **a la mitad de volumen no abría turno en ninguna de
-las 6 grabaciones**, y por línea telefónica en 1 de 6 — o sea que el punto 7
-(Twilio) estaba apoyado en algo que no podía funcionar. Y el fallo no dejaba
-rastro: sin turno cerrado no hay transcripción vacía, así que el guardia del
-turno vacío tampoco se enteraba. ADR 0009, `probe/umbral_voz.py`.
+**El umbral fijo oye la voz floja y la telefónica**, porque `voz_ms` acumula
+trozo a trozo durante toda la intervención y no se reinicia en los silencios
+de en medio. El "0 de 6 con la voz a la mitad" que justificaba el cambio salía
+de una sonda que comparaba el nivel MEDIO del clip entero contra el umbral,
+que no es lo que hace el sistema.
 
-**Límite conocido y declarado:** si el ruido de fondo sube POR ENCIMA del
-umbral a mitad de llamada, todo se declara voz (500 de 500 trozos) y el suelo
-deja de aprender. No se parchea porque la racha de habla real más larga de las
-seis grabaciones es de 9,9 s y no deja hueco donde poner el corte; se arregla
-con grabaciones de otras salas.
+Y el adaptativo rompía el caso normal: declara voz en el 96-97% de los trozos
+de una grabación real, el silencio seguido más largo cae de 2520 ms a 380, y
+con la ventana de cierre de 1200 ms **el turno no termina nunca**. Lo cazó
+`app/prueba_pasarela.py`, no las seis pruebas deterministas, que estaban todas
+en verde. Está entero en el ADR 0009, que es de los documentos más útiles del
+proyecto precisamente por eso.
 
 ### Coste por conversación (métrica 5): instrumentado, sin medir
 
@@ -293,10 +297,10 @@ medición final lanza una excepción.
   con el reloj de la demo, el prompt nuevo baja de 6 a 4 de 12
 - **0006** qué pasa si una herramienta falla a mitad. El error es un resultado
   para el modelo, no una excepción, y `reintentable` distingue el 5xx del 4xx
-- **0009** cuándo se decide que alguien está hablando. El umbral fijo no oía
-  la voz a la mitad de volumen (0 de 6) ni por teléfono (1 de 6), y ese fallo
-  no dejaba rastro. Se calibra contra el ruido de la llamada, con su límite
-  conocido escrito y sin parchear
+- **0009** cuándo se decide que alguien está hablando. **REVERTIDA el mismo
+  día**: el detector adaptativo rompía el cierre del turno y el problema que
+  venía a resolver no existía. Se deja entero, con el desmontaje y las cuatro
+  lecciones, porque vale más que la decisión
 - **0008** qué hace el agente cuando la transcripción no es de fiar. Whisper
   se inventa turnos sobre el silencio —7 de 64 clips— y `vad_filter=True` los
   deja en 0 por +24 ms. El umbral de confianza se descartó con su motivo
@@ -307,7 +311,7 @@ medición final lanza una excepción.
 
 ---
 
-## ONCE VECES QUE UNA MEDICIÓN SALIÓ LIMPIA Y ERA FALSA
+## DOCE VECES QUE UNA MEDICIÓN SALIÓ LIMPIA Y ERA FALSA
 
 Es la parte más valiosa del proyecto y el mejor material de entrevista.
 **Coherente no es correcto.**
@@ -378,6 +382,28 @@ Es la parte más valiosa del proyecto y el mejor material de entrevista.
     código explicaba el mecanismo equivocado. No es una medición falsa sino una
     prueba falsa, y cuenta igual: **una prueba que sigue pasando cuando rompes
     lo que dice proteger no está protegiendo nada.**
+12. **Tres sondas midieron un sistema que no existe, y una de ellas hizo que
+    se cambiara el sistema de verdad** (24/09). Es la peor del día y la más
+    instructiva. El umbral que abre turno parecía sordo a la voz floja —"0 de
+    6 con la voz a la mitad"—, se sustituyó por un detector adaptativo con su
+    tabla, su criterio escrito antes y sus seis pruebas en verde, y **rompió el
+    sistema**: el turno dejaba de cerrarse. Al buscar por qué, las tres sondas
+    resultaron tener cada una su propia idea de `app/vivo.py`:
+    - la que dio la alarma comparaba el **nivel medio del clip entero** contra
+      el umbral, cuando el sistema acumula `voz_ms` trozo a trozo y **no lo
+      reinicia** en los silencios de en medio;
+    - la que eligió el parámetro reiniciaba la racha en cada silencio, y
+      además solo medía si el turno **se abre**, nunca si se cierra — con lo
+      que un detector que declare voz siempre saca la nota perfecta;
+    - y el material de silencio se seleccionaba con "pico < 3× el suelo" para
+      luego elegir un factor de 2,5: cualquier factor ≥3 daba cero falsos **por
+      construcción**.
+
+    Medido por fin **contra la clase `Llamada` de verdad**, el umbral fijo
+    cierra turno 6/6 con la voz a la mitad, 6/6 al 25% y 6/6 por teléfono: el
+    problema no existía. Se revirtió todo. **La prueba que lo cazó fue la del
+    stack levantado**, con las seis deterministas en verde, y por eso la regla
+    de verificar contra el stack no es una preferencia de estilo.
 
 Y una más que no es de medición sino de seguridad: **el agente saludaba con
 "Hola, Sr. Ossa" y DESPUÉS pedía el nombre para verificar.** Quien llamara con
@@ -574,19 +600,20 @@ tasa de error, es una calibración de orden de magnitud. Y con el canal ya
 simulado, cualquier grabación nueva se puede medir por los dos caminos sin
 volver a grabar nada.
 
-**Y el 24/09 esto pasó de "sería bueno" a ser el desbloqueo de tres cosas.**
-El umbral que abre turno ya no es una constante (ADR 0009), pero se calibró
-contra el ruido de UNA habitación; el límite conocido del detector —que se
-queda abierto si el ruido sube a mitad de llamada— no se puede arreglar sin
-grabaciones de otras salas, porque la racha de habla real más larga de estas
-seis (9,9 s) no deja hueco donde poner el corte; y la tasa de alucinación de
-Whisper sobre el silencio (16 de 64) es la de esta sala.
+**Y el 24/09 esto subió de prioridad por un camino inesperado.** Todo lo que
+se midió ese día —la alucinación de Whisper sobre el silencio (16 de 64), el
+ruido de sala, el umbral que abre turno— sale de UNA habitación, y el intento
+de arreglar el umbral con ese material acabó rompiendo el sistema y
+revirtiéndose (ADR 0009). No porque el material fuera poco: porque **con una
+sola sala no hay forma de saber si un número describe el sistema o describe la
+sala**, y esa duda ya no es teórica.
 
 Lo bueno es que ya no hay que escribir nada para aprovechar una grabación
 nueva: `probe/confianza_asr.py`, `probe/sordera_asr.py` y `probe/umbral_voz.py`
-miden con lo que haya. Hace falta grabar, y grabar es cosa de Juan Diego: unos
-minutos de voz y de ruido de fondo en otro sitio, mejor con el móvil en manos
-libres.
+miden con lo que haya —este último, corregido primero para que mida el cierre
+del turno y no solo la apertura—. Hace falta grabar, y grabar es cosa de Juan
+Diego: unos minutos de voz y de ruido de fondo en otro sitio, mejor con el
+móvil en manos libres.
 
 ### 6. Barge-in, que exige cancelación de eco
 Hoy, mientras el agente habla, **se ignora la entrada**, y está declarado como
@@ -596,11 +623,11 @@ está pedido en `getUserMedia`, pero no se ha comprobado que baste. Es la
 métrica 6 y es lo que más se nota en una demo: poder interrumpir al agente.
 
 ### 7. Telefonía real con Twilio Media Streams
-**Aviso del 24/09, que casi hace fracasar este punto sin que se supiera por
-qué:** con el umbral fijo anterior, el audio pasado por una línea telefónica
-**solo abría turno en 1 de 6 grabaciones**. Con Twilio delante, el síntoma
-habría sido "el agente no contesta cuando llamo desde el móvil" y la causa
-estaba a cuatro capas de distancia. El ADR 0009 lo arregla antes de empezar.
+**Falsa alarma del 24/09, que conviene conocer antes de repetirla:** pareció
+que el audio telefónico solo abría turno en 1 de 6 grabaciones y que este
+punto estaba condenado. Medido contra la clase `Llamada` de verdad, abre 6 de
+6. La sonda modelaba mal el sistema; ver el ADR 0009 y el punto 12 de la lista
+de mediciones falsas.
 
 Es el patrón de la industria y lo que convierte "una página web" en "llamé al
 número desde mi móvil". Trae de regalo el audio de 8 kHz de verdad, la latencia
@@ -672,11 +699,13 @@ protocolo paró en seco en vez de reintentar, que es justo lo que tenía que
 hacer. La sonda de límites, mientras tanto, decía que quedaban 7920 tokens del
 minuto: la cuarta vez que las cabeceras mienten sobre el día. **El reservado
 sigue intacto.** Con el día quemado salieron los ADR 0008 y 0009, que no
-gastan cuota.
+gastan cuota. El 0008 (el filtro de voz) está en el sistema; el 0009 se probó,
+rompió el cierre del turno y **se revirtió el mismo día**, así que lo único
+que cambió en la ruta del turno el 24/09 por la tarde es el filtro.
 
-**Y eso añade una razón a lo del paso 1:** el agente cambió dos veces más el
-24/09 por la tarde —el filtro de voz en la ruta del turno y el detector de voz
-adaptativo—. Las 3 corridas de calibración no son una formalidad, son la única
+**Y eso añade una razón a lo del paso 1:** el agente cambió el 24/09 —por la
+mañana el turno vacío y los tres intentos de documento, por la tarde el filtro
+de voz—. Las 3 corridas de calibración no son una formalidad, son la única
 manera de que el número del reservado se pueda comparar con algo.
 
 **Lo que esos cambios NO tocan, y conviene saberlo antes de preocuparse:** la

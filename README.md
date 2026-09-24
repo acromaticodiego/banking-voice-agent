@@ -172,12 +172,11 @@ salía por la mitad de su tamaño. El razonamiento completo, con lo que se
 descartó, está en
 [ADR 0008](docs/adr/0008-que-hace-el-agente-cuando-la-transcripcion-no-es-de-fiar.md).
 
-### El umbral que describía una habitación
+### El umbral que parecía describir una habitación
 
 Mientras se comprobaba que el filtro de voz no dejara sordo al agente apareció
-algo peor, y no era del filtro. El sistema abría turno cuando un trozo de 20 ms
-pasaba de una constante, `0.005`. Funcionaba **por una coincidencia**: el ruido
-de la habitación de desarrollo mide 0,0011, trece decibelios por debajo.
+algo que parecía peor. El sistema abre turno cuando se acumulan 600 ms de audio
+por encima de una constante, `0.005`, y una sonda dijo esto:
 
 | | ¿abre turno? |
 |---|---|
@@ -185,31 +184,41 @@ de la habitación de desarrollo mide 0,0011, trece decibelios por debajo.
 | la misma voz a la mitad de volumen | **0 de 6** |
 | la misma voz por línea telefónica | **1 de 6** |
 
-Quien hablara bajito no era oído, y quien llamara por teléfono tampoco — lo que
-dejaba el siguiente paso del proyecto, telefonía real, construido sobre algo que
-no podía funcionar. Y el fallo **no deja rastro**: el turno no llega a cerrarse,
-así que no hay transcripción vacía y el guardia del turno vacío tampoco se
-entera. De todos los fallos de este proyecto es el único invisible.
+Conclusión aparente: quien hable bajito no es oído, quien llame por teléfono
+tampoco, y el siguiente paso del proyecto —telefonía real— está apoyado en algo
+que no puede funcionar. Se escribió un detector que calibra el umbral contra el
+ruido de la propia llamada, con su barrido de parámetros, su criterio fijado de
+antemano y seis pruebas deterministas. Todas en verde.
 
-Ahora el umbral se calibra contra el ruido de la propia llamada. El factor se
-eligió con un criterio escrito **antes** de ver la tabla —ningún clip de
-silencio puede abrir turno; dentro de eso, oír toda la voz que el ASR entiende—
-sobre 72 clips de habla degradada y 48 de silencio:
+**Y rompió el sistema.** La prueba del stack levantado se puso roja: el turno
+dejaba de cerrarse. El detector nuevo declaraba voz en el 96-97% de los trozos
+de una grabación real —el fijo, en el 38-47%—, el silencio seguido más largo
+caía de 2520 ms a 380, y con una ventana de cierre de 1200 ms el turno no
+terminaba nunca.
 
-| | oye voz | abre silencios |
-|---|---|---|
-| umbral fijo 0,005 | 40 / 72 | 15 / 48 |
-| factor 2,0 | 70 / 72 | 1 / 48 |
-| **factor 2,5 (elegido)** | **63 / 72** | **0 / 48** |
+Al buscar por qué las sondas no lo habían visto, las tres resultaron tener cada
+una su propia idea del sistema:
 
-El 2,0 oye siete clips más y se descartó igual, porque el criterio estaba
-fijado de antemano. Lo que hace fácil el cambio es que el adaptativo gana al
-fijo **en las dos direcciones a la vez**: no hay intercambio que discutir.
-Razonado, con el límite que no arregla, en
-[ADR 0009](docs/adr/0009-cuando-se-decide-que-alguien-esta-hablando.md).
+- la que dio la alarma comparaba el **nivel medio del clip entero** contra el
+  umbral, cuando el sistema acumula el tiempo de voz trozo a trozo **y no lo
+  reinicia** en los silencios de en medio;
+- la que eligió el parámetro reiniciaba la racha en cada silencio, y solo medía
+  si el turno **se abre**, nunca si se cierra — con lo que un detector que
+  declare voz siempre saca la nota perfecta;
+- y el material de silencio se seleccionaba exigiendo "pico < 3× el suelo" para
+  después elegir un factor de 2,5: cualquier factor ≥3 daba cero falsos **por
+  construcción**.
 
+Medido por fin contra la clase real, el umbral fijo cierra turno 6/6 con la voz
+a la mitad, 6/6 al 25% y 6/6 por teléfono. **El problema no existía.** Se
+revirtió todo.
 
----
+Lo que queda escrito en
+[ADR 0009](docs/adr/0009-cuando-se-decide-que-alguien-esta-hablando.md), que es
+una decisión rechazada y uno de los documentos más útiles del repositorio: una
+sonda que reimplementa la lógica del sistema mide la reimplementación, un
+detector de voz se mide por sus dos puertas, y la prueba que cazó esto fue la
+del sistema levantado mientras las seis deterministas seguían en verde.
 
 ## El hallazgo: el fin de habla no cabe en el presupuesto
 
