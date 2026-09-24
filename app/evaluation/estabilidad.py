@@ -32,7 +32,7 @@ from pathlib import Path
 
 from app.agent.fundamento import revisar
 from app.evaluation.catalogo import por_id
-from app.evaluation.correr import clasificar
+from app.evaluation.correr import acierta, clasificar
 
 RAIZ = Path(__file__).resolve().parents[2]
 
@@ -144,7 +144,11 @@ def main() -> int:
     for _, datos in corridas:
         for r in datos["resultados"]:
             obtenido = clasificar(r["dijo"], r["herramientas"])
-            tabla[r["id"]].append("OK" if obtenido == r["esperado"]
+            # Se juzga con la rúbrica del catálogo de HOY, no con el `esperado`
+            # que guardó la corrida, por lo mismo que se reclasifica: si la
+            # rúbrica cambió, comparar corridas con dos rúbricas distintas
+            # mezcla variables.
+            tabla[r["id"]].append("OK" if acierta(por_id(r["id"]), obtenido)
                                   else obtenido)
 
     n = len(corridas)

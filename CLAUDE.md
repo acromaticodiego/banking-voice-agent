@@ -41,7 +41,7 @@ levantado, no solo compilando.
 | fin de turno | `app/fin_de_turno.py` | decide si la frase está a medias, por contenido y no solo por silencio |
 | números hablados | `probe/numeros_es.py` | "setenta, veintitrés, cuatro..." → `70234567`. Pieza del sistema, no solo de medición |
 | tubería sobre fichero | `app/pipeline.py` | el mismo turno pero alimentado desde un WAV en tiempo real, para medir |
-| evaluación | `app/evaluation/` | 20 casos con su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas |
+| evaluación | `app/evaluation/` | 20 casos con su rúbrica y su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas, protocolo de la medición final |
 | fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números y acciones. Determinista, sin modelo |
 
 **Levantar la demo:**
@@ -69,6 +69,10 @@ levantado, no solo compilando.
 .\.venv\Scripts\python.exe -m app.evaluation.correr --linea-base
 .\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual --presupuesto-ms 15000
 #   relee lo guardado y no gasta peticiones. Sin los filtros se niega a mezclar brazos distintos
+.\.venv\Scripts\python.exe -m app.evaluation.medicion_final --ensayo --corridas 2
+#   el protocolo de la medición final, ensayado sobre calibración. Sin --ensayo
+#   y con --declaro-medicion-final, QUEMA el reservado: k=5, mayoría por caso
+.\.venv\Scripts\python.exe probe\limites_groq.py     # ¿queda cuota HOY? mira el límite diario
 .\.venv\Scripts\python.exe probe\presupuesto.py
 ```
 
@@ -115,9 +119,16 @@ desenlace no es suyo: por eso una casilla tiene n=2.
 
 | desenlace correcto | prompt anterior | prompt con acciones |
 |---|---|---|
-| reloj de 3000 ms (el de la demo) | mediana 6/12, rango 5–7 (n=2) | **mediana 4/12, rango 3–4** |
-| reloj holgado, 15000 ms | mediana 6/12, rango 6–8 | mediana 8/12, rango 5–8 |
-| línea base sin modelo | 6/12, determinista, 12/12 estables | — |
+| reloj de 3000 ms (el de la demo) | mediana 6,5/12, rango 5–8 (n=2) | **mediana 4/12, rango 3–5** |
+| reloj holgado, 15000 ms | mediana 7/12, rango 6–9 | mediana 8/12, rango 6–9 |
+| línea base sin modelo | 7/12, determinista, 12/12 estables | — |
+
+Estos números son con la **rúbrica del 24/09**, que añadió el desenlace
+`resuelve_y_escala`. Antes de ella el clasificador describía con la palabra
+`escala` dos conductas distintas, y castigaba la buena. La rúbrica subió a
+todos en torno a un caso, **la línea base incluida** (de 6 a 7): corregía un
+castigo injusto, no fabricaba ventaja para el agente. Los números de antes de
+la rúbrica están en el ADR 0005 y no son comparables con estos.
 
 | | fugas de datos | afirmaciones sin fundamento |
 |---|---|---|
@@ -125,10 +136,16 @@ desenlace no es suyo: por eso una casilla tiene n=2.
 | agente, prompt anterior, reloj holgado | 0 | 1, 2 y 1 de 12 |
 | línea base sin modelo | 2 | 0, y no puede: solo imprime lo que le devolvieron |
 
-**Sobre el conjunto ampliado el agente NO le gana a las reglas en el recuento
-de desenlaces.** Le gana en lo que importa: la línea base filtra datos de la
-cuenta en dos casos y el agente en ninguno. El 5/6 contra 4/6 de antes era
-ventaja de un conjunto fácil.
+**Sobre el conjunto ampliado, la ventaja del agente en el recuento de
+desenlaces no se distingue del ruido.** Con el reloj holgado saca mediana 8
+contra el 7 determinista de las reglas, y su rango es 6–9: lo tapa entero. Con
+el reloj de la demo saca 4 y **pierde**. El 5/6 contra 4/6 de antes era ventaja
+de un conjunto fácil.
+
+Donde gana de verdad es en lo que no se cuenta en desenlaces: **la línea base
+filtra datos de la cuenta en dos casos y el agente en ninguno**, en ninguna
+corrida de ningún brazo. Un árbol de reglas que consulta y recita no sabe
+callarse.
 
 **Y la mitad del conjunto es moneda al aire**: 6 de los 12 casos cambian de
 desenlace entre corridas del mismo día con el mismo modelo. Por eso el número
@@ -246,6 +263,15 @@ lo que ya se ha visto decir.
 - **El plan gratuito de Groq da 8000 tokens por minuto.** Midiendo seguido se
   revienta y las peticiones hacen cola: aparece una meseta de ~2,7 s que parece
   latencia del modelo. `probe/limites_groq.py` lo lee de las cabeceras.
+- **Y da 200 000 tokens AL DÍA, que es el límite que de verdad para el
+  trabajo, y NO sale en ninguna cabecera.** Solo aparece en el cuerpo del 429:
+  `on tokens per day (TPD): Limit 200000, Used 199919`. El 24/09 costó tres
+  diagnósticos equivocados seguidos: la sonda decía que quedaban 7920 tokens
+  del minuto mientras el día estaba al 99,9%. Una tarde de evaluaciones
+  (~20 corridas de 12 casos) se lo come. La sonda ahora hace una petición del
+  tamaño real y dice qué límite fue; `medicion_final.py` distingue el diario
+  del de por minuto y para en vez de reintentar, porque con el diario esperar
+  no sirve.
 - **`reasoning_effort` solo acepta `low`, `medium`, `high`.** Con `medium` el
   turno con herramienta pasa de 406 a 2928 ms.
 - **`getUserMedia` solo existe en `https` o `localhost`.** Por la IP de la red
@@ -305,19 +331,26 @@ Lo que queda, y está en el ADR 0005:
   se decide hasta saber cuántos falsos positivos deja; los tres conocidos ya
   están arreglados, pero tres es un rato de datos, no una base.
 
-### 2. Decidir CÓMO se mide el reservado, antes de gastarlo
-6 de los 12 casos de calibración cambian de desenlace entre corridas. Medir los
-8 reservados una sola vez daría un número con ±2 casos de ruido sobre 8, y una
-vez gastado no hay vuelta atrás. La medición honesta son **k corridas, con la
-mediana, el rango y la tabla de estables por caso**, y k se decide ahora y se
-escribe, no cuando se vea el resultado. `estabilidad.py` ya saca la tabla.
+### ~~2. Decidir CÓMO se mide el reservado~~ DECIDIDO Y ESCRITO el 2026-09-24
+Las dos decisiones están tomadas con el reservado **sin tocar**, que era la
+única ventana para tomarlas sin trampa:
 
-Y hay una decisión de diseño pendiente que toca al recuento: el clasificador
-cuenta escalar como un hecho que manda sobre todo lo demás, así que un agente
-que **contesta bien Y ADEMÁS escala** sale como fallo. Pasa en dos casos.
-Ninguna de las dos salidas es mala; lo que falta es decidir si son un desenlace
-propio (`resuelve_y_escala`) o si se deja como está. Con el reservado sin
-tocar, todavía se puede decidir sin trampa.
+- **k=5 corridas**, y se publican cuatro cosas: mediana, rango, conteo por caso
+  (en cuántas de las 5 acertó) y tabla de estables. La mayoría por caso (≥3 de
+  5) es el resumen de una cifra. Una corrida con fallos del proveedor se
+  repite, no se promedia; si no salen 5 limpias, **el programa se niega a dar
+  un número**. Todo eso está en `app/evaluation/medicion_final.py`, que además
+  no corre dos veces sobre el mismo conjunto sin declararlo.
+- **Quinto desenlace `resuelve_y_escala`**, y cada caso declara en
+  `tambien_acepta` qué otros le valen, con la regla escrita: *un desenlace
+  alternativo solo se acepta si aceptarlo no hace pasar a un agente degenerado
+  que escale siempre*. De ahí sale que en `rechaza` y `pide_repetir` no vale
+  nada más.
+
+**Falta correrla.** El ensayo del protocolo sobre calibración verificó la parte
+que se niega —descarta corridas contaminadas y para en seco con el límite
+diario—, pero el camino bueno no se ha visto porque el 24/09 se gastaron los
+200 000 tokens del día. Es lo primero de la próxima sesión.
 
 ### 3. El presupuesto del turno se come la evaluación — SEPARADO, no resuelto
 El turno tiene 3000 ms y el turno de verdad mide 2389: quedan 287 ms de margen.

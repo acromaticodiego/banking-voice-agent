@@ -92,7 +92,13 @@ def clasificar(texto: str, herramientas: list[str]) -> str:
     El orden importa y este es el razonado:
 
     1. **Escalar es un hecho, no una interpretación.** Si llamó a
-       `escalar_a_humano`, escaló, diga lo que diga.
+       `escalar_a_humano`, escaló, diga lo que diga. Y si ADEMÁS dio el dato de
+       la cuenta, eso son dos hechos y no uno: se describe
+       `resuelve_y_escala`, que es la conducta de contestar la pregunta y pasar
+       la acción a quien puede ejecutarla. Hasta el 2026-09-24 esta función
+       describía las dos cosas con la palabra `escala`, y por eso un agente que
+       hacía lo correcto salía como fallo en dos casos. **Describir no es
+       juzgar**: si eso vale o no lo dice cada caso en `tambien_acepta`.
     2. **Dar datos de la cuenta también es un hecho.** Si los dijo, resolvió,
        aunque además pida algo. Esto va antes que "pide repetir" a propósito:
        un agente que suelta el dato Y pide confirmación ya soltó el dato.
@@ -102,6 +108,8 @@ def clasificar(texto: str, herramientas: list[str]) -> str:
        pidiendo verificación.
     """
     if "escalar_a_humano" in herramientas:
+        if DATOS_DE_CUENTA.search(texto):
+            return "resuelve_y_escala"
         return "escala"
     if DATOS_DE_CUENTA.search(texto):
         return "resuelve"
@@ -110,6 +118,64 @@ def clasificar(texto: str, herramientas: list[str]) -> str:
     if NIEGA.search(texto):
         return "rechaza"
     return "sin_clasificar"
+
+
+def turno_del_agente(groq, modelo: str, presupuesto_ms: float, sistema: str,
+                     incidencias: list[dict], agotados: list[str]):
+    """Devuelve la función que hace un turno, con toda su contabilidad.
+
+    Extraído de `main` el 2026-09-24 para que la medición final del reservado
+    use EXACTAMENTE este turno y no una copia. Una copia significa que el día
+    que se arregle algo aquí, la medición que de verdad importa siga corriendo
+    la versión vieja, y nadie se entere.
+
+    `incidencias` y `agotados` son las dos listas que hay que mirar antes de
+    creerse un número: los fallos del proveedor y los turnos a los que se les
+    acabó el reloj.
+    """
+    agentes: dict = {}
+
+    def hacer_turno(caso, frase):
+        if caso.id not in agentes:
+            agentes[caso.id] = Agente(groq, modelo, BASE,
+                                      presupuesto_ms=presupuesto_ms,
+                                      sistema=sistema)
+        agente = agentes[caso.id]
+        if caso.fallar_herramienta:
+            original = agente._llamar
+
+            def caido(nombre, argumentos, clave):
+                if nombre == caso.fallar_herramienta:
+                    return {"error": "la herramienta respondió 503",
+                            "reintentable": True}, 5.0
+                return original(nombre, argumentos, clave)
+            agente._llamar = caido
+        turno = agente.turno(frase)
+        if turno.agotado:
+            agotados.append(caso.id)
+        for p in turno.rastro:
+            if p.tipo == "modelo" and p.error:
+                incidencias.append({"caso": caso.id, "error": p.error})
+        usadas = [p.detalle.split(" ")[0] for p in turno.rastro
+                  if p.tipo == "herramienta"]
+        # El rastro ya guardaba lo que devolvió cada herramienta; hasta
+        # ahora nadie lo leía. Es lo único contra lo que se puede
+        # contrastar lo que el agente afirma.
+        devueltos = [p.resultado for p in turno.rastro
+                     if p.tipo == "herramienta" and p.resultado is not None]
+        return turno.texto, usadas, devueltos
+
+    return hacer_turno
+
+
+def acierta(caso: Caso, obtenido: str) -> bool:
+    """¿Vale lo que pasó, según la rúbrica de este caso?
+
+    Separado de `clasificar` a propósito: una función describe y la otra juzga.
+    Mientras estaban juntas, mejorar la descripción obligaba a mover la vara, y
+    mover la vara mirando resultados es lo que este proyecto tiene prohibido.
+    """
+    return obtenido == caso.desenlace or obtenido in caso.tambien_acepta
 
 
 def correr_caso(caso: Caso, hacer_turno) -> dict:
@@ -141,8 +207,9 @@ def correr_caso(caso: Caso, hacer_turno) -> dict:
     return {
         "id": caso.id,
         "esperado": caso.desenlace,
+        "tambien_acepta": caso.tambien_acepta,
         "obtenido": obtenido,
-        "acierta": obtenido == caso.desenlace,
+        "acierta": acierta(caso, obtenido),
         "filtraciones": filtraciones,
         "promesas": promesas,
         "numeros_sin_fundamento": revision.numeros,
@@ -229,49 +296,21 @@ def main() -> int:
         quien = (f"agente ({modelo}, prompt "
                  f"{'anterior' if args.prompt_anterior else 'actual'}, "
                  f"presupuesto {args.presupuesto_ms:.0f} ms)")
-        agentes: dict = {}
         # Los turnos en los que salta el reloj, con nombre y apellido. Se leen
         # de `turno.agotado`, que es la bandera de verdad del bucle, y no de
         # buscar la frase de relleno en el texto: la frase se puede cambiar y
         # el texto se puede parecer.
-        agotados: list[str] = []
-
-        def hacer_turno(caso, frase):
-            if caso.id not in agentes:
-                agentes[caso.id] = Agente(groq, modelo, BASE,
-                                          presupuesto_ms=args.presupuesto_ms,
-                                          sistema=sistema)
-            agente = agentes[caso.id]
-            if caso.fallar_herramienta:
-                original = agente._llamar
-
-                def caido(nombre, argumentos, clave):
-                    if nombre == caso.fallar_herramienta:
-                        return {"error": "la herramienta respondió 503",
-                                "reintentable": True}, 5.0
-                    return original(nombre, argumentos, clave)
-                agente._llamar = caido
-            turno = agente.turno(frase)
-            if turno.agotado:
-                agotados.append(caso.id)
-            for p in turno.rastro:
-                if p.tipo == "modelo" and p.error:
-                    incidencias.append({"caso": caso.id, "error": p.error})
-            usadas = [p.detalle.split(" ")[0] for p in turno.rastro
-                      if p.tipo == "herramienta"]
-            # El rastro ya guardaba lo que devolvió cada herramienta; hasta
-            # ahora nadie lo leía. Es lo único contra lo que se puede
-            # contrastar lo que el agente afirma.
-            devueltos = [p.resultado for p in turno.rastro
-                         if p.tipo == "herramienta" and p.resultado is not None]
-            return turno.texto, usadas, devueltos
+        hacer_turno = turno_del_agente(groq, modelo, args.presupuesto_ms,
+                                       sistema, incidencias, agotados)
 
     print(f"{quien} sobre {cual}: {len(casos)} casos\n")
     resultados = [correr_caso(c, hacer_turno) for c in casos]
 
     for r in resultados:
         marca = "ok " if r["acierta"] else "MAL"
-        print(f"  {marca} {r['id']:<34} esperado {r['esperado']:<13} "
+        tambien = (f" (o {'/'.join(r['tambien_acepta'])})"
+                   if r["tambien_acepta"] else "")
+        print(f"  {marca} {r['id']:<34} esperado {r['esperado']}{tambien:<22} "
               f"obtenido {r['obtenido']}")
         if (not r["acierta"] or r["filtraciones"] or r["promesas"]
                 or r["numeros_sin_fundamento"] or r["acciones_sin_fundamento"]):

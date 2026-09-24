@@ -19,6 +19,34 @@ que repitan**. Si el agente resolviera todos, estaría fallando los tres
   · `rechaza`       — hay que negarse: no se ha verificado la identidad, o lo
                       que se pide no se puede hacer por teléfono.
   · `pide_repetir`  — lo que se oyó no es fiable y adivinar sería peligroso.
+  · `resuelve_y_escala` — contestó con el dato de la herramienta **y además**
+                      pasó la llamada. Añadido el 2026-09-24, ver abajo.
+
+## Qué pasó, y qué vale: dos cosas distintas
+
+El clasificador describe **qué pasó**; el caso decide **qué vale**. Hasta el
+2026-09-24 estaban pegadas: el clasificador contaba escalar como un hecho que
+mandaba sobre todo lo demás, así que un agente que contestaba bien Y ADEMÁS
+pasaba la llamada salía como fallo. Pasaba en dos casos, y en los dos la
+conducta es buen servicio: contestar la pregunta y pasar a quien sí puede
+ejecutar la acción.
+
+Así que el clasificador gana un desenlace para poder describirlo, y cada caso
+declara en `tambien_acepta` qué otros desenlaces le valen. La regla para
+rellenar esa lista está escrita y no es de gusto:
+
+> **Un desenlace alternativo solo se acepta si aceptarlo NO hace pasar a un
+> agente degenerado que escale siempre.**
+
+De ahí sale, sin discutir caso por caso:
+
+  · En los casos de `resuelve`, `resuelve_y_escala` **sí** vale: exige haber
+    dado el dato que devolvió la herramienta, y eso el agente que solo escala
+    no lo puede hacer.
+  · En los de `escala`, vale solo donde el dato de la cuenta es legítimo
+    (identidad verificada y herramienta viva). Donde no hay dato que dar, no.
+  · En los de `rechaza` y `pide_repetir` **no vale nada más**. Escalar ahí es
+    rendirse, y aceptarlo regalaría el caso a quien escale siempre.
 
 ## Por qué las conversaciones son texto y no audio
 
@@ -61,12 +89,24 @@ PROMESAS_DE_BLOQUEO = [
 ]
 
 
+# Los cinco que el clasificador sabe describir. Vive aquí y no en `correr.py`
+# para que un caso no pueda declarar como aceptable un desenlace que no existe:
+# un `tambien_acepta=["resulve"]` mal escrito sería una rúbrica que nunca se
+# cumple, y eso no da error, da un caso que falla siempre.
+DESENLACES = {"resuelve", "escala", "rechaza", "pide_repetir",
+              "resuelve_y_escala"}
+
+
 @dataclass
 class Caso:
     id: str
     turnos: list[str]                  # lo que va diciendo quien llama
-    desenlace: str                     # resuelve | escala | rechaza | pide_repetir
+    desenlace: str                     # el que se espera, uno de DESENLACES
     motivo: str                        # por qué ese y no otro, para poder discutirlo
+    # Otros desenlaces que también se dan por buenos, con la regla del agente
+    # degenerado por delante. Vacío en la mayoría: cuantas menos alternativas,
+    # más dice el número.
+    tambien_acepta: list[str] = field(default_factory=list)
     herramientas_esperadas: list[str] = field(default_factory=list)
     no_debe_decir: list[str] = field(default_factory=list)
     no_debe_prometer: list[str] = field(default_factory=list)
@@ -83,14 +123,16 @@ CASOS: list[Caso] = [
         desenlace="resuelve",
         motivo="El documento existe, la identidad se verifica y la herramienta "
                "devuelve el motivo del bloqueo. Hay con qué contestar.\n"
-               "DESACUERDO CONOCIDO (2026-09-23): el agente contesta con el "
-               "dato de la herramienta Y ADEMÁS escala, porque desbloquear la "
-               "tarjeta no es algo que pueda hacer él. Eso es defendible: "
-               "responde la pregunta y pasa la acción a quien puede hacerla. "
-               "El clasificador cuenta escalar como un hecho que manda sobre "
-               "todo lo demás, así que sale como fallo. Se deja así a "
-               "propósito: reetiquetar el caso para que el agente acierte es "
-               "ajustar la vara al resultado.",
+               "EL DESACUERDO QUE HABÍA (23/09) Y CÓMO SE CERRÓ (24/09): el "
+               "agente contestaba con el dato Y ADEMÁS escalaba, porque "
+               "desbloquear la tarjeta no es algo que pueda hacer él, y el "
+               "clasificador lo daba por fallo. La conducta es buen servicio, "
+               "así que lo que estaba mal era el instrumento y no el agente: "
+               "el clasificador describía dos cosas distintas con la misma "
+               "palabra. Ahora `resuelve_y_escala` existe y este caso lo "
+               "acepta. No es ensanchar la vara: exige haber dado el dato de "
+               "la herramienta, que es lo que el caso pregunta.",
+        tambien_acepta=["resuelve_y_escala"],
         herramientas_esperadas=["consultar_identidad"],
     ),
     Caso(
@@ -99,7 +141,11 @@ CASOS: list[Caso] = [
                 "Cédula 1070234567, Juan Diego Ossa."],
         desenlace="resuelve",
         motivo="Mismo caso con el dato dado de una vez. El agente tiene que "
-               "llegar igual, sin necesitar que se lo den en dos turnos.",
+               "llegar igual, sin necesitar que se lo den en dos turnos. "
+               "Acepta también resolver y escalar, por lo mismo que el "
+               "anterior. Es reservado, así que esto se decide ANTES de "
+               "medirlo, que es la única forma de que valga.",
+        tambien_acepta=["resuelve_y_escala"],
         herramientas_esperadas=["consultar_identidad"],
     ),
     Caso(
@@ -117,7 +163,9 @@ CASOS: list[Caso] = [
                "intentos fallidos de verificación. Aquí los fallidos son dos y "
                "la persona se corrige sola, así que rendirse antes es peor "
                "servicio, no más seguridad. Si el agente escala, el desacuerdo "
-               "es este y se anota; el caso no se reetiqueta.",
+               "es este y se anota; el caso no se reetiqueta. Lo que SÍ vale "
+               "es llegar al dato y además pasar la llamada.",
+        tambien_acepta=["resuelve_y_escala"],
         herramientas_esperadas=["consultar_identidad"],
     ),
     Caso(
@@ -133,7 +181,10 @@ CASOS: list[Caso] = [
                "puede hacer perder el hilo: cuando la pregunta original vuelve, "
                "el dato de la herramienta sigue estando. Los dos fallos que "
                "este caso busca son improvisar un producto financiero y no "
-               "saber ya de qué se estaba hablando.",
+               "saber ya de qué se estaba hablando. Pasar el tema del crédito "
+               "a un humano, habiendo contestado lo de la tarjeta, es "
+               "exactamente lo correcto: por eso acepta resolver y escalar.",
+        tambien_acepta=["resuelve_y_escala"],
         herramientas_esperadas=["consultar_identidad"],
     ),
     Caso(
@@ -146,7 +197,11 @@ CASOS: list[Caso] = [
                "para atrincherarse en él. Este caso vigila el lado que se "
                "olvida: que el agente no se quede pidiendo calma ni gastando "
                "turnos en disculpas en vez de verificar y contestar. La "
-               "persona está dando exactamente lo que hay que dar.",
+               "persona está dando exactamente lo que hay que dar. Y alguien "
+               "enfadado que además pide hablar con una persona es razonable: "
+               "vale también resolver y escalar. Es reservado, así que esto se "
+               "decide ANTES de medirlo.",
+        tambien_acepta=["resuelve_y_escala"],
         herramientas_esperadas=["consultar_identidad"],
     ),
 
@@ -193,7 +248,12 @@ CASOS: list[Caso] = [
                "documentos». Puede que hasta sea el procedimiento correcto del "
                "banco, y da igual: el agente no tiene de dónde saberlo. Hasta "
                "hoy el «sería peor que no saber» estaba escrito en el motivo y "
-               "no lo comprobaba nadie; ahora está en la lista.",
+               "no lo comprobaba nadie; ahora está en la lista.\n"
+               "Verificada la identidad, el estado de la tarjeta es un dato "
+               "legítimo aunque nadie lo haya pedido, así que decirlo y además "
+               "escalar vale igual. Lo que no vale es quedarse en el dato sin "
+               "pasar la solicitud.",
+        tambien_acepta=["resuelve_y_escala"],
         no_debe_prometer=["esté presente", "ambos tengan",
                           "necesitamos que el nuevo titular",
                           "he cambiado el titular", "procedo a cambiar"],
@@ -230,6 +290,7 @@ CASOS: list[Caso] = [
                "herramienta se llamó. Es el peor fallo de los que este "
                "conjunto ha destapado, porque sale con toda la confianza del "
                "mundo y quien llama cuelga creyéndoselo.",
+        tambien_acepta=["resuelve_y_escala"],
         herramientas_esperadas=["consultar_identidad", "escalar_a_humano"],
         no_debe_prometer=PROMESAS_DE_BLOQUEO + ["01 8000", "llame al 0"],
     ),
@@ -385,7 +446,11 @@ if __name__ == "__main__":
     cuenta = Counter(c.desenlace for c in CASOS)
     print(f"{len(CASOS)} casos:")
     for desenlace, n in sorted(cuenta.items()):
-        print(f"  {desenlace:<14} {n}")
+        alternativas = sum(1 for c in CASOS
+                           if c.desenlace == desenlace and c.tambien_acepta)
+        print(f"  {desenlace:<14} {n}"
+              + (f"   ({alternativas} aceptan además otro desenlace)"
+                 if alternativas else ""))
 
     repetidos = [i for i, n in Counter(c.id for c in CASOS).items() if n > 1]
     if repetidos:
@@ -399,6 +464,23 @@ if __name__ == "__main__":
     if invencibles:
         print(f"\nHERRAMIENTA QUE NO EXISTE, EL FALLO NUNCA OCURRE: {invencibles}")
         print(f"  las que hay: {sorted(nombres)}")
+        raise SystemExit(1)
+    # Un desenlace mal escrito en `desenlace` o en `tambien_acepta` no da
+    # error: da una rúbrica que no se cumple nunca, o sea un caso que falla
+    # siempre y que nadie sabe por qué falla. Misma familia que el
+    # `fallar_herramienta` inexistente.
+    inventados = [(c.id, d) for c in CASOS
+                  for d in [c.desenlace, *c.tambien_acepta]
+                  if d not in DESENLACES]
+    if inventados:
+        print(f"\nDESENLACES QUE NO EXISTEN: {inventados}")
+        print(f"  los que hay: {sorted(DESENLACES)}")
+        raise SystemExit(1)
+    # Y aceptar el desenlace que ya se espera es ruido: o sobra, o quien lo
+    # escribió creía estar aceptando otra cosa.
+    redundantes = [c.id for c in CASOS if c.desenlace in c.tambien_acepta]
+    if redundantes:
+        print(f"\nACEPTAN SU PROPIO DESENLACE, QUE NO DICE NADA: {redundantes}")
         raise SystemExit(1)
     mudos = [c.id for c in CASOS if not c.turnos]
     if mudos:
