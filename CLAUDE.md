@@ -57,6 +57,7 @@ levantado, no solo compilando.
 .\.venv\Scripts\python.exe -m app.agent.prueba_bucle         # 5 escenarios. Si acaba en 3, hubo 429: repite
 .\.venv\Scripts\python.exe -m app.agent.prueba_fundamento    # 17/17, y no gasta peticiones
 .\.venv\Scripts\python.exe -m app.agent.prueba_silencio      # el turno vacío, sin gastar peticiones
+.\.venv\Scripts\python.exe -m app.agent.prueba_consumo       # el contador de tokens, exacto y sin cuota
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
@@ -120,6 +121,23 @@ números críticos se recuperan igual. Los 3,3 puntos del literal, con n=3, no s
 distinguen del ruido. Conclusión honesta: **el canal telefónico no rompe a
 `faster-whisper small` en este material**, y lo que queda por probar no es el
 canal, son las voces y el ruido.
+
+### Coste por conversación (métrica 5): instrumentado, sin medir
+
+Los tokens ya se cuentan por paso, por turno y por conversación (24/09). **El
+número todavía no existe** porque hace falta una corrida con cuota, y llega
+gratis con la medición del reservado.
+
+Y el precio está **SIN CONFIRMAR** a propósito: `groq.com/pricing` no listaba
+`openai/gpt-oss-20b` el 24/09, así que `probe/precios.py` devuelve `None` y el
+corredor dice "no se puede decir" en vez de imprimir un dólar inventado. Para
+cerrarlo hacen falta dos números de la consola de Groq (entrada y salida por
+millón), y quedan anotados con su fecha.
+
+Lo que sí está comprobado, y es lo que cambia la lectura: **el coste de una
+conversación crece más que linealmente**, porque cada turno reenvía la historia
+anterior. Medir un turno y multiplicarlo por el número de turnos da un número
+bajo que no es el que se factura.
 
 ### Tarea completada (calibración, 12 casos, 2026-09-24)
 
@@ -433,9 +451,13 @@ escribirlo. Y mover el estado de `Llamada` a Redis es lo que permite defender
 la frase de que la pasarela no guarda nada y escala horizontal — **hoy es
 verdad por diseño pero no está demostrado**.
 
-### 9. Coste por conversación (métrica 5)
-Contar tokens y peticiones por llamada y sacar el dólar. Los tokens ya se leen
-de la respuesta de Groq para el regulador de ritmo, así que es barato.
+### ~~9. Coste por conversación~~ INSTRUMENTADO el 2026-09-24, falta medirlo
+Los tokens se cuentan por paso, por turno y por conversación, y el contador
+está comprobado con un modelo de mentira que declara su consumo (exacto, sin
+cuota). Faltan dos cosas y ninguna es código:
+
+- **El precio**, que no se inventa: dos números de la consola de Groq.
+- **Una corrida con cuota**, que llega gratis con la medición del reservado.
 
 ### 10. Deepgram, que sigue sin usarse
 La clave está puesta y no se ha gastado un céntimo. Nova-3 en streaming
