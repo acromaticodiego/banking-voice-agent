@@ -141,11 +141,50 @@ PATRON_DOCUMENTO = re.compile(r"\b(\d{6,11})\b")
 # sabe que va a haber espera.
 FRASE_PUENTE = "Permítame un momento, lo estoy revisando."
 
+# Un turno vacío no es un turno.
+#
+# La transcripción de un silencio es la cadena vacía, y hasta el 2026-09-24
+# llegaba al modelo como un turno normal. El modelo, obediente, contestaba a la
+# nada con un saludo completo: "¡Hola! Soy el asistente virtual del banco. Para
+# poder ayudarle, necesito verificar su identidad. ¿Podría indicarme su número
+# de documento?" — a alguien que no ha dicho nada. Sale igual en las tres
+# corridas del caso `silencio-total`, o sea que no es ruido: es el
+# comportamiento.
+#
+# Se arregla antes del modelo, y no solo por elegancia: al teléfono, el silencio
+# es información —se cortó la llamada, la persona se apartó, el micrófono está
+# muteado— y la respuesta correcta no depende de nada que haya que razonar. Es
+# siempre la misma, así que no hace falta gastar un modelo, ni un token, ni
+# esperar 2,4 segundos para decirla.
+#
+# Lo que NO se arregla aquí: Whisper a veces alucina sobre el silencio y
+# devuelve "Gracias." o un trozo de subtítulos. Eso no es una cadena vacía y
+# este guardia no lo ve. Queda anotado como lo que falta.
+PREGUNTAS_POR_SILENCIO = [
+    "¿Sigue ahí? No le escucho.",
+    "Sigo sin escucharle. Si me oye, dígame algo, por favor.",
+]
+
+# Al tercero se pasa a un humano. Dos preguntas son insistir; tres son
+# encerrar a alguien en un bucle con una máquina que no le oye. Y se escala de
+# verdad, con su ticket: el ADR 0005 está para no volver a prometer lo que no
+# se hace.
+SILENCIOS_ANTES_DE_ESCALAR = len(PREGUNTAS_POR_SILENCIO) + 1
+
+
+def es_silencio(dicho: str) -> bool:
+    """¿Esto que llegó del ASR es 'nada'?
+
+    No basta con `not dicho`: el ASR devuelve espacios, y a veces un punto o
+    una coma sueltos. Lo que decide es si hay alguna letra o algún dígito.
+    """
+    return not any(c.isalnum() for c in dicho)
+
 
 @dataclass
 class Paso:
     """Una cosa que pasó en el turno, con su instante y su duración."""
-    tipo: str            # "modelo" | "herramienta" | "limite"
+    tipo: str            # "modelo" | "herramienta" | "limite" | "silencio"
     detalle: str
     ms: float
     argumentos: dict | None = None
@@ -160,6 +199,7 @@ class Turno:
     ms_primer_hablable: float | None = None
     ms_total: float = 0.0
     agotado: bool = False
+    silencio: int = 0             # si fue un turno vacío, el cuántos seguidos
     puente: str = ""              # lo que se dijo mientras la herramienta corría
     adelantada: bool = False      # se disparó una consulta antes de que el modelo la pidiera
     adelantos_usados: int = 0     # cuántas de esas consultas acabó usando el modelo
@@ -193,6 +233,9 @@ class Agente:
         self.tardanza_ms = tardanza_herramienta_ms
         self._adelantadas: dict[tuple, dict] = {}
         self._hilos_vivos: list = []
+        # Silencios seguidos. Se pone a cero en cuanto alguien dice algo: dos
+        # silencios con una frase en medio son dos incidentes, no una racha.
+        self.silencios = 0
 
     # ------------------------------------------------------ adelantar consulta
 
@@ -308,6 +351,41 @@ class Agente:
         """
         turno = Turno()
         arranque = time.perf_counter()
+
+        # Antes que nada: si no ha llegado nada, esto no es un turno. No se
+        # llama al modelo, no se ensucia la historia con un mensaje vacío, y
+        # se contesta lo único que se puede contestar a un silencio. Cuesta
+        # cero tokens y cero espera.
+        if es_silencio(dicho):
+            self.silencios += 1
+            turno.silencio = self.silencios
+            if self.silencios >= SILENCIOS_ANTES_DE_ESCALAR:
+                turno.texto = ("No consigo escucharle. Le paso con un asesor "
+                               "para que le devuelva la llamada.")
+                resultado, ms = self._llamar(
+                    "escalar_a_humano",
+                    {"motivo": f"{self.silencios} silencios seguidos"},
+                    turno.clave)
+                turno.rastro.append(Paso("herramienta", "escalar_a_humano", ms,
+                                         argumentos={"motivo": "silencio"},
+                                         resultado=resultado,
+                                         error=resultado.get("error")))
+            else:
+                turno.texto = PREGUNTAS_POR_SILENCIO[self.silencios - 1]
+            turno.rastro.insert(0, Paso("silencio",
+                                        f"turno vacío ({self.silencios})",
+                                        0.0))
+            # La historia NO se toca: no se dijo nada, así que para el modelo
+            # del turno siguiente no ha pasado nada. Meter aquí el mensaje
+            # vacío y la pregunta sería enseñarle a conversar con el silencio.
+            if al_hablar:
+                al_hablar(turno.texto, "respuesta")
+            turno.ms_primer_hablable = (time.perf_counter() - arranque) * 1000
+            turno.ms_total = turno.ms_primer_hablable
+            return turno
+
+        # Alguien ha dicho algo: la racha de silencios se acabó.
+        self.silencios = 0
 
         # Lo primero, antes incluso de preguntarle al modelo: si en lo que
         # dijo la persona ya hay un documento, la consulta sale ahora y corre
