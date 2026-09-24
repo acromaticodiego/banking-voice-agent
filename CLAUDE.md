@@ -43,6 +43,7 @@ levantado, no solo compilando.
 | tubería sobre fichero | `app/pipeline.py` | el mismo turno pero alimentado desde un WAV en tiempo real, para medir |
 | evaluación | `app/evaluation/` | 20 casos con su rúbrica y su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas, protocolo de la medición final |
 | fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números y acciones. Determinista, sin modelo |
+| canal telefónico | `probe/linea_telefonica.py` | 300–3400 Hz, 8 kHz y µ-law: el audio como llega por una llamada. Se comprueba solo |
 
 **Levantar la demo:**
 ```powershell
@@ -61,6 +62,7 @@ levantado, no solo compilando.
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
 .\.venv\Scripts\python.exe -m app.evaluation.catalogo      # 20 casos, ids únicos, herramientas que existen
 .\.venv\Scripts\python.exe -m app.evaluation.particion     # 12 calibración / 8 reservado, sin solapar
+.\.venv\Scripts\python.exe probe\linea_telefonica.py         # el canal, se comprueba solo
 ```
 
 **Medir:**
@@ -74,6 +76,7 @@ levantado, no solo compilando.
 #   el protocolo de la medición final, ensayado sobre calibración. Sin --ensayo
 #   y con --declaro-medicion-final, QUEMA el reservado: k=5, mayoría por caso
 .\.venv\Scripts\python.exe probe\limites_groq.py     # ¿queda cuota HOY? mira el límite diario
+.\.venv\Scripts\python.exe probe\probe_wer.py --linea-telefonica   # la tasa de error por teléfono
 .\.venv\Scripts\python.exe probe\presupuesto.py
 ```
 
@@ -99,13 +102,24 @@ Todos en un portátil con RTX 3050 de 6 GB, `openai/gpt-oss-20b` en Groq,
 mentía por 2,6×: las sondas medían cada etapa aislada y en su mejor caso, y un
 turno encadena dos llamadas al modelo con una herramienta en medio.
 
-### Transcripción (n=3, un hablante, sin ruido)
+### Transcripción (n=3, un hablante, sin ruido, 2026-09-24)
 
-| | p50 |
-|---|---|
-| literal | 16,7% |
-| con números normalizados | 0,0% |
-| números críticos recuperados | 3/3 |
+| | micrófono, 16 kHz | por línea telefónica |
+|---|---|---|
+| literal p50 | 16,7% | 20,0% |
+| con números normalizados, p50 | 0,0% | **0,0%** |
+| números críticos recuperados | 3/3 | **3/3** |
+
+La segunda columna es el mismo audio pasado por el canal de una llamada:
+banda de 300–3400 Hz, muestreo a 8 kHz y cuantización µ-law de 8 bits (G.711),
+y de vuelta a 16 kHz para el modelo. `probe/linea_telefonica.py`.
+
+**Y aquí este documento se equivocaba.** Decía que ese filtro "cambia la tasa
+de error bastante". No la cambia: el error normalizado sigue en 0,0% y los tres
+números críticos se recuperan igual. Los 3,3 puntos del literal, con n=3, no se
+distinguen del ruido. Conclusión honesta: **el canal telefónico no rompe a
+`faster-whisper small` en este material**, y lo que queda por probar no es el
+canal, son las voces y el ruido.
 
 ### Tarea completada (calibración, 12 casos, 2026-09-24)
 
@@ -386,13 +400,18 @@ Queda el otro, y también es estable:
   caso `documento-mal-dos-veces`, que falla igual en las tres corridas de los
   dos brazos del prompt.
 
-### 5. Voz de verdad: varias personas, ruido y línea telefónica
-La tasa de transcripción tiene n=3 y un solo hablante en una habitación
-silenciosa. Para que signifique algo: varias voces, ruido de fondo, y **audio
-pasado por el filtro de una línea telefónica** (banda de 300–3400 Hz, 8 kHz).
-Ese filtro se simula con `scipy` en diez líneas y cambia la tasa de error
-bastante. Es el cambio que más acerca el número a la realidad por el menor
-esfuerzo.
+### 5. Voz de verdad: varias personas y ruido (la línea ya está)
+El canal telefónico está hecho (24/09) y **el resultado fue que no importa**:
+banda de 300–3400 Hz, 8 kHz y µ-law dejan el error normalizado en 0,0% y los
+números críticos en 3/3. Se creía que era "el cambio que más acerca el número a
+la realidad por el menor esfuerzo"; fue barato, y lo que enseñó es que el
+cuello de botella está en otra parte.
+
+Lo que queda, y ahora es lo único que queda de este punto: **varias voces y
+ruido de fondo.** n=3 con un solo hablante en una habitación callada no es una
+tasa de error, es una calibración de orden de magnitud. Y con el canal ya
+simulado, cualquier grabación nueva se puede medir por los dos caminos sin
+volver a grabar nada.
 
 ### 6. Barge-in, que exige cancelación de eco
 Hoy, mientras el agente habla, **se ignora la entrada**, y está declarado como
