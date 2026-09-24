@@ -30,9 +30,33 @@ import statistics
 from collections import defaultdict
 from pathlib import Path
 
+from app.agent.fundamento import revisar
+from app.evaluation.catalogo import por_id
 from app.evaluation.correr import clasificar
 
 RAIZ = Path(__file__).resolve().parents[2]
+
+
+def sin_fundamento(datos: dict) -> str:
+    """Cuántos casos de esa corrida dijeron algo que no les constaba.
+
+    Se recalcula aquí en vez de leer el campo guardado, por la misma razón que
+    los desenlaces se reclasifican: el detector también se arregla por el
+    camino, y comparar corridas con dos versiones suyas mezcla variables. Con
+    el de hoy, todas se miden igual.
+
+    Las corridas de antes del 2026-09-24 no guardaban lo que devolvieron las
+    herramientas. Sin esas fuentes, el detector daría por inventado cualquier
+    número que el agente leyó correctamente, así que no se calcula y se dice.
+    """
+    if not all("resultados" in r for r in datos["resultados"]):
+        return "sin fundamento: no medible (no se guardaron las herramientas)"
+    marcados = 0
+    for r in datos["resultados"]:
+        revision = revisar(r["dijo"], r["resultados"],
+                           por_id(r["id"]).turnos, r["herramientas"])
+        marcados += 0 if revision.limpio else 1
+    return f"sin fundamento: {marcados}/{datos['total']}"
 
 
 def main() -> int:
@@ -45,6 +69,11 @@ def main() -> int:
                         help="solo las corridas con este número de casos. Sin "
                              "esto se mezclarían corridas de conjuntos de "
                              "tamaños distintos, que no son comparables.")
+    parser.add_argument("--prompt", choices=["actual", "anterior"],
+                        default=None,
+                        help="solo las corridas con esta versión del prompt")
+    parser.add_argument("--presupuesto-ms", type=float, default=None,
+                        help="solo las corridas con este reloj de turno")
     args = parser.parse_args()
 
     patron = f"evaluacion-{args.conjunto}-{args.quien}-*.json"
@@ -52,6 +81,16 @@ def main() -> int:
     for fichero in sorted((RAIZ / "artifacts").glob(patron)):
         datos = json.loads(fichero.read_text(encoding="utf-8"))
         if args.casos and datos["total"] != args.casos:
+            continue
+        # Las corridas de antes del 2026-09-24 no guardaban ni el prompt ni el
+        # presupuesto, así que se etiquetan con lo que eran entonces: el prompt
+        # de antes y el reloj de 3000 ms. Inventarles un "desconocido" las
+        # dejaría fuera de toda comparación, y describirlas mal sería peor.
+        prompt = datos.get("prompt", "anterior")
+        presupuesto = datos.get("presupuesto_ms", 3000.0)
+        if args.prompt and prompt != args.prompt:
+            continue
+        if args.presupuesto_ms and presupuesto != args.presupuesto_ms:
             continue
         corridas.append((fichero.name, datos))
 
@@ -68,6 +107,21 @@ def main() -> int:
               f"Usa --casos N para quedarte con uno.")
         return 1
 
+    # Lo mismo con las condiciones: el 2026-09-24 el prompt se alargó y el
+    # reloj del turno se relajó, y las dos cosas mueven el número. Tres
+    # corridas de un brazo y tres del otro, metidas en el mismo saco, dan una
+    # mediana de nada con una estabilidad falsa. Mejor negarse que promediar.
+    condiciones = {(d.get("prompt", "anterior"),
+                    d.get("presupuesto_ms", 3000.0)) for _, d in corridas}
+    if len(condiciones) > 1:
+        print("Estas corridas no se hicieron en las mismas condiciones:")
+        for prompt, presupuesto in sorted(condiciones):
+            print(f"    prompt {prompt}, presupuesto {presupuesto:.0f} ms")
+        print("  Filtra con --prompt y --presupuesto-ms. Promediarlas daría "
+              "una mediana de dos experimentos distintos y una tabla de "
+              "estabilidad que mide el cambio de condiciones, no al agente.")
+        return 1
+
     tabla: dict[str, list[str]] = defaultdict(list)
     for _, datos in corridas:
         for r in datos["resultados"]:
@@ -76,10 +130,12 @@ def main() -> int:
                                   else obtenido)
 
     n = len(corridas)
+    prompt, presupuesto = condiciones.pop()
     print(f"{args.quien} sobre {args.conjunto}: {n} corrida(s) de "
-          f"{tamanos.pop()} casos, reclasificadas con el clasificador de hoy\n")
-    for nombre, _ in corridas:
-        print(f"    {nombre}")
+          f"{tamanos.pop()} casos, prompt {prompt}, presupuesto "
+          f"{presupuesto:.0f} ms, reclasificadas con el clasificador de hoy\n")
+    for nombre, datos in corridas:
+        print(f"    {nombre}   {sin_fundamento(datos)}")
     print()
 
     estables, inestables = [], []

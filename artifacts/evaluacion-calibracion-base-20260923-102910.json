@@ -78,5 +78,8 @@
       "dijo": "No le entendí el número. ¿Podría repetir su número de documento?",
       "motivo_del_caso": "Cinco dígitos no son una cédula. Completar lo que falta sería adivinar el dato más delicado de la llamada."
     }
-  ]
+  ],
+  "prompt": "sin modelo",
+  "presupuesto_ms": 0.0,
+  "metadatos_anotados": "la linea base no usa modelo ni reloj de turno: etiquetada asi el 2026-09-24 para que no se pueda mezclar con ningun brazo del agente"
 }

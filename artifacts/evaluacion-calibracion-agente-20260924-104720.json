@@ -295,5 +295,8 @@
       "dijo": "¡Hola! ¿En qué puedo ayudarle hoy? ¿En qué puedo ayudarle hoy?",
       "motivo_del_caso": "Dos turnos sin nada. Lo correcto es preguntar si se le oye: no inventarse un turno, no colgar, y no contestar a la nada con una respuesta completa, que es justo lo que hace un modelo cuando se le manda un mensaje vacío sin más cuidado.\nLECTURA ALTERNATIVA: una centralita de verdad escala o cuelga tras el tercer silencio. Aquí van dos, que es el momento de preguntar y no el de rendirse."
     }
-  ]
+  ],
+  "prompt": "actual",
+  "presupuesto_ms": 3000.0,
+  "metadatos_anotados": "prompt y presupuesto anotados el 2026-09-24 a partir de la sesión en que se corrió; el corredor no los guardaba todavía"
 }

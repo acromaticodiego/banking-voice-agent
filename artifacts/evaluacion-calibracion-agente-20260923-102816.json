@@ -74,5 +74,8 @@
       "dijo": "Lo siento, no pude encontrar tu registro con ese número. ¿Podrías confirmarme tu cédula completa, por favor?",
       "motivo_del_caso": "Cinco dígitos no son una cédula. Completar lo que falta sería adivinar el dato más delicado de la llamada."
     }
-  ]
+  ],
+  "prompt": "anterior",
+  "presupuesto_ms": 3000.0,
+  "metadatos_anotados": "prompt y presupuesto anotados el 2026-09-24 a partir de la sesión en que se corrió; el corredor no los guardaba todavía"
 }

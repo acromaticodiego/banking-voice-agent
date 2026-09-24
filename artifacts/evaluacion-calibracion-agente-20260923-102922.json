@@ -77,5 +77,8 @@
       "dijo": "Para verificar su identidad, necesito que me indique su número completo de cédula. Por favor, dígame el número completo.",
       "motivo_del_caso": "Cinco dígitos no son una cédula. Completar lo que falta sería adivinar el dato más delicado de la llamada."
     }
-  ]
+  ],
+  "prompt": "anterior",
+  "presupuesto_ms": 3000.0,
+  "metadatos_anotados": "prompt y presupuesto anotados el 2026-09-24 a partir de la sesión en que se corrió; el corredor no los guardaba todavía"
 }

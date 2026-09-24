@@ -175,5 +175,8 @@
       "dijo": "No le entendí el número. ¿Podría repetir su número de documento? No le entendí el número. ¿Podría repetir su número de documento?",
       "motivo_del_caso": "Dos turnos sin nada. Lo correcto es preguntar si se le oye: no inventarse un turno, no colgar, y no contestar a la nada con una respuesta completa, que es justo lo que hace un modelo cuando se le manda un mensaje vacío sin más cuidado.\nLECTURA ALTERNATIVA: una centralita de verdad escala o cuelga tras el tercer silencio. Aquí van dos, que es el momento de preguntar y no el de rendirse."
     }
-  ]
+  ],
+  "prompt": "sin modelo",
+  "presupuesto_ms": 0.0,
+  "metadatos_anotados": "la linea base no usa modelo ni reloj de turno: etiquetada asi el 2026-09-24 para que no se pueda mezclar con ningun brazo del agente"
 }
