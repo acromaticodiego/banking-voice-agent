@@ -29,11 +29,22 @@ De las grabaciones que ya hay, sin grabar nada nuevo:
 
   1. **La de Whisper con el filtro puesto**: el audio llega y el filtro decide
      que ahí no hay voz. Se ve comparando lo que sale con filtro y sin él.
-  2. **La del propio sistema, antes de Whisper**: `app/vivo.py` solo abre turno
-     cuando la media absoluta del trozo pasa de `UMBRAL_VOZ` (0,005). Una voz
-     atenuada no llega a ese umbral y **el turno no se abre siquiera**, así que
-     no hay transcripción que filtrar. Esa sordera no la causa el filtro, ya
-     estaba, y esta sonda la mide de paso porque es la que se encuentra antes.
+  2. **La del propio sistema, antes de Whisper.** Y aquí esta sonda **se
+     equivocó, el 2026-09-24**, de una forma que conviene no repetir: la
+     columna "¿abre turno?" compara el nivel medio del clip ENTERO contra
+     `UMBRAL_VOZ`, y el sistema no hace eso. `app/vivo.py` acumula `voz_ms`
+     trozo a trozo y **no lo reinicia** en los silencios de en medio, así que
+     una voz floja junta sus 600 ms a lo largo de la intervención aunque su
+     nivel medio esté por debajo del umbral. Con la clase `Llamada` de verdad,
+     el umbral fijo abre y cierra turno 6/6 con la voz a la mitad, 6/6 al 25%
+     y 6/6 por teléfono.
+
+     **Esa columna hizo que se cambiara el detector de voz, y el cambio rompió
+     el cierre del turno y hubo que revertirlo** (ADR 0009). Léela como lo que
+     es: un indicador de nivel, no una respuesta sobre el comportamiento del
+     sistema. Lo demás que mide esta sonda —la transcripción con y sin filtro
+     y la tasa de error contra la verdad escrita— no depende de esa columna y
+     sigue siendo válido.
 
 De las seis grabaciones, tres tienen transcripción verdadera escrita. En esas
 la comparación no es "con filtro salió menos texto" —que no dice si el texto

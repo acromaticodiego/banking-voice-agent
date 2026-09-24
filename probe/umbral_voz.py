@@ -1,5 +1,29 @@
 r"""¿Cuánto por encima del ruido hay que estar para que cuente como voz?
 
+**AVISO: ESTA SONDA MIDIÓ MAL Y SU TABLA NO SIRVE PARA DECIDIR NADA.**
+Está escrito arriba del todo porque el 2026-09-24 su tabla hizo que se
+cambiara el sistema, y el cambio hubo que revertirlo el mismo día. Dos fallos,
+los dos de método:
+
+  1. **Mide si el turno se ABRE, nunca si se cierra.** `app/vivo.py` cierra el
+     turno cuando pasan 300 ms sin voz (1200 tras una reanudación), y con un
+     detector demasiado sensible eso no llega nunca: el turno no termina y el
+     agente se queda escuchando para siempre. Con este criterio, un detector
+     que declare voz SIEMPRE saca la nota perfecta.
+  2. **Reimplementa la regla de `Llamada.empujar` y la reimplementa mal.** Aquí
+     la racha de voz se reinicia en cada silencio; en el sistema, `voz_ms`
+     acumula durante toda la intervención y no se reinicia. Por eso el umbral
+     fijo parecía sordo a la voz floja y no lo es.
+
+Cómo habría que rehacerla, si algún día hace falta: **importar `Llamada` y
+empujarle audio**, en vez de copiar su lógica, y contar las dos puertas —abrir
+el turno y cerrarlo—. La tabla de esa forma está en el ADR 0009 y es la que
+desmontó a esta sonda.
+
+Se conserva sin arreglar, y a propósito: es la pieza que enseña el error.
+
+---
+
 `probe/sordera_asr.py` destapó que el umbral fijo de `app/vivo.py` —0,005 sobre
 la media absoluta— no abre turno con la voz a la mitad (0 de 6 grabaciones) ni
 con el audio pasado por una línea telefónica (1 de 6). El umbral no describía
