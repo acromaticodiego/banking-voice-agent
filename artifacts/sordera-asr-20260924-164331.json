@@ -1,0 +1,2021 @@
+{
+  "fecha": "2026-09-24T16:43:31.029966-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "modelo": "small",
+  "dispositivo": "cuda/float16",
+  "umbral_voz_del_sistema": 0.005,
+  "degradaciones": [
+    [
+      "original",
+      1.0,
+      null,
+      false
+    ],
+    [
+      "mitad",
+      0.5,
+      null,
+      false
+    ],
+    [
+      "lejos",
+      0.25,
+      null,
+      false
+    ],
+    [
+      "muy-lejos",
+      0.1,
+      null,
+      false
+    ],
+    [
+      "susurro",
+      0.05,
+      null,
+      false
+    ],
+    [
+      "ruido-20dB",
+      1.0,
+      20.0,
+      false
+    ],
+    [
+      "ruido-10dB",
+      1.0,
+      10.0,
+      false
+    ],
+    [
+      "ruido-5dB",
+      1.0,
+      5.0,
+      false
+    ],
+    [
+      "ruido-0dB",
+      1.0,
+      0.0,
+      false
+    ],
+    [
+      "lejos+ruido-10dB",
+      0.25,
+      10.0,
+      false
+    ],
+    [
+      "lejos+ruido-5dB",
+      0.25,
+      5.0,
+      false
+    ],
+    [
+      "original@tel",
+      1.0,
+      null,
+      true
+    ],
+    [
+      "lejos+ruido-10dB@tel",
+      0.25,
+      10.0,
+      true
+    ],
+    [
+      "muy-lejos@tel",
+      0.1,
+      null,
+      true
+    ]
+  ],
+  "sorderas_por_el_filtro": [],
+  "resumen_wer": {
+    "original": {
+      "sin": 3.3,
+      "con": 2.2,
+      "abre_turno": "12/12"
+    },
+    "mitad": {
+      "sin": 3.3,
+      "con": 3.3,
+      "abre_turno": "0/12"
+    },
+    "lejos": {
+      "sin": 3.3,
+      "con": 3.3,
+      "abre_turno": "0/12"
+    },
+    "muy-lejos": {
+      "sin": 3.3,
+      "con": 9.4,
+      "abre_turno": "0/12"
+    },
+    "susurro": {
+      "sin": 3.3,
+      "con": 13.9,
+      "abre_turno": "0/12"
+    },
+    "ruido-20dB": {
+      "sin": 3.3,
+      "con": 3.3,
+      "abre_turno": "12/12"
+    },
+    "ruido-10dB": {
+      "sin": 12.8,
+      "con": 2.2,
+      "abre_turno": "12/12"
+    },
+    "ruido-5dB": {
+      "sin": 5.1,
+      "con": 3.6,
+      "abre_turno": "12/12"
+    },
+    "ruido-0dB": {
+      "sin": 5.1,
+      "con": 4.7,
+      "abre_turno": "12/12"
+    },
+    "lejos+ruido-10dB": {
+      "sin": 5.1,
+      "con": 3.3,
+      "abre_turno": "0/12"
+    },
+    "lejos+ruido-5dB": {
+      "sin": 5.1,
+      "con": 6.0,
+      "abre_turno": "0/12"
+    },
+    "original@tel": {
+      "sin": 4.4,
+      "con": 5.8,
+      "abre_turno": "2/12"
+    },
+    "lejos+ruido-10dB@tel": {
+      "sin": 7.1,
+      "con": 8.6,
+      "abre_turno": "0/12"
+    },
+    "muy-lejos@tel": {
+      "sin": 5.9,
+      "con": 34.8,
+      "abre_turno": "0/12"
+    }
+  },
+  "resultados": [
+    {
+      "grabacion": "documento",
+      "degradacion": "original",
+      "vad": false,
+      "nivel": 0.00706,
+      "abre_turno": true,
+      "texto": "Buenas tardes, llamo porque me bloquearon la tarjeta, esta mañana y necesito saber por qué. Mi número de documento es el 1 0 7 0 2 3 4 5 6 7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "original",
+      "vad": true,
+      "nivel": 0.00706,
+      "abre_turno": true,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta esta mañana y necesito saber por qué. Mi número de documento es el 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "original",
+      "vad": false,
+      "nivel": 0.00722,
+      "abre_turno": true,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no sé comunicaron conmigo, me jaleon en balado, pues la noche de ayer trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 59,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "original",
+      "vad": true,
+      "nivel": 0.00722,
+      "abre_turno": true,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de Davidon no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me jaron en balado, pues la noche de ayer trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 59,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "original",
+      "vad": false,
+      "nivel": 0.00678,
+      "abre_turno": true,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la nada pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "original",
+      "vad": true,
+      "nivel": 0.00678,
+      "abre_turno": true,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la NAA pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "original",
+      "vad": false,
+      "nivel": 0.00679,
+      "abre_turno": true,
+      "texto": "claro que sí, mirá mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego, goza",
+      "palabras": 23,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "original",
+      "vad": true,
+      "nivel": 0.00679,
+      "abre_turno": true,
+      "texto": "claro que sí, mirá mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego Osa",
+      "palabras": 23,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "original",
+      "vad": false,
+      "nivel": 0.00691,
+      "abre_turno": true,
+      "texto": "Es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "original",
+      "vad": true,
+      "nivel": 0.00691,
+      "abre_turno": true,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "original",
+      "vad": false,
+      "nivel": 0.00871,
+      "abre_turno": true,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no? No la de débito. La que termina en 4, 5, 8, 2. Esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "original",
+      "vad": true,
+      "nivel": 0.00871,
+      "abre_turno": true,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no la de débito, la que termina en 4, 5, 8, 2, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 33,
+      "wer_normalizado": 6.7,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "mitad",
+      "vad": false,
+      "nivel": 0.00353,
+      "abre_turno": false,
+      "texto": "Buenas tardes, llamo porque me bloquearon la tarjeta, esta mañana y necesito saber por qué. Mi número de documento es el 1 0 7 0 2 3 4 5 6 7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "mitad",
+      "vad": true,
+      "nivel": 0.00353,
+      "abre_turno": false,
+      "texto": "Buenas tardes Llamo porque me bloquearon la tarjeta Esta mañana y necesito saber por qué Mi número de documento es el 1 0 7 0 2 3 4 5 6 7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "mitad",
+      "vad": false,
+      "nivel": 0.00361,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no sé comunicaron conmigo, me dejaron embalados, pues la noche de ayer trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "mitad",
+      "vad": true,
+      "nivel": 0.00361,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de Davidon no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues la noche de ayer trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "mitad",
+      "vad": false,
+      "nivel": 0.00339,
+      "abre_turno": false,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la nada pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "mitad",
+      "vad": true,
+      "nivel": 0.00339,
+      "abre_turno": false,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la NAA pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "mitad",
+      "vad": false,
+      "nivel": 0.0034,
+      "abre_turno": false,
+      "texto": "claro que sí, mirá mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego, goza",
+      "palabras": 23,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "mitad",
+      "vad": true,
+      "nivel": 0.0034,
+      "abre_turno": false,
+      "texto": "claro que sí, mirá mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego Osa",
+      "palabras": 23,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "mitad",
+      "vad": false,
+      "nivel": 0.00346,
+      "abre_turno": false,
+      "texto": "Es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "mitad",
+      "vad": true,
+      "nivel": 0.00346,
+      "abre_turno": false,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "mitad",
+      "vad": false,
+      "nivel": 0.00435,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no? No la de débito. La que termina en 4, 5, 8, 2. Esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "mitad",
+      "vad": true,
+      "nivel": 0.00435,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito no, no la de débito, la que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "lejos",
+      "vad": false,
+      "nivel": 0.00176,
+      "abre_turno": false,
+      "texto": "Buenas tardes, llamo porque me bloquearon la tarjeta, esta mañana y necesito saber por qué. Mi número de documento es el 1 0 7 0 2 3 4 5 6 7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "lejos",
+      "vad": true,
+      "nivel": 0.00176,
+      "abre_turno": false,
+      "texto": "Buenas tardes Llamo porque me bloquearon la tarjeta Esta mañana y necesito saber por qué Mi número de documento es el 1 0 7 0 2 3 4 5 6 7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "lejos",
+      "vad": false,
+      "nivel": 0.00181,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no sé comunicaron conmigo, me dejaron embalado, pues la noche de ayer trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "lejos",
+      "vad": true,
+      "nivel": 0.00181,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de Davidon no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues la noche de ayer trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "lejos",
+      "vad": false,
+      "nivel": 0.0017,
+      "abre_turno": false,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la nada pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "lejos",
+      "vad": true,
+      "nivel": 0.0017,
+      "abre_turno": false,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la NAA pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "lejos",
+      "vad": false,
+      "nivel": 0.0017,
+      "abre_turno": false,
+      "texto": "claro que sí, mirá mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego, goza",
+      "palabras": 23,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "lejos",
+      "vad": true,
+      "nivel": 0.0017,
+      "abre_turno": false,
+      "texto": "claro que sí, mirá mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego Osa",
+      "palabras": 23,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "lejos",
+      "vad": false,
+      "nivel": 0.00173,
+      "abre_turno": false,
+      "texto": "Es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "lejos",
+      "vad": true,
+      "nivel": 0.00173,
+      "abre_turno": false,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "lejos",
+      "vad": false,
+      "nivel": 0.00218,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no? No la de débito. La que termina en 4, 5, 8, 2. Esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "lejos",
+      "vad": true,
+      "nivel": 0.00218,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito no, no la de débito, la que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "muy-lejos",
+      "vad": false,
+      "nivel": 0.00071,
+      "abre_turno": false,
+      "texto": "Buenas tardes, llamo porque me bloquearon la tarjeta, esta mañana y necesito saber por qué. Mi número de documento es el 1070234567",
+      "palabras": 22,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "muy-lejos",
+      "vad": true,
+      "nivel": 0.00071,
+      "abre_turno": false,
+      "texto": "Buenas tardes Llamo porque me bloquearon la tarjeta Esta mañana y necesito saber por qué es él 1 0 7 0 2 3 4 5 6 7",
+      "palabras": 27,
+      "wer_normalizado": 18.2,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "muy-lejos",
+      "vad": false,
+      "nivel": 0.00072,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me jaron embalado, pues la noche de ayer traté de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "muy-lejos",
+      "vad": true,
+      "nivel": 0.00072,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de Davidon no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues la noche de ayer trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "muy-lejos",
+      "vad": false,
+      "nivel": 0.00068,
+      "abre_turno": false,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la nada pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "muy-lejos",
+      "vad": true,
+      "nivel": 0.00068,
+      "abre_turno": false,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la nada pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "muy-lejos",
+      "vad": false,
+      "nivel": 0.00068,
+      "abre_turno": false,
+      "texto": "Claro que sí, mirá mis datos son mi célula es 70 23 4 5 6 7. Mi nombre completo es Juan Diego.",
+      "palabras": 22,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "muy-lejos",
+      "vad": true,
+      "nivel": 0.00068,
+      "abre_turno": false,
+      "texto": "claro que sí, mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego Osa",
+      "palabras": 22,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "muy-lejos",
+      "vad": false,
+      "nivel": 0.00069,
+      "abre_turno": false,
+      "texto": "Es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "muy-lejos",
+      "vad": true,
+      "nivel": 0.00069,
+      "abre_turno": false,
+      "texto": "es que me apareció un cobro de 347 mil 200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 27,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "muy-lejos",
+      "vad": false,
+      "nivel": 0.00087,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no? No la de débito. La que termina en 4, 5, 8, 2. Esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "muy-lejos",
+      "vad": true,
+      "nivel": 0.00087,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito no, no la de débito, la que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "susurro",
+      "vad": false,
+      "nivel": 0.00035,
+      "abre_turno": false,
+      "texto": "Buenas tardes, llamo porque me bloquearon la tarjeta, esta mañana y necesito saber por qué. Mi número de documento es el 1070234567",
+      "palabras": 22,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "susurro",
+      "vad": true,
+      "nivel": 0.00035,
+      "abre_turno": false,
+      "texto": "Buenas tardes Llamo porque me bloquearon la tarjeta Esta mañana y necesito saber por qué 0, 7, 0, 2, 3, 4, 5, 6, 7",
+      "palabras": 24,
+      "wer_normalizado": 31.8,
+      "numeros_recuperados": "0/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "susurro",
+      "vad": false,
+      "nivel": 0.00036,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me jaron embalado, pues la noche de ayer traté de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "susurro",
+      "vad": true,
+      "nivel": 0.00036,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de Davidon no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues la noche de ayer trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "susurro",
+      "vad": false,
+      "nivel": 0.00034,
+      "abre_turno": false,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la nada pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "susurro",
+      "vad": true,
+      "nivel": 0.00034,
+      "abre_turno": false,
+      "texto": "Sí, pues al parecer un cobro de 347.200 pesos, el martes pasado en un almacén que no conozco, pues me apareció la compra de la NAAA, pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "susurro",
+      "vad": false,
+      "nivel": 0.00034,
+      "abre_turno": false,
+      "texto": "Claro que sí, mirá mis datos son mi célula es 70234567 Mi nombre completo es Juan Diego Osa",
+      "palabras": 18,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "susurro",
+      "vad": true,
+      "nivel": 0.00034,
+      "abre_turno": false,
+      "texto": "claro que sí, mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego, goza",
+      "palabras": 22,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "susurro",
+      "vad": false,
+      "nivel": 0.00035,
+      "abre_turno": false,
+      "texto": "es que me apareció un cobro de 347 mil 200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 27,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "susurro",
+      "vad": true,
+      "nivel": 0.00035,
+      "abre_turno": false,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "susurro",
+      "vad": false,
+      "nivel": 0.00044,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no? No la de débito. La que termina en 4, 5, 8, 2. Esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "susurro",
+      "vad": true,
+      "nivel": 0.00044,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no? No la de débito. La que termina en 4, 5, 8, 2... Esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "ruido-20dB",
+      "vad": false,
+      "nivel": 0.00724,
+      "abre_turno": true,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el. 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "ruido-20dB",
+      "vad": true,
+      "nivel": 0.00724,
+      "abre_turno": true,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta esta mañana y necesito saber por qué. Mi número de documento es el 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "ruido-20dB",
+      "vad": false,
+      "nivel": 0.00735,
+      "abre_turno": true,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no sé comunicaron con mí, me dejaron embalados, pues la noche de ayer trate de hacer unas compras y pagar algo y no se pudo.",
+      "palabras": 59,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "ruido-20dB",
+      "vad": true,
+      "nivel": 0.00735,
+      "abre_turno": true,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de Davidon no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me jaron embalado, pues la noche de ayer trate de hacer unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "ruido-20dB",
+      "vad": false,
+      "nivel": 0.00692,
+      "abre_turno": true,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la nada pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "ruido-20dB",
+      "vad": true,
+      "nivel": 0.00692,
+      "abre_turno": true,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la nada pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "ruido-20dB",
+      "vad": false,
+      "nivel": 0.00697,
+      "abre_turno": true,
+      "texto": "Claro que sí, mirá mis datos son mi cédula es 70234567. Mi nombre completo es Juan Diego Osa.",
+      "palabras": 18,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "ruido-20dB",
+      "vad": true,
+      "nivel": 0.00697,
+      "abre_turno": true,
+      "texto": "claro que sí, mirá mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego Osa",
+      "palabras": 23,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "ruido-20dB",
+      "vad": false,
+      "nivel": 0.00719,
+      "abre_turno": true,
+      "texto": "Es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen.",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "ruido-20dB",
+      "vad": true,
+      "nivel": 0.00719,
+      "abre_turno": true,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "ruido-20dB",
+      "vad": false,
+      "nivel": 0.00896,
+      "abre_turno": true,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito no, no la de débito, la que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "ruido-20dB",
+      "vad": true,
+      "nivel": 0.00896,
+      "abre_turno": true,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito no, no la de débito, la que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "ruido-10dB",
+      "vad": false,
+      "nivel": 0.00834,
+      "abre_turno": true,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el. 1-0-7-0-2-3-4-5-6-7 Mi número de documento es el. 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 47,
+      "wer_normalizado": 31.8,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "ruido-10dB",
+      "vad": true,
+      "nivel": 0.00834,
+      "abre_turno": true,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el 1-0-7-0-2-3-4-5-6-7.",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "ruido-10dB",
+      "vad": false,
+      "nivel": 0.00805,
+      "abre_turno": true,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no sé comunicaron con mí, me dejaron embalados, pues en el carniche de ayer trate de hacer unas compras y pagar algo y no se pudo.",
+      "palabras": 60,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "ruido-10dB",
+      "vad": true,
+      "nivel": 0.00805,
+      "abre_turno": true,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de Davidon no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues me dejaron mi chad ayer, trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 59,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "ruido-10dB",
+      "vad": false,
+      "nivel": 0.00777,
+      "abre_turno": true,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la nada pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "ruido-10dB",
+      "vad": true,
+      "nivel": 0.00777,
+      "abre_turno": true,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la NAA pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "ruido-10dB",
+      "vad": false,
+      "nivel": 0.00788,
+      "abre_turno": true,
+      "texto": "Claro que sí, mirá mis datos son mi cédula es 70234567. Mi nombre completo es Juan Diego, ¡Gosán!",
+      "palabras": 18,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "ruido-10dB",
+      "vad": true,
+      "nivel": 0.00788,
+      "abre_turno": true,
+      "texto": "claro que sí, mirá mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego, Osam",
+      "palabras": 23,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "ruido-10dB",
+      "vad": false,
+      "nivel": 0.00858,
+      "abre_turno": true,
+      "texto": "Es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen.",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "ruido-10dB",
+      "vad": true,
+      "nivel": 0.00858,
+      "abre_turno": true,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "ruido-10dB",
+      "vad": false,
+      "nivel": 0.01028,
+      "abre_turno": true,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no la de débito, la que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 33,
+      "wer_normalizado": 6.7,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "ruido-10dB",
+      "vad": true,
+      "nivel": 0.01028,
+      "abre_turno": true,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no la de débito, la que termina en 4, 5, 8, 2, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 33,
+      "wer_normalizado": 6.7,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "ruido-5dB",
+      "vad": false,
+      "nivel": 0.01004,
+      "abre_turno": true,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el. 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 111,
+      "wer_normalizado": 4.5,
+      "numeros_recuperados": "0/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "ruido-5dB",
+      "vad": true,
+      "nivel": 0.01004,
+      "abre_turno": true,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el 1-0-7-0-2-3-4-5-6-7.",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "ruido-5dB",
+      "vad": false,
+      "nivel": 0.00919,
+      "abre_turno": true,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de Davidon no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues me dejaron mi chadriller, trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "ruido-5dB",
+      "vad": true,
+      "nivel": 0.00919,
+      "abre_turno": true,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de Davidon no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues, me quedaron mis calles, trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "ruido-5dB",
+      "vad": false,
+      "nivel": 0.00917,
+      "abre_turno": true,
+      "texto": "Sí, pues al parecer un cobro de 347.200 pesos, el martes pasado en un almacén que no conozco, pues me apareció la compra de la nada, pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "ruido-5dB",
+      "vad": true,
+      "nivel": 0.00917,
+      "abre_turno": true,
+      "texto": "Sí, pues al parecer un cobro de 347.200 pesos, el martes pasado en un almacén que no conozco, pues me apareció la compra de la NAA, pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "ruido-5dB",
+      "vad": false,
+      "nivel": 0.00935,
+      "abre_turno": true,
+      "texto": "Claro que sí, mirad mis datos son mi cédula es 70234567 Mi nombre completo es Juan Diego, goza",
+      "palabras": 18,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "ruido-5dB",
+      "vad": true,
+      "nivel": 0.00935,
+      "abre_turno": true,
+      "texto": "claro que sí, mirad mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego, Osano",
+      "palabras": 23,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "ruido-5dB",
+      "vad": false,
+      "nivel": 0.01052,
+      "abre_turno": true,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revise",
+      "palabras": 26,
+      "wer_normalizado": 4.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "ruido-5dB",
+      "vad": true,
+      "nivel": 0.01052,
+      "abre_turno": true,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revise",
+      "palabras": 26,
+      "wer_normalizado": 4.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "ruido-5dB",
+      "vad": false,
+      "nivel": 0.01224,
+      "abre_turno": true,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no la de débito, la que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 33,
+      "wer_normalizado": 6.7,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "ruido-5dB",
+      "vad": true,
+      "nivel": 0.01224,
+      "abre_turno": true,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no la de débito, la que termina en 4, 5, 8, 2, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 33,
+      "wer_normalizado": 6.7,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "ruido-0dB",
+      "vad": false,
+      "nivel": 0.01354,
+      "abre_turno": true,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el. 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-7-0-2-3-4-5-6-7 1-0-7-0-7-0-2-3-4-5-6-7 1-0-7-0-7-0-2-3-4-5-6-7 1-0-7-0-7-0-2-3-4-5-6-7 1-0-7-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 111,
+      "wer_normalizado": 4.5,
+      "numeros_recuperados": "0/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "ruido-0dB",
+      "vad": true,
+      "nivel": 0.01354,
+      "abre_turno": true,
+      "texto": "Buenas tardes Llamo porque me bloquearon la tarjeta Esta mañana y necesito saber por qué Mi número de documento es el 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "ruido-0dB",
+      "vad": false,
+      "nivel": 0.01164,
+      "abre_turno": true,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja, ya que mi tarjeta de Davidon no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me haron embalado, pues, si me digas mucho de ayer, trate de pasar una secompre, se pagar algo y no se pudo.",
+      "palabras": 60,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "ruido-0dB",
+      "vad": true,
+      "nivel": 0.01164,
+      "abre_turno": true,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja, ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues, digamos que ayer trate de pasar unas compras y pagar algo, y no se pudo.",
+      "palabras": 57,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "ruido-0dB",
+      "vad": false,
+      "nivel": 0.01214,
+      "abre_turno": true,
+      "texto": "Sí, pues aparece un cobro de 347.200 pesos, el martes pasado en un almacén que no conozco, pues me apareció la compra de la NAA, pero yo no la hice.",
+      "palabras": 31,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "ruido-0dB",
+      "vad": true,
+      "nivel": 0.01214,
+      "abre_turno": true,
+      "texto": "Sí, pues al parecer un cobro de 347.200 pesos, el martes pasado en una almacén que no conozco, pues me apareció la compra de la NAA, pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "ruido-0dB",
+      "vad": false,
+      "nivel": 0.01246,
+      "abre_turno": true,
+      "texto": "Claro que sí, mirad mi estatusón, mi cédula es 70234567, mi nombre completo es Juan Diego, José.",
+      "palabras": 17,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "ruido-0dB",
+      "vad": true,
+      "nivel": 0.01246,
+      "abre_turno": true,
+      "texto": "claro que sí, mirad mi estatus o mi cédula es 70 234 567 mi nombre completo es Juan Diego, osa",
+      "palabras": 20,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "ruido-0dB",
+      "vad": false,
+      "nivel": 0.01438,
+      "abre_turno": true,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revise",
+      "palabras": 26,
+      "wer_normalizado": 4.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "ruido-0dB",
+      "vad": true,
+      "nivel": 0.01438,
+      "abre_turno": true,
+      "texto": "es que me apareció un cobro de 347 mil 200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revise",
+      "palabras": 27,
+      "wer_normalizado": 4.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "ruido-0dB",
+      "vad": false,
+      "nivel": 0.01625,
+      "abre_turno": true,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no la de débito, la que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 33,
+      "wer_normalizado": 6.7,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "ruido-0dB",
+      "vad": true,
+      "nivel": 0.01625,
+      "abre_turno": true,
+      "texto": "Si... Mire, es que la tarjeta, o sea, la de crédito no la debido, la que termina en 4, 5, 8, 2, esa es la que no me estás sirviendo desde ayer.",
+      "palabras": 32,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": false,
+      "nivel": 0.00209,
+      "abre_turno": false,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el. 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 111,
+      "wer_normalizado": 4.5,
+      "numeros_recuperados": "0/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": true,
+      "nivel": 0.00209,
+      "abre_turno": false,
+      "texto": "Buenas tardes, llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": false,
+      "nivel": 0.00201,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no sé comunicaron con mí, me dejaron embalado, pues en el carmeche de ayer trate de hacer unas compras y pagar algo y no se pudo.",
+      "palabras": 60,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": true,
+      "nivel": 0.00201,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de Davidon no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues me dejaron mi chayer, trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": false,
+      "nivel": 0.00194,
+      "abre_turno": false,
+      "texto": "Sí, pues al parecer un cobro de 347.200 pesos, el martes pasado en un almacén que no conozco, pues me apareció la compra de la NAA, pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": true,
+      "nivel": 0.00194,
+      "abre_turno": false,
+      "texto": "Sí pues al parecer un cobro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la NAA pero yo no la hice",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": false,
+      "nivel": 0.00197,
+      "abre_turno": false,
+      "texto": "Claro que sí, mirá mis datos son mi cédula es 70234567. Mi nombre completo es Juan Diego, Cosa.",
+      "palabras": 18,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": true,
+      "nivel": 0.00197,
+      "abre_turno": false,
+      "texto": "claro que sí, mirá mis datos son mi cédula es 70 23 4 5 6 7 mi nombre completo es Juan Diego Ozan",
+      "palabras": 23,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": false,
+      "nivel": 0.00214,
+      "abre_turno": false,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revise",
+      "palabras": 26,
+      "wer_normalizado": 4.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": true,
+      "nivel": 0.00214,
+      "abre_turno": false,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": false,
+      "nivel": 0.00257,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no la de débito, la que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 33,
+      "wer_normalizado": 6.7,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "lejos+ruido-10dB",
+      "vad": true,
+      "nivel": 0.00257,
+      "abre_turno": false,
+      "texto": "Si... Mire, es que la tarjeta, o sea, la de crédito, no? No la de débito. La que termina en 4, 5, 8, 2... Esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": false,
+      "nivel": 0.00251,
+      "abre_turno": false,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el. 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 111,
+      "wer_normalizado": 4.5,
+      "numeros_recuperados": "0/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": true,
+      "nivel": 0.00251,
+      "abre_turno": false,
+      "texto": "Buenas tardes Llamo porque me bloquearon la tarjeta Esta mañana y necesito saber por qué Mi número de documento es el 1 0 7 0 2 3 4 5 6 7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": false,
+      "nivel": 0.0023,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no sé, comunicaron con mí, me dejaron embalado, pues el carmeche de ayer trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 59,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": true,
+      "nivel": 0.0023,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues, me quedaron mis calles, trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": false,
+      "nivel": 0.00229,
+      "abre_turno": false,
+      "texto": "Sí, pues al parecer un cobro de 347.200 pesos, el martes pasado en un almacén que no conozco, pues me apareció la compra de la nada, pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": true,
+      "nivel": 0.00229,
+      "abre_turno": false,
+      "texto": "Sí, pues al parecer un cobro de 347.200 pesos, el martes pasado en un almacén que no conozco, pues me apareció la compra de la NAM, pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": false,
+      "nivel": 0.00234,
+      "abre_turno": false,
+      "texto": "Claro que sí, mirad mis datos son mi cédula es 70234567 Mi nombre completo es Juan Diego Ozan",
+      "palabras": 18,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": true,
+      "nivel": 0.00234,
+      "abre_turno": false,
+      "texto": "claro que sí, mirad mis datos son mi cédula es 70 234 567 mi nombre completo es Juan Diego Ozan",
+      "palabras": 20,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": false,
+      "nivel": 0.00263,
+      "abre_turno": false,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revise",
+      "palabras": 26,
+      "wer_normalizado": 4.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": true,
+      "nivel": 0.00263,
+      "abre_turno": false,
+      "texto": "es que me apareció un cobro de 347.200 pesos el martes pasado en una almacén que yo no conozco y quiero que me lo revise",
+      "palabras": 26,
+      "wer_normalizado": 8.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": false,
+      "nivel": 0.00306,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, no la de débito, la que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 33,
+      "wer_normalizado": 6.7,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "lejos+ruido-5dB",
+      "vad": true,
+      "nivel": 0.00306,
+      "abre_turno": false,
+      "texto": "Si... Mire, es que la tarjeta, o sea, la de crédito, no? No la de débito. La que termina en 4, 5, 8, 2... Esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 10.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "original@tel",
+      "vad": false,
+      "nivel": 0.00365,
+      "abre_turno": false,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el. 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "original@tel",
+      "vad": true,
+      "nivel": 0.00365,
+      "abre_turno": false,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el 1-0-7-0-2-3-4-5-6-7.",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "original@tel",
+      "vad": false,
+      "nivel": 0.00499,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de David no funciona desde el día de ayer. Nadie me ha avisado nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues la noche de ayer trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 59,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "original@tel",
+      "vad": true,
+      "nivel": 0.00499,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queja ya que mi tarjeta de David no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalado, pues la noche de ayer traté de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "original@tel",
+      "vad": false,
+      "nivel": 0.00465,
+      "abre_turno": false,
+      "texto": "Sí, pues al parecer un cobro de $347.200 pesos, el martes pasado en un almacén que no conozco, pues me apareció la compra de la nada, pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "original@tel",
+      "vad": true,
+      "nivel": 0.00465,
+      "abre_turno": false,
+      "texto": "Sí, pues al parecer un cobro de 347.200 pesos, el martes pasado en un almacén que no conozco, pues me apareció la compra de la nada, pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "original@tel",
+      "vad": false,
+      "nivel": 0.00468,
+      "abre_turno": false,
+      "texto": "Claro que sí, mis datos son mi cédula 70234567. Mi nombre completo es Juan Diego Osa.",
+      "palabras": 16,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "original@tel",
+      "vad": true,
+      "nivel": 0.00468,
+      "abre_turno": false,
+      "texto": "Claro que sí, mis datos son mi cédula 70234567. Mi nombre completo es Juan Diego Osa.",
+      "palabras": 16,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "original@tel",
+      "vad": false,
+      "nivel": 0.00413,
+      "abre_turno": false,
+      "texto": "Es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen.",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "original@tel",
+      "vad": true,
+      "nivel": 0.00413,
+      "abre_turno": false,
+      "texto": "es que me apareció un cobro de 347 mil 200 pesos el martes pasado en una almacén que yo no conozco y quiero que me lo revisen",
+      "palabras": 27,
+      "wer_normalizado": 4.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "original@tel",
+      "vad": false,
+      "nivel": 0.00606,
+      "abre_turno": true,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, ¿no? No la de crédito. La que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 13.3,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "original@tel",
+      "vad": true,
+      "nivel": 0.00606,
+      "abre_turno": true,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito no, no la de crédito, la que termina en 4, 5, 8, 2, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 13.3,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": false,
+      "nivel": 0.00116,
+      "abre_turno": false,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es él. 1-0-7-0-2-3-4-5-6-7.",
+      "palabras": 31,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": true,
+      "nivel": 0.00116,
+      "abre_turno": false,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué. Mi número de documento es el 1-0-7-0-2-3-4.",
+      "palabras": 28,
+      "wer_normalizado": 4.5,
+      "numeros_recuperados": "0/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": false,
+      "nivel": 0.00137,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queda, ya que mi tarjeta de De Vito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalados, pues la noche de ayer traté de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 59,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": true,
+      "nivel": 0.00137,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queda, ya que mi tarjeta de deviso no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron embalados, pues la noche de ayer traté de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 58,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": false,
+      "nivel": 0.00126,
+      "abre_turno": false,
+      "texto": "Sí, pues al parecer un cobro de 347.200 pesos, el martes pasado en un almacén que no conozco, pues me apareció la compra de la NAAA, pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": true,
+      "nivel": 0.00126,
+      "abre_turno": false,
+      "texto": "Sí, pues al parecer un cobro de 347.200 pesos, el martes pasado en un almacén que no conozco, pues me apareció la compra de la NAAA, pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": false,
+      "nivel": 0.0013,
+      "abre_turno": false,
+      "texto": "Claro que sí, mirá mi dato son mi cédula 70234567. Mi nombre completo es Juan Diego.",
+      "palabras": 16,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": true,
+      "nivel": 0.0013,
+      "abre_turno": false,
+      "texto": "Claro que sí, mira mi dato son mi cédula 70234567. Mi nombre completo es Juan Diego Osa.",
+      "palabras": 17,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": false,
+      "nivel": 0.00129,
+      "abre_turno": false,
+      "texto": "Es que me apareció un cobro de 347.200 pesos el martes pasado en una almacén que yo no conozco y quiero que me lo revise.",
+      "palabras": 26,
+      "wer_normalizado": 8.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": true,
+      "nivel": 0.00129,
+      "abre_turno": false,
+      "texto": "Es que me apareció un cobro de 347.200 pesos el martes pasado en una almacén que yo no conozco y quiero que me lo revise",
+      "palabras": 26,
+      "wer_normalizado": 8.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": false,
+      "nivel": 0.00172,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, ¿no? No la de crédito. La que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 13.3,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "lejos+ruido-10dB@tel",
+      "vad": true,
+      "nivel": 0.00172,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito no, no la de crédito, la que termina en 4, 5, 8, 2, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 13.3,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "muy-lejos@tel",
+      "vad": false,
+      "nivel": 0.00036,
+      "abre_turno": false,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana, y necesito saber por qué. Mi número de documento es el. 1-0-7-0-2-3-4-5-6-7 1-0-7-0-2-3-4-5-6-7",
+      "palabras": 41,
+      "wer_normalizado": 4.5,
+      "numeros_recuperados": "0/1"
+    },
+    {
+      "grabacion": "documento",
+      "degradacion": "muy-lejos@tel",
+      "vad": true,
+      "nivel": 0.00036,
+      "abre_turno": false,
+      "texto": "Buenas tardes. Llamo porque me bloquearon la tarjeta. Esta mañana y necesito saber por qué.",
+      "palabras": 15,
+      "wer_normalizado": 31.8,
+      "numeros_recuperados": "0/1"
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "muy-lejos@tel",
+      "vad": false,
+      "nivel": 0.0005,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que me gustaría poner una queda, ya que mi tarjeta de De Vito no funciona desde el día de ayer. Nadie me ha avisado nada, nadie me ha dicho nada, no se comunicaron conmigo, me han avalado, pues en la noche de ayer traté de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 61,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-bloqueo",
+      "degradacion": "muy-lejos@tel",
+      "vad": true,
+      "nivel": 0.0005,
+      "abre_turno": false,
+      "texto": "Buenas tardes, lo que pasa es que una queda ya que mi tarjeta de DeVito no funciona desde el día de ayer. Nadie me avisó nada, nadie me ha dicho nada, no se comunicaron conmigo, me dejaron en base. Trate de pasar unas compras y pagar algo y no se pudo.",
+      "palabras": 51,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "muy-lejos@tel",
+      "vad": false,
+      "nivel": 0.00046,
+      "abre_turno": false,
+      "texto": "Sí, pues al parecer un coro de 347.200 pesos el martes pasado en un almacén que no conozco pues me apareció la compra de la nada pero yo no la hice.",
+      "palabras": 32,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-cobro",
+      "degradacion": "muy-lejos@tel",
+      "vad": true,
+      "nivel": 0.00046,
+      "abre_turno": false,
+      "texto": "Sí, pues en dos pesos el martes pasado en un almacén que no conozco, pues me apareció la compra pero yo no la...",
+      "palabras": 23,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "muy-lejos@tel",
+      "vad": false,
+      "nivel": 0.00047,
+      "abre_turno": false,
+      "texto": "Claro que sí, mirá mis datos son mi cédula 70234567. Mi nombre completo es Juan Diego.",
+      "palabras": 16,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "libre-datos",
+      "degradacion": "muy-lejos@tel",
+      "vad": true,
+      "nivel": 0.00047,
+      "abre_turno": false,
+      "texto": "Mi célula es 70, 23, 4, 5, 6, 7. El completo es Juan Diego, cosa.",
+      "palabras": 15,
+      "wer_normalizado": null,
+      "numeros_recuperados": null
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "muy-lejos@tel",
+      "vad": false,
+      "nivel": 0.00041,
+      "abre_turno": false,
+      "texto": "Es que me apareció un cobro de 347.200 pesos el martes pasado en un almacén que yo no conozco y quiero que me lo revisen.",
+      "palabras": 26,
+      "wer_normalizado": 0.0,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "monto",
+      "degradacion": "muy-lejos@tel",
+      "vad": true,
+      "nivel": 0.00041,
+      "abre_turno": false,
+      "texto": "es que me apareció un cobro de 300 el martes pasado en una almacén que yo no conozco y quiero que me lo...",
+      "palabras": 23,
+      "wer_normalizado": 16.0,
+      "numeros_recuperados": "0/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "muy-lejos@tel",
+      "vad": false,
+      "nivel": 0.0006,
+      "abre_turno": false,
+      "texto": "Si, mire, es que la tarjeta, o sea, la de crédito, ¿no? No la de crédito. La que termina en cuatro, cinco, ocho, dos, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 34,
+      "wer_normalizado": 13.3,
+      "numeros_recuperados": "1/1"
+    },
+    {
+      "grabacion": "titubeos",
+      "degradacion": "muy-lejos@tel",
+      "vad": true,
+      "nivel": 0.0006,
+      "abre_turno": false,
+      "texto": "Mire, es que el ATAR 8.2, esa es la que no me está sirviendo desde ayer.",
+      "palabras": 17,
+      "wer_normalizado": 56.7,
+      "numeros_recuperados": "0/1"
+    }
+  ]
+}

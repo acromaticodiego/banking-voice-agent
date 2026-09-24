@@ -19,11 +19,23 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from app.confianza import resumir
 from app.fin_de_turno import parece_incompleto
 
 FRECUENCIA = 16000
 TROZO_MS = 20
 MUESTRAS_POR_TROZO = FRECUENCIA * TROZO_MS // 1000
+
+# Amplitud media por encima de la cual un trozo de 20 ms cuenta como voz, en la
+# escala del audio normalizado a ±1.
+#
+# El 2026-09-24 esto se sustituyó por un umbral que se calibraba con el ruido
+# de cada llamada, y se revirtió el mismo día: la medición que lo justificaba
+# modelaba mal este archivo —daba por hecho que la racha de voz se reiniciaba
+# con cada silencio, cuando `voz_ms` acumula durante toda la intervención— y
+# con el sistema de verdad el umbral fijo oye lo que se decía que no oía. El
+# ADR 0009 lo cuenta entero, y `app/deteccion_voz.py` se conserva sin usar
+# como material de ese hallazgo.
 UMBRAL_VOZ = 0.005
 
 
@@ -102,9 +114,22 @@ class Llamada:
 
         t = time.perf_counter()
         completo = np.concatenate(self.buffer)
-        segmentos, _ = self.asr.transcribe(completo, language="es", beam_size=1)
+        # `vad_filter=True` le quita a Whisper el audio sin voz antes de
+        # transcribirlo, y no es una optimización: es lo único que impide que
+        # se invente. Medido el 2026-09-24 sobre 64 clips de silencio real de
+        # esta sala, sin el filtro 16 producen texto —"¿Qué pasa?",
+        # "¡Suscríbete!", un trozo de subtítulos— y con él, ninguno. Y el
+        # buffer que llega aquí lleva además la cola de silencio que cerró el
+        # turno, que es más silencio del que parece: hasta 3,6 s con las dos
+        # reanudaciones. Cuesta +24 ms sobre un turno de 2389. ADR 0008.
+        segmentos, info = self.asr.transcribe(completo, language="es",
+                                              beam_size=1, vad_filter=True)
+        segmentos = list(segmentos)     # el generador es perezoso: aquí se ejecuta
         dicho = "".join(s.text for s in segmentos).strip()
         ms_asr = (time.perf_counter() - t) * 1000
+        # Lo que el modelo sabe de su propia transcripción. Se anota y no se
+        # actúa sobre ello: el porqué está en `app/confianza.py` y en el ADR.
+        senales = resumir(segmentos, getattr(info, "language_probability", None))
 
         motivo = parece_incompleto(dicho, self.esperando)
         if motivo and self.reanudaciones < self.max_reanudaciones:
@@ -115,9 +140,11 @@ class Llamada:
             self.ventana_actual = self.ventana_larga_ms
             self.silencio_ms = 0
             return [Aviso("estado", "sigo escuchando",
-                          {"motivo": motivo, "parcial": dicho})]
+                          {"motivo": motivo, "parcial": dicho,
+                           "confianza": senales})]
 
-        avisos.append(Aviso("oido", dicho, {"ms_asr": round(ms_asr)}))
+        avisos.append(Aviso("oido", dicho, {"ms_asr": round(ms_asr),
+                                            "confianza": senales}))
         avisos.append(Aviso("estado", "pensando"))
 
         salida: list[dict] = []

@@ -30,7 +30,8 @@ import uvicorn
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "probe"))
 from common import cargar_env  # noqa: E402
 
-from app.agent.loop import Agente  # noqa: E402
+from app.agent.loop import (ADELANTABLES, CON_EFECTO, HERRAMIENTAS,  # noqa: E402
+                            SIN_EFECTO, Agente)
 from app.tools.service import app as app_herramientas  # noqa: E402
 
 PUERTO = 8124
@@ -106,6 +107,31 @@ def main() -> int:
         time.sleep(0.1)
 
     try:
+        # ------------------------------- 0. toda herramienta esta clasificada
+        #
+        # Va primero y no necesita modelo, asi que se comprueba aunque no haya
+        # cuota. Una herramienta sin clasificar no da error: solo se queda sin
+        # proteccion contra reintentos, y eso se descubre el dia que se abren
+        # dos tickets.
+        print("\n[0] Toda herramienta declara si tiene efecto")
+        declaradas = {h["function"]["name"] for h in HERRAMIENTAS}
+        clasificadas = CON_EFECTO | SIN_EFECTO
+        comprobar("ninguna sin clasificar",
+                  not (declaradas - clasificadas),
+                  str(sorted(declaradas - clasificadas)))
+        comprobar("ninguna clasificada que no exista",
+                  not (clasificadas - declaradas),
+                  str(sorted(clasificadas - declaradas)))
+        comprobar("ninguna en los dos sitios a la vez",
+                  not (CON_EFECTO & SIN_EFECTO),
+                  str(sorted(CON_EFECTO & SIN_EFECTO)))
+        # Y la regla que se sigue del ADR 0007: nada con efecto se adelanta.
+        # Adelantar una lectura cuesta una consulta; adelantar una escalada es
+        # abrir un ticket que nadie pidio.
+        comprobar("nada con efecto se adelanta",
+                  not (ADELANTABLES & CON_EFECTO),
+                  str(sorted(ADELANTABLES & CON_EFECTO)))
+
         # ---------------------------------------------------------- 1. resuelve
         print("\n[1] Resuelve: documento válido, tarjeta bloqueada")
         agente = Agente(groq, modelo, BASE)

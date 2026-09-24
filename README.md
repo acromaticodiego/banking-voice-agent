@@ -129,7 +129,96 @@ identidad lo segundo es lo único que decide.
 Con n=3 y un solo hablante esto calibra el orden de magnitud. No es una tasa
 representativa: para eso hacen falta varias voces, ruido y línea telefónica.
 
----
+### Turnos que nadie dijo
+
+Hay un error que no aparece en ninguna tasa: el que comete el sistema cuando
+**no se dijo nada**. Whisper se inventa frases sobre el ruido de fondo, y lo
+que se inventa tiene letras, así que el guardia del turno vacío —que mira si
+la transcripción tiene alguna letra o dígito— lo deja pasar como si alguien
+hubiera hablado.
+
+Medido sobre 106 clips (42 con voz, 64 sin ella), con el silencio sacado de las
+propias grabaciones y no sintetizado:
+
+| | sin filtro de voz | con `vad_filter=True` |
+|---|---|---|
+| clips sin voz que producen texto | **16 de 64** | **0 de 64** |
+| clips con voz que se quedan mudos | 0 de 42 | 0 de 42 |
+| coste en el turno (3 s + 1,2 s), mediana n=18 | 178 ms | 202 ms |
+
+Ya inventa con un solo segundo de silencio, y cuanto más largo, más: 1 de 13 a
+1 s, 4 de 15 a 2 s, 5 de 15 a 4 s, 6 de 17 a 8 s.
+
+Lo que sale: *"¡Suscríbete!"*, *"Este es el canal de subtítulos en español de
+la Iglesia…"* y *"¿Qué pasa?"*. Las dos primeras delatan de dónde vienen. **La
+tercera no delata nada**: es una frase que un cliente diría, y un agente
+bancario le contesta a una habitación vacía.
+
+Dos cosas más, que son las que hacen falta para decidir. **Qué clip alucina se
+repite entre corridas; qué dice, no** — es el fallback de temperatura de
+Whisper, que es aleatorio por dentro. Y **el umbral de confianza, que parecía
+la solución elegante, no lo es**: `no_speech_prob` no separa (los rangos del
+habla y del invento se solapan casi enteros) y un corte por `avg_logprob`
+cazaba 7 de 7... hasta que entraron seis clips de habla más y bajó a 5 de 7, y
+al arreglar el material de silencio quedó en 6 de 16. Tres medidas, cada una
+peor que la anterior, y ninguna por un error de medición: el umbral nunca había
+sido bueno, solo había visto poco.
+
+**El primer número de esta tabla fue 7 de 64 y estaba mal**, por cómo se
+construía el silencio: se cogían los tramos de menos energía de cada
+grabación, y los de menos energía son los ceros que el grabador deja al
+principio y al final. El banco se llenaba de tramos medio mudos y el problema
+salía por la mitad de su tamaño. El razonamiento completo, con lo que se
+descartó, está en
+[ADR 0008](docs/adr/0008-que-hace-el-agente-cuando-la-transcripcion-no-es-de-fiar.md).
+
+### El umbral que parecía describir una habitación
+
+Mientras se comprobaba que el filtro de voz no dejara sordo al agente apareció
+algo que parecía peor. El sistema abre turno cuando se acumulan 600 ms de audio
+por encima de una constante, `0.005`, y una sonda dijo esto:
+
+| | ¿abre turno? |
+|---|---|
+| grabación original | 6 de 6 |
+| la misma voz a la mitad de volumen | **0 de 6** |
+| la misma voz por línea telefónica | **1 de 6** |
+
+Conclusión aparente: quien hable bajito no es oído, quien llame por teléfono
+tampoco, y el siguiente paso del proyecto —telefonía real— está apoyado en algo
+que no puede funcionar. Se escribió un detector que calibra el umbral contra el
+ruido de la propia llamada, con su barrido de parámetros, su criterio fijado de
+antemano y seis pruebas deterministas. Todas en verde.
+
+**Y rompió el sistema.** La prueba del stack levantado se puso roja: el turno
+dejaba de cerrarse. El detector nuevo declaraba voz en el 96-97% de los trozos
+de una grabación real —el fijo, en el 38-47%—, el silencio seguido más largo
+caía de 2520 ms a 380, y con una ventana de cierre de 1200 ms el turno no
+terminaba nunca.
+
+Al buscar por qué las sondas no lo habían visto, las tres resultaron tener cada
+una su propia idea del sistema:
+
+- la que dio la alarma comparaba el **nivel medio del clip entero** contra el
+  umbral, cuando el sistema acumula el tiempo de voz trozo a trozo **y no lo
+  reinicia** en los silencios de en medio;
+- la que eligió el parámetro reiniciaba la racha en cada silencio, y solo medía
+  si el turno **se abre**, nunca si se cierra — con lo que un detector que
+  declare voz siempre saca la nota perfecta;
+- y el material de silencio se seleccionaba exigiendo "pico < 3× el suelo" para
+  después elegir un factor de 2,5: cualquier factor ≥3 daba cero falsos **por
+  construcción**.
+
+Medido por fin contra la clase real, el umbral fijo cierra turno 6/6 con la voz
+a la mitad, 6/6 al 25% y 6/6 por teléfono. **El problema no existía.** Se
+revirtió todo.
+
+Lo que queda escrito en
+[ADR 0009](docs/adr/0009-cuando-se-decide-que-alguien-esta-hablando.md), que es
+una decisión rechazada y uno de los documentos más útiles del repositorio: una
+sonda que reimplementa la lógica del sistema mide la reimplementación, un
+detector de voz se mide por sus dos puertas, y la prueba que cazó esto fue la
+del sistema levantado mientras las seis deterministas seguían en verde.
 
 ## El hallazgo: el fin de habla no cabe en el presupuesto
 

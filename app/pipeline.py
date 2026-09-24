@@ -47,6 +47,10 @@ MUESTRAS_POR_TROZO = FRECUENCIA * TROZO_MS // 1000
 # escala del audio normalizado a ±1. Equivale a unas 165 unidades de entero de
 # 16 bits, por debajo del 500 que las sondas usan para "hay señal" porque aquí
 # se mira la MEDIA de un trozo corto y no el pico de la grabación entera.
+#
+# Tiene que ser el mismo número que el de `app/vivo.py`. Lo fue por copia hasta
+# el 2026-09-24, cuando los dos pasaron a un detector compartido y volvieron
+# aquí el mismo día: ver el ADR 0009.
 UMBRAL_VOZ = 0.005
 
 
@@ -118,14 +122,13 @@ class Tuberia:
     # ------------------------------------------------------------------ VAD
 
     def _hay_voz(self, trozo: np.ndarray) -> bool:
-        """Detector de energía sobre un trozo de 20 ms.
+        """Detector de energía sobre un trozo de 20 ms, contra el ruido de fondo.
 
         Silero trabaja sobre ventanas de 32 ms y no encaja en el ritmo de 20 ms
-        de la telefonía sin un adaptador. Para esta comprobación basta la
-        energía: lo que se está midiendo es si el reloj cuadra, no la calidad
-        del detector.
+        de la telefonía sin un adaptador, así que aquí se sigue midiendo
+        energía; lo que cambió el 2026-09-24 es contra qué se compara.
 
-        El umbral va en la escala del audio normalizado a ±1, no en la del
+        El nivel va en la escala del audio normalizado a ±1, no en la del
         entero de 16 bits. Ponerlo en la escala equivocada no da un detector
         malo: da uno que no oye absolutamente nada, que fue lo que pasó.
         """
@@ -189,8 +192,12 @@ class Tuberia:
             # escuchando, lo que cuenta es cuándo se calló del todo.
             t_cero = ultimo_con_voz
             t = time.perf_counter()
+            # Con `vad_filter=True`, igual que en vivo: si la tubería de medir
+            # no lleva el mismo filtro que la de correr, el número que sale no
+            # es el del sistema. Cuesta +24 ms y va dentro de `ms_asr`. ADR 0008.
             segmentos, _ = self.asr.transcribe(np.concatenate(acumulado),
-                                               language="es", beam_size=1)
+                                               language="es", beam_size=1,
+                                               vad_filter=True)
             resultado.dicho = "".join(s.text for s in segmentos).strip()
             ms_asr = (time.perf_counter() - t) * 1000
 

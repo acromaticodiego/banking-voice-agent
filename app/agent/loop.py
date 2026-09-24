@@ -67,7 +67,12 @@ SISTEMA = (
     "Y no inventes procedimientos: ni teléfonos, ni horarios, ni plazos, ni "
     "requisitos, ni papeles que haya que llevar a una oficina. Si no lo ha "
     "devuelto una herramienta, no lo sabes. Cuando lo que piden necesita una "
-    "acción que no tienes, dilo en una frase y pasa la llamada a un asesor."
+    "acción que no tienes, dilo en una frase y pasa la llamada a un asesor. "
+    "SI UN DOCUMENTO NO APARECE, no te rindas a la primera: pide que lo "
+    "repitan dígito a dígito. Al teléfono la gente se equivoca y tú puedes "
+    "haber oído mal. La herramienta te dice en `_intentos_en_esta_llamada` "
+    "cuántos documentos distintos van fallando y en `_que_hacer` qué toca; "
+    "hazle caso a eso y no a tu impresión."
 )
 
 HERRAMIENTAS = [
@@ -112,6 +117,14 @@ HERRAMIENTAS = [
 # Acciones con efecto: llevan clave de idempotencia. Consultar no la necesita
 # —preguntar dos veces no rompe nada— pero abrir un ticket sí.
 CON_EFECTO = {"escalar_a_humano"}
+
+# Y las que solo leen, declaradas una por una. Existe para que ninguna
+# herramienta se quede SIN CLASIFICAR: el día que se añada una que haga algo y
+# nadie se acuerde de meterla en `CON_EFECTO`, no saltaría ningún error, solo
+# dejaría de estar protegida contra reintentos. Es el mismo tipo de agujero que
+# el `fallar_herramienta` inexistente del catálogo de evaluación: un olvido que
+# no falla, solo deja de proteger. Lo comprueba `prueba_bucle`.
+SIN_EFECTO = {"consultar_identidad", "estado_tarjeta"}
 
 # Herramientas que se pueden disparar ANTES de que el modelo las pida.
 # Solo las de lectura pura: preguntar dos veces por un documento no cambia
@@ -168,6 +181,12 @@ FRASE_PUENTE = "Permítame un momento, lo estoy revisando."
 # prueba de la pasarela, y verde no puede significar "no lo he mirado".
 TEXTO_FALLO_DEL_MODELO = ("Disculpe, tuve un problema técnico. "
                           "Le paso con un asesor.")
+
+# Cuántos documentos DISTINTOS se prueban antes de pasar a un humano. Tres,
+# que es lo que hace un banco de verdad y lo que aguanta una persona: el
+# primero puede ser un dígito mal dicho, el segundo un dígito mal oído, y al
+# tercero ya no es un despiste.
+DOCUMENTOS_ANTES_DE_ESCALAR = 3
 
 PREGUNTAS_POR_SILENCIO = [
     "¿Sigue ahí? No le escucho.",
@@ -277,6 +296,10 @@ class Agente:
         self.tokens_entrada = 0
         self.tokens_salida = 0
         self.peticiones = 0
+        # Los documentos distintos que se han probado y no aparecen. Van por
+        # conversación y no por turno: quien llama se equivoca en un turno y
+        # se corrige en el siguiente.
+        self.documentos_intentados: list[str] = []
 
     # ------------------------------------------------------ adelantar consulta
 
@@ -329,6 +352,55 @@ class Agente:
                     break
                 time.sleep(0.005)
         return self._llamar(nombre, argumentos, clave)
+
+    def _anotar_intentos(self, nombre: str, argumentos: dict,
+                         resultado: dict) -> dict:
+        """Le dice al modelo cuántos documentos van fallando en esta llamada.
+
+        El caso `documento-mal-dos-veces` falla igual en las seis corridas de
+        los dos prompts, así que no es ruido: **el agente escala al PRIMER
+        documento que no aparece, y abre un ticket.** Al teléfono la gente se
+        equivoca de dígito —y el ASR también—, así que rendirse a la primera es
+        peor servicio, y el ticket tiene efecto: alguien tiene que atenderlo.
+
+        La decisión no se deja en manos del prompt solo, porque el prompt no
+        sabe contar: cuando la herramienta dice "no lo encuentro", el modelo no
+        tiene forma de saber si es el primer intento o el tercero. Un turno
+        posterior ve la historia, sí, pero interpretarla es justo lo que hace
+        mal. Así que el dato se le da masticado, y contado por quien puede
+        contarlo.
+
+        Se cuentan documentos DISTINTOS, no llamadas: repetir la misma cédula
+        —porque el adelanto ya la consultó, o porque el modelo insiste— no es
+        un intento nuevo de la persona.
+
+        Los campos van con `_` delante para que se vea que los pone el agente y
+        no el core bancario. Inventarse campos con pinta de datos del banco
+        sería, precisamente, lo que el ADR 0005 prohíbe.
+        """
+        if nombre != "consultar_identidad" or resultado.get("encontrado"):
+            return resultado
+        if resultado.get("error"):
+            # La herramienta se cayó; eso no es un documento equivocado y
+            # contarlo como intento haría escalar por el motivo que no es.
+            return resultado
+        documento = "".join(c for c in str(argumentos.get("documento", ""))
+                            if c.isdigit())
+        if documento and documento not in self.documentos_intentados:
+            self.documentos_intentados.append(documento)
+        intentos = len(self.documentos_intentados)
+        anotado = dict(resultado)
+        anotado["_intentos_en_esta_llamada"] = intentos
+        anotado["_intentos_antes_de_escalar"] = DOCUMENTOS_ANTES_DE_ESCALAR
+        if intentos < DOCUMENTOS_ANTES_DE_ESCALAR:
+            anotado["_que_hacer"] = (
+                "Pídele que repita el documento dígito a dígito. NO escales "
+                "todavía: al teléfono equivocarse una vez es normal.")
+        else:
+            anotado["_que_hacer"] = (
+                "Ya van demasiados documentos distintos sin encontrar. Ahora "
+                "sí: pasa la llamada a un asesor humano.")
+        return anotado
 
     def _llamar(self, nombre: str, argumentos: dict, clave: str) -> tuple[dict, float]:
         cuerpo = dict(argumentos)
@@ -536,6 +608,7 @@ class Agente:
                 except json.JSONDecodeError:
                     argumentos = {}
                 resultado, ms = self._ejecutar(nombre, argumentos, turno.clave)
+                resultado = self._anotar_intentos(nombre, argumentos, resultado)
                 # Una consulta servida por el adelanto sale a coste cero en la
                 # ruta critica: ya estaba hecha. Se marca para poder contarlas,
                 # porque ese conteo SI es deterministico, mientras que el
