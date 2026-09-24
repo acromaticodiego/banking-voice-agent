@@ -118,6 +118,14 @@ HERRAMIENTAS = [
 # —preguntar dos veces no rompe nada— pero abrir un ticket sí.
 CON_EFECTO = {"escalar_a_humano"}
 
+# Y las que solo leen, declaradas una por una. Existe para que ninguna
+# herramienta se quede SIN CLASIFICAR: el día que se añada una que haga algo y
+# nadie se acuerde de meterla en `CON_EFECTO`, no saltaría ningún error, solo
+# dejaría de estar protegida contra reintentos. Es el mismo tipo de agujero que
+# el `fallar_herramienta` inexistente del catálogo de evaluación: un olvido que
+# no falla, solo deja de proteger. Lo comprueba `prueba_bucle`.
+SIN_EFECTO = {"consultar_identidad", "estado_tarjeta"}
+
 # Herramientas que se pueden disparar ANTES de que el modelo las pida.
 # Solo las de lectura pura: preguntar dos veces por un documento no cambia
 # nada, y si el modelo acaba no pidiéndola, lo único que se pierde es una

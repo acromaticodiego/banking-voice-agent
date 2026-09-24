@@ -216,6 +216,12 @@ medición final lanza una excepción.
 - **0005** por qué no puede afirmar nada que no venga de una herramienta.
   Prompt, detector y el texto de respaldo que mentía. Con la tabla del coste:
   con el reloj de la demo, el prompt nuevo baja de 6 a 4 de 12
+- **0006** qué pasa si una herramienta falla a mitad. El error es un resultado
+  para el modelo, no una excepción, y `reintentable` distingue el 5xx del 4xx
+- **0007** idempotencia de las acciones con efecto. La clave es del TURNO —ni
+  de la llamada ni de la conversación— y de ahí se sigue que nada con efecto
+  se puede adelantar. Escribirlo destapó que nadie comprobaba que la lista
+  blanca estuviera completa
 
 ---
 
@@ -477,11 +483,18 @@ quitaría la doble transcripción que hoy cuesta ~500 ms en la ruta crítica, y
 daría la tasa de error en español con acento paisa contra un sistema comercial.
 Medir el coste por minuto desde la primera llamada.
 
-### 11. Los ADR que faltan
-Qué hace el agente cuando la transcripción tiene poca confianza; qué pasa si
-una herramienta falla a mitad (implementado, sin escribir); idempotencia
-(implementada, sin escribir). El de "por qué no puede afirmar nada que no venga
-de una herramienta" ya está escrito: es el 0005.
+### 11. El ADR que falta
+Solo queda uno: **qué hace el agente cuando la transcripción tiene poca
+confianza**, y ese no está implementado, así que no es escribir sino decidir.
+Los otros tres cayeron el 24/09: el 0005 (no afirmar lo que no venga de una
+herramienta), el 0006 (herramienta que falla a mitad) y el 0007
+(idempotencia).
+
+Y de escribir los dos últimos salió algo que no se esperaba: **explicar por qué
+la lista de herramientas adelantables es una lista blanca destapó que nadie
+comprobaba que estuviera completa.** Una herramienta con efecto que nadie
+clasificara no daba error, solo se quedaba sin protección contra reintentos.
+Documentar lo ya implementado no es papeleo.
 
 ---
 
