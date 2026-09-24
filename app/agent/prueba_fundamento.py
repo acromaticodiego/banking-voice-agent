@@ -91,6 +91,18 @@ CASOS = [
         [], [],
     ),
     (
+        "EL ESTADO EN MASCULINO, que es el que de verdad protege el diseño. "
+        "El caso de arriba no bastaba: decía 'bloqueada' y los participios de "
+        "la tabla van en masculino, así que pasaba por el género y no por la "
+        "regla. Mutar el detector para que confundiera estado y acción no "
+        "rompía ninguna prueba, y eso es un test que pasa sin cubrir nada",
+        "Su tarjeta está bloqueado y el cobro quedó reversado, según el "
+        "registro.",
+        [IDENTIDAD, {"cobro": "reversado", "tarjeta": "bloqueado"}],
+        ["consultar_identidad", "estado_tarjeta"],
+        [], [],
+    ),
+    (
         "repetir el documento que acaban de dictar no es inventárselo",
         "Confirmo el documento 1070234567. Un momento, por favor.",
         [], [],
@@ -116,6 +128,30 @@ CASOS = [
         "Permítame un momento. En 24 horas tendrá respuesta, entre las 8 y "
         "las 5.",
         [], [],
+        [], [],
+    ),
+    (
+        "LA FECHA AL DERECHO: la herramienta devuelve 2026-09-15 y al "
+        "teléfono se dice 15/09/2026. Es la misma fecha, y el detector la "
+        "denunció como inventada en 2 de 6 corridas antes de arreglarlo",
+        "Su tarjeta está bloqueada desde el 15/09/2026 por un movimiento "
+        "inusual.",
+        [IDENTIDAD, TARJETA], ["consultar_identidad", "estado_tarjeta"],
+        [], [],
+    ),
+    (
+        "OFRECER no es prometer: el condicional deja la decisión en quien "
+        "llama y es una respuesta correcta",
+        "Si lo desea, le puedo pasar con un asesor humano.",
+        [], [],
+        [], [],
+    ),
+    (
+        "contar la escalada con otro verbo, habiéndola hecho, no es "
+        "inventarse nada",
+        "Lo siento, no puedo hacer ese cambio. Le he enviado su solicitud a "
+        "un asesor humano.",
+        [TICKET], ["consultar_identidad", "escalar_a_humano"],
         [], [],
     ),
     (

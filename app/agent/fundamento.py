@@ -40,6 +40,14 @@ sigue estando la lista literal `no_debe_prometer` de cada caso, que es un cepo
 y solo caza lo que ya se vio decir. Las dos piezas se solapan poco y ninguna
 sobra.
 
+**La voz pasiva.** "Su tarjeta ha sido bloqueada" no se la atribuye nadie, y es
+a la vez la forma más natural de contar un estado que devolvió la herramienta
+—cuyo motivo, literalmente, es "movimiento inusual detectado el 2026-09-15"—.
+Queda fuera a propósito: marcarla convertiría la respuesta correcta del caso
+principal en un invento. Solo se persigue la primera persona, que es donde
+está la mentira que importa: la que hace que quien llama cuelgue creyendo que
+alguien ha hecho algo.
+
 ## Hacia qué lado se equivoca
 
 Un número se da por fundado si aparece **dentro** del blob de cifras de las
@@ -77,6 +85,14 @@ NUMERO = re.compile(r"\d{4,}")
 # guion para que el número sea uno y no tres.
 SEPARADOR_INTERNO = re.compile(r"(?<=\d)[ .,\-](?=\d)")
 
+# Las fechas se dicen en el orden de aquí y las devuelven en el de la máquina.
+# La herramienta contesta "2026-09-15" y el agente dice "15/09/2026", que es lo
+# correcto al teléfono. Sin esto, pegar las cifras da "15092026" contra
+# "20260915" y el detector denuncia como inventada una fecha que acaba de leer.
+# Falso positivo visto en 2 de 6 corridas del 2026-09-24: la primera cosa que
+# hizo este detector fue acusar al agente de algo que no había hecho.
+FECHA_AL_REVES = re.compile(r"\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})\b")
+
 # Verbos de acción, con la herramienta que respaldaría afirmarlos. `None`
 # significa que NO EXISTE herramienta capaz de eso, así que atribuirse la
 # acción está inventado siempre, sin importar lo que se llamara.
@@ -92,7 +108,12 @@ ACCIONES = [
     ("activar", "activado", "activé", None),
     ("reactivar", "reactivado", "reactivé", None),
     ("reportar", "reportado", "reporté", None),
-    ("enviar", "enviado", "envié", None),
+    # "Le he enviado su solicitud a un asesor" es la escalada contada con otro
+    # verbo, y marcarlo cuando el ticket existe es acusar de inventar a quien
+    # acaba de hacer lo correcto. A cambio se pierde "le enviaré un correo"
+    # cuando además ha escalado. Es el precio, y es el lado bueno del que
+    # equivocarse: el detector solo sirve si quien lo lee se lo cree.
+    ("enviar", "enviado", "envié", "escalar_a_humano"),
     ("cambiar", "cambiado", "cambié", None),
     ("modificar", "modificado", "modifiqué", None),
     ("actualizar", "actualizado", "actualicé", None),
@@ -117,9 +138,13 @@ MARCOS = [
 # tabla, y es justo la que el propio agente lleva escrita en su texto de
 # respaldo. Si la dice sin abrir el ticket, ha prometido una transferencia que
 # no existe.
+# Ojo con el condicional: "si lo desea, le PUEDO pasar con un asesor" es un
+# ofrecimiento y es una respuesta correcta; "le paso con un asesor" y "le voy a
+# pasar" afirman que la transferencia ya está en marcha. La primera versión de
+# esto metía "puedo" en el mismo saco y marcó un ofrecimiento como promesa.
 PASAR_CON_HUMANO = re.compile(
     r"\b(?:le|lo|la|les)\s+(?:paso|pongo|comunico|transfiero|derivo)\b"
-    r"|\b(?:le|lo|la|les)\s+(?:voy a|puedo)\s+(?:pasar|comunicar|transferir)\b"
+    r"|\b(?:le|lo|la|les)\s+voy a\s+(?:pasar|comunicar|transferir)\b"
     r"|\bpaso (?:su|la) llamada\b", re.I)
 
 
@@ -142,8 +167,9 @@ class Revision:
 
 
 def _cifras(texto: str) -> str:
-    """El texto con los números normalizados y las cifras pegadas."""
-    return SEPARADOR_INTERNO.sub("", normalizar(texto))
+    """El texto con las fechas al derecho, los números en cifras y pegados."""
+    return SEPARADOR_INTERNO.sub(
+        "", normalizar(FECHA_AL_REVES.sub(r"\3-\2-\1", texto)))
 
 
 def numeros_dichos(texto: str) -> list[str]:

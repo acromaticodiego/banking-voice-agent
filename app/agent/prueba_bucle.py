@@ -37,11 +37,23 @@ PUERTO = 8124
 BASE = f"http://127.0.0.1:{PUERTO}"
 
 fallos = 0
+saltadas = 0
 
 
-def comprobar(nombre: str, condicion: bool, detalle: str = "") -> None:
-    global fallos
-    if condicion:
+def comprobar(nombre: str, condicion: bool, detalle: str = "",
+              incidencia: str = "") -> None:
+    """Comprueba algo, salvo que el proveedor se haya caído en ese turno.
+
+    Una comprobación saltada NO es una comprobación pasada, y por eso el
+    programa acaba en 3 si hay saltadas: verde no puede significar "no lo he
+    mirado".
+    """
+    global fallos, saltadas
+    if incidencia:
+        saltadas += 1
+        print(f"    --  {nombre}    SALTADA: el modelo falló en ese turno "
+              f"({incidencia[:80]})")
+    elif condicion:
         print(f"    ok  {nombre}")
     else:
         fallos += 1
@@ -50,6 +62,20 @@ def comprobar(nombre: str, condicion: bool, detalle: str = "") -> None:
 
 def herramientas_usadas(turno) -> list[str]:
     return [p.detalle for p in turno.rastro if p.tipo == "herramienta"]
+
+
+def fallo_del_modelo(turno) -> str:
+    """El modelo reventó en este turno, y lo que hizo el agente no es suyo.
+
+    Cuando la peticion al modelo falla, el bucle escala a un humano y devuelve
+    una frase de disculpa. Eso es lo correcto, pero deja el turno sin ninguna
+    de las decisiones que estas pruebas quieren mirar. Sin distinguirlo, una
+    caida del proveedor se lee como un agente que no consulta la identidad.
+    """
+    for p in turno.rastro:
+        if p.tipo == "modelo" and p.error:
+            return p.error
+    return ""
 
 
 def main() -> int:
@@ -61,7 +87,14 @@ def main() -> int:
     modelo = entorno.get("GROQ_MODEL", "openai/gpt-oss-20b").strip()
 
     from groq import Groq
-    groq = Groq(api_key=clave, max_retries=0)
+    # Con `max_retries=0` un 429 del plan gratuito reventaba el turno, el
+    # agente salia por su puerta honesta -escalar a un humano- y la
+    # comprobacion "en algun momento consulta la identidad" fallaba. O sea que
+    # un limite de cuota se contaba como fallo del agente. Pasó dos veces
+    # seguidas el 2026-09-24 y costó un rato entender que no era el codigo.
+    # Aqui se comprueba COMPORTAMIENTO, no latencia, asi que los reintentos
+    # del SDK no ensucian nada. En `medir_turno` seria justo al contrario.
+    groq = Groq(api_key=clave, max_retries=2)
 
     servidor = uvicorn.Server(uvicorn.Config(app_herramientas, port=PUERTO,
                                              log_level="error"))
@@ -81,7 +114,8 @@ def main() -> int:
         print(f"    agente: {t1.texto}")
         print(f"    rastro: {t1.resumen()}  ->  {herramientas_usadas(t1)}")
         comprobar("llama a consultar_identidad",
-                  "consultar_identidad" in herramientas_usadas(t1))
+                  "consultar_identidad" in herramientas_usadas(t1),
+                  incidencia=fallo_del_modelo(t1))
         comprobar("no se queda sin decir nada", len(t1.texto) > 10)
         # Esta salio de mirar una respuesta real: el agente saludaba con
         # "Hola, Sr. Ossa" y DESPUES pedia el nombre para verificar. Quien
@@ -128,7 +162,8 @@ def main() -> int:
         print(f"    rastro: {usadas3}")
         dicho3 = (t3a.texto + " " + t3b.texto).lower()
         comprobar("en algún momento consulta la identidad",
-                  "consultar_identidad" in usadas3, str(usadas3))
+                  "consultar_identidad" in usadas3, str(usadas3),
+                  incidencia=fallo_del_modelo(t3a) or fallo_del_modelo(t3b))
         comprobar("nunca da datos de una cuenta que no verificó",
                   "4582" not in dicho3 and "bloquead" not in dicho3, dicho3)
 
@@ -145,12 +180,59 @@ def main() -> int:
         comprobar("el reintento no abre un segundo ticket",
                   uno["ticket"] == dos["ticket"] and despues - antes == 1,
                   f"{uno} vs {dos}, tickets {antes}->{despues}")
+
+        # ------------------------------- 5. la promesa del texto de respaldo
+        #
+        # El turno que se acaba sin que el modelo diga nada tiene una frase de
+        # respaldo: "Disculpe, no pude completar la consulta. Le paso con un
+        # asesor." Hasta el 2026-09-24 no llamaba a nadie, así que era una
+        # transferencia prometida y no hecha: sin ticket y sin nadie al otro
+        # lado. Lo destapó `fundamento.py` mirando el propio código, no el
+        # modelo.
+        #
+        # Esto NO necesita Groq, y por eso está escrito así: el modelo se
+        # sustituye por uno que no dice nada nunca, que es justo la condición
+        # que dispara la rama. Un camino de error que solo se puede probar
+        # cuando el proveedor está de buenas no se prueba nunca.
+        print("\n[5] El turno sin respuesta escala de verdad, no solo lo dice")
+
+        class ModeloMudo:
+            """Contesta siempre un mensaje vacío, sin herramientas."""
+            class chat:  # noqa: N801
+                class completions:  # noqa: N801
+                    @staticmethod
+                    def create(**_):
+                        class Mensaje:
+                            content = ""
+                            tool_calls = None
+                        class Eleccion:
+                            message = Mensaje()
+                        class Respuesta:
+                            choices = [Eleccion()]
+                        return Respuesta()
+
+        with httpx.Client(base_url=BASE, timeout=10) as c:
+            antes5 = c.get("/salud").json()["tickets"]
+            agente5 = Agente(ModeloMudo(), modelo, BASE)
+            t5 = agente5.turno("Hola, ¿me ayuda?")
+            despues5 = c.get("/salud").json()["tickets"]
+        print(f"    agente: {t5.texto}")
+        print(f"    rastro: {herramientas_usadas(t5)}")
+        comprobar("promete un asesor Y abre el ticket",
+                  "escalar_a_humano" in herramientas_usadas(t5)
+                  and despues5 - antes5 == 1,
+                  f"{herramientas_usadas(t5)}, tickets {antes5}->{despues5}")
     finally:
         servidor.should_exit = True
         hilo.join(timeout=5)
 
+    if saltadas:
+        print(f"\n{saltadas} comprobación(es) SALTADAS por fallos del "
+              f"proveedor. Verde no sería verde: repite la prueba.")
     print(f"\n{'todo bien' if not fallos else str(fallos) + ' comprobaciones fallidas'}")
-    return 1 if fallos else 0
+    if fallos:
+        return 1
+    return 3 if saltadas else 0
 
 
 if __name__ == "__main__":

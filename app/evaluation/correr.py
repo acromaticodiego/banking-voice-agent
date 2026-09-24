@@ -37,11 +37,12 @@ sys.path.insert(0, str(RAIZ / "probe"))
 
 from common import cargar_env  # noqa: E402
 
-from app.agent.loop import Agente  # noqa: E402
+from app.agent.loop import SISTEMA, Agente  # noqa: E402
 from app.agent.fundamento import revisar  # noqa: E402
 from app.evaluation.catalogo import Caso  # noqa: E402
 from app.evaluation.linea_base import decidir_sin_modelo  # noqa: E402
 from app.evaluation.particion import calibracion, reservado  # noqa: E402
+from app.evaluation.prompt_anterior import SISTEMA_ANTERIOR  # noqa: E402
 from app.tools.service import app as app_herramientas  # noqa: E402
 
 PUERTO = 8151
@@ -161,6 +162,25 @@ def main() -> int:
     parser.add_argument("--reservado", action="store_true",
                         help="SOLO para la medición final. Quema el conjunto.")
     parser.add_argument("--declaro-medicion-final", action="store_true")
+    # El presupuesto del turno por defecto son 3000 ms, y el turno de verdad
+    # mide 2389: 287 ms de margen. Lo que se mide AQUÍ son decisiones, no
+    # milisegundos, y con ese margen el reloj salta a mitad de conversación, el
+    # agente suelta la frase de relleno y el caso se queda sin desenlace
+    # ninguno. Pasó en 1-3 de 12 casos el 23/09 y en 8-10 de 12 el 24/09, al
+    # alargar el prompt: la caída de 6 a 4 aciertos no era el prompt decidiendo
+    # peor, era el prompt tardando más. Dos métricas que tienen que ser
+    # independientes dejaron de serlo.
+    #
+    # Así que por defecto esta medición corre con el reloj holgado y lo dice en
+    # la cabecera. Para medir latencia está `medir_turno`, que es donde el
+    # presupuesto es el objeto del estudio y no un estorbo.
+    parser.add_argument("--presupuesto-ms", type=float, default=15000.0,
+                        help="reloj del turno. Holgado a propósito: aquí se "
+                             "miden decisiones. Ponlo en 3000 para ver el "
+                             "sistema tal y como corre en la demo.")
+    parser.add_argument("--prompt-anterior", action="store_true",
+                        help="corre con el prompt de antes del 2026-09-24, "
+                             "para comparar el mismo día y con el mismo reloj")
     args = parser.parse_args()
 
     if args.reservado:
@@ -187,6 +207,7 @@ def main() -> int:
     # exactamente la sexta forma de medición falsa de este proyecto, así que se
     # anota aparte y se dice a gritos.
     incidencias: list[dict] = []
+    agotados: list[str] = []
 
     if args.linea_base:
         quien = "línea base (sin modelo)"
@@ -204,12 +225,22 @@ def main() -> int:
         # mentiría por 80 segundos.
         groq = Groq(api_key=entorno["GROQ_API_KEY"].strip(), max_retries=2)
         modelo = entorno.get("GROQ_MODEL", "openai/gpt-oss-20b").strip()
-        quien = f"agente ({modelo})"
+        sistema = SISTEMA_ANTERIOR if args.prompt_anterior else SISTEMA
+        quien = (f"agente ({modelo}, prompt "
+                 f"{'anterior' if args.prompt_anterior else 'actual'}, "
+                 f"presupuesto {args.presupuesto_ms:.0f} ms)")
         agentes: dict = {}
+        # Los turnos en los que salta el reloj, con nombre y apellido. Se leen
+        # de `turno.agotado`, que es la bandera de verdad del bucle, y no de
+        # buscar la frase de relleno en el texto: la frase se puede cambiar y
+        # el texto se puede parecer.
+        agotados: list[str] = []
 
         def hacer_turno(caso, frase):
             if caso.id not in agentes:
-                agentes[caso.id] = Agente(groq, modelo, BASE)
+                agentes[caso.id] = Agente(groq, modelo, BASE,
+                                          presupuesto_ms=args.presupuesto_ms,
+                                          sistema=sistema)
             agente = agentes[caso.id]
             if caso.fallar_herramienta:
                 original = agente._llamar
@@ -221,6 +252,8 @@ def main() -> int:
                     return original(nombre, argumentos, clave)
                 agente._llamar = caido
             turno = agente.turno(frase)
+            if turno.agotado:
+                agotados.append(caso.id)
             for p in turno.rastro:
                 if p.tipo == "modelo" and p.error:
                     incidencias.append({"caso": caso.id, "error": p.error})
@@ -276,6 +309,15 @@ def main() -> int:
         print("    (el clasificador no supo traducir la respuesta; se cuentan "
               "como fallo, nunca se fuerzan al esperado)")
 
+    if agotados:
+        unicos = sorted(set(agotados))
+        print(f"\n  RELOJ AGOTADO en {len(agotados)} turno(s) de "
+              f"{len(unicos)} caso(s): {unicos}")
+        print("    Esos turnos acabaron en la frase de relleno, así que el "
+              "caso no llegó a ningún desenlace: no cuentan como decisión del "
+              "agente. Si son muchos, esto es una medición de latencia "
+              "disfrazada de tarea completada.")
+
     if incidencias:
         afectados = sorted({i["caso"] for i in incidencias})
         print(f"\n  ¡OJO! {len(incidencias)} llamada(s) al modelo fallaron, en "
@@ -296,7 +338,9 @@ def main() -> int:
     destino.write_text(json.dumps(
         {"quien": quien, "conjunto": cual, "aciertos": aciertos,
          "total": len(resultados), "fugas": con_fuga, "promesas": con_promesa,
-         "sin_fundamento": sin_fundamento,
+         "sin_fundamento": sin_fundamento, "agotados": sorted(set(agotados)),
+         "presupuesto_ms": args.presupuesto_ms,
+         "prompt": "anterior" if args.prompt_anterior else "actual",
          "incidencias": incidencias, "resultados": resultados},
         indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nGuardado en {destino.name}")
