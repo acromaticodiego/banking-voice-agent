@@ -66,9 +66,14 @@ def arrancar() -> None:
     print("Cargando texto a voz...")
     voz = PiperVoice.load(str(RAIZ / "voices" / "es_MX-claude-high.onnx"))
 
+    from app.estado import desde_entorno as estado_desde_entorno
     from app.expediente import desde_entorno
     expediente = desde_entorno()
     print(f"Expediente: {type(expediente).__name__}")
+    estado = estado_desde_entorno()
+    print(f"Estado de la llamada: {type(estado).__name__}"
+          + ("" if estado.compartido else "  (NO compartido: no se puede "
+                                          "retomar en otra pasarela)"))
 
     entorno = cargar_env()
     from groq import Groq
@@ -79,6 +84,7 @@ def arrancar() -> None:
         "modelo": entorno.get("GROQ_MODEL", "openai/gpt-oss-20b").strip(),
         "dispositivo": dispositivo,
         "expediente": expediente,
+        "estado": estado,
     })
     print("\nListo.  ->  http://127.0.0.1:8000/\n")
 
@@ -96,9 +102,23 @@ async def conversacion(ws: WebSocket) -> None:
     llamada = Llamada(PIEZAS["asr"], PIEZAS["voz"], agente,
                       expediente=PIEZAS.get("expediente"))
 
+    # Retomar una llamada empezada en otra pasarela. El navegador vuelve con
+    # `?llamada=<id>` y aquí se recoge la conversación donde se quedó: es lo
+    # que hace cierta la frase de que esta pasarela no guarda nada suyo.
+    almacen_estado = PIEZAS.get("estado")
+    retomada = ws.query_params.get("llamada")
+    if retomada and almacen_estado is not None:
+        guardado = almacen_estado.cargar(retomada)
+        if guardado:
+            llamada.importar_estado(guardado)
+            print(f"  llamada {retomada} retomada en esta pasarela")
+
     await ws.send_text(json.dumps({
         "tipo": "estado", "texto": "escuchando",
-        "datos": {"dispositivo": PIEZAS["dispositivo"]}}))
+        "datos": {"dispositivo": PIEZAS["dispositivo"],
+                  "llamada": llamada.id_llamada,
+                  "retomada": bool(retomada and almacen_estado
+                                   and almacen_estado.cargar(retomada))}}))
 
     try:
         while True:
@@ -121,6 +141,12 @@ async def conversacion(ws: WebSocket) -> None:
             muestras = np.frombuffer(mensaje["bytes"],
                                      dtype=np.int16).astype(np.float32) / 32768.0
             avisos = llamada.empujar(muestras)
+
+            # Un turno cerrado es el momento de guardar: una vez por turno y
+            # no una vez por trozo de audio, que es lo que hace esto barato.
+            if any(a.tipo == "tiempos" for a in avisos) and almacen_estado:
+                almacen_estado.guardar(llamada.id_llamada,
+                                       llamada.exportar_estado())
 
             for aviso in avisos:
                 if aviso.tipo == "dice":

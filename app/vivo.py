@@ -6,15 +6,23 @@ Aquí **no existe todavía**: llega cuando quien habla lo produce, y el sistema 
 puede mirar el futuro. Es la misma tubería, pero empujada en vez de tirada.
 
 Todo el estado de la llamada vive en este objeto, uno por conexión. La pasarela
-no guarda nada suyo: si mañana este estado se mueve a Redis, se pueden levantar
-N pasarelas detrás de un balanceador y cualquiera atiende cualquier turno. Esa
-es la frase que hay que poder defender, y por eso el estado está aquí y no
-repartido por la pasarela.
+no guarda nada suyo, y desde el 2026-09-24 **eso está demostrado y no solo
+diseñado**: el estado conversacional se escribe en Redis al cerrar cada turno
+(`app/estado.py`), y `app/prueba_estado.py` atiende el primer turno en una
+pasarela y el segundo en otra distinta, con objetos nuevos y nada compartido en
+memoria, comprobando que en la petición de la segunda están los mensajes de la
+primera.
+
+Lo que NO viaja es el audio: el buffer de una intervención se llena y se vacía
+dentro de un mismo turno, y un turno lo atiende entera la pasarela que tiene el
+WebSocket abierto. Por eso esto se escribe una vez por turno y no una vez por
+trozo de 20 ms, que es lo que lo hace barato.
 """
 
 from __future__ import annotations
 
 import time
+import uuid
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -60,7 +68,10 @@ class Llamada:
         # Cuando no hay, el rastro sigue existiendo en los avisos y se pierde
         # al colgar, que es lo que pasaba siempre hasta el 2026-09-24.
         self.expediente = expediente
-        self.id_llamada = expediente.abrir() if expediente is not None else None
+        # El id existe siempre, aunque no haya expediente: es también la
+        # llave con la que otra pasarela puede retomar esta llamada.
+        self.id_llamada = (expediente.abrir() if expediente is not None
+                           else str(uuid.uuid4()))
         # Lo que ha dicho quien llama, para que el detector de fundamento
         # sepa que repetir un documento dictado no es inventárselo.
         self.dicho_por_quien_llama: list[str] = []

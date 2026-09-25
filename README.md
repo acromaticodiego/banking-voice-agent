@@ -9,8 +9,8 @@ devolvió y qué se revisó de lo que el agente contestó.
 **Estado (2026-09-24): el sistema funciona de punta a punta y está medido.**
 Se habla por el micrófono del navegador, el agente decide, llama herramientas,
 se recupera cuando fallan y contesta hablando. Lo que falta está al final, sin
-adornos: el estado de la llamada en curso todavía vive en memoria, no hay
-telefonía real, y la evaluación sobre el conjunto reservado no se ha hecho
+adornos: no hay telefonía real, no hay barge-in, y la evaluación sobre el
+conjunto reservado no se ha hecho
 —el reservado sigue **sin tocar**, que es lo que le da valor—.
 
 > **Lo que de verdad merece la pena de este repositorio no son los números
@@ -507,11 +507,11 @@ Sin adornos, y por orden de lo que más acerca esto a una llamada de verdad:
 3. **Barge-in**: hoy, mientras el agente habla, se ignora la entrada. Es una
    decisión declarada —sin cancelación de eco el micrófono capta la propia voz
    del agente— y es la métrica que falta.
-4. **El estado en Redis.** El expediente en PostgreSQL ya está —de cada
-   llamada queda qué se dijo, qué herramienta se llamó con qué argumentos, qué
-   devolvió y qué se revisó—, pero el estado de la llamada en curso sigue en
-   memoria, así que la frase "la pasarela no guarda nada y escala horizontal"
-   es verdad por diseño y no está demostrada.
+4. **El despliegue de varias pasarelas.** El expediente (PostgreSQL) y el
+   estado compartido (Redis) ya están, y hay una prueba que atiende un turno en
+   una pasarela y el siguiente en otra distinta. Lo que falta es el despliegue
+   en sí: dos procesos detrás de un balanceador. Lo demostrado es que **el
+   estado no las ata**, no que el despliegue exista.
 5. **Telefonía real** (Twilio Media Streams), que trae de regalo el audio de
    8 kHz de verdad y la latencia de red real.
 
@@ -528,5 +528,5 @@ la corrección de llamadas a herramientas y el barge-in.
 | texto → voz | `Piper` local / Deepgram Aura-2 | Piper da 136 ms de p95: ninguna ida y vuelta por red lo mejora |
 | modelo | `openai/gpt-oss-20b` en Groq | entra en el presupuesto del turno |
 | fin de habla | Silero VAD + fin de turno por contenido | ver `docs/adr/0002` |
-| estado | Redis | **previsto, no implementado.** La pasarela no guarda nada suyo, así que escala horizontal *por diseño* — pero eso hoy no está demostrado |
+| estado | Redis | el estado conversacional se escribe una vez por turno; el audio no viaja. Hay una prueba que atiende un turno en una pasarela y el siguiente en otra |
 | expediente | PostgreSQL | tres tablas, lo que devolvió cada herramienta guardado entero. Si la base cae, la llamada sigue y la pérdida se cuenta |

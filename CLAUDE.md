@@ -44,6 +44,7 @@ levantado, no solo compilando.
 | evaluación | `app/evaluation/` | 20 casos con su rúbrica y su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas, protocolo de la medición final |
 | fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números, acciones y —desde el 24/09— procedimientos inventados. Determinista, sin modelo |
 | confianza del ASR | `app/confianza.py` | resume lo que el modelo sabe de su propia transcripción. Se anota, no decide. ADR 0008 |
+| estado compartido | `app/estado.py` | el estado conversacional en Redis, una escritura por turno. Otra pasarela puede retomar la llamada, y hay prueba de que lo hace |
 | expediente | `app/expediente/` | lo que queda al colgar en PostgreSQL: qué se dijo, qué herramienta con qué argumentos, qué devolvió y qué se revisó. Se lee con `-m app.expediente.leer` |
 | detector adaptativo | `app/deteccion_voz.py` | **NO está en uso.** Se puso y se revirtió el 24/09: ver ADR 0009. Se conserva con sus pruebas por el hallazgo |
 | canal telefónico | `probe/linea_telefonica.py` | 300–3400 Hz, 8 kHz y µ-law: el audio como llega por una llamada. Se comprueba solo |
@@ -67,6 +68,7 @@ docker compose up -d       # PostgreSQL (expediente) y Redis. Sin esto el
 .\.venv\Scripts\python.exe -m app.prueba_confianza          # el filtro de voz sigue puesto, sin cuota ni GPU
 .\.venv\Scripts\python.exe -m app.prueba_deteccion_voz     # el detector de voz y su limite conocido, sin cuota ni GPU
 .\.venv\Scripts\python.exe -m app.prueba_expediente        # el expediente. SIN Postgres sale con codigo 2, no con 0
+.\.venv\Scripts\python.exe -m app.prueba_estado            # turno 1 en una pasarela, turno 2 en otra. SIN Redis, codigo 2
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
@@ -676,10 +678,26 @@ datos caída no puede tumbar una llamada en curso**. Se sigue atendiendo y se
 anota la pérdida; `fallos` y `ultimo_error` son parte de la interfaz, porque un
 expediente que se pierde en silencio es peor que no tenerlo.
 
-**Lo que queda: el estado en Redis.** Mover el estado de `Llamada` a Redis es
-lo que permitiría defender que la pasarela no guarda nada y escala horizontal
-—hoy es verdad por diseño pero **sigue sin estar demostrado**—. El contenedor
-ya está en `docker-compose.yml` y no lo usa nadie todavía.
+**Y el estado en Redis también, el mismo día.** La frase "la pasarela no
+guarda nada suyo y escala horizontal" **ya no es una promesa de diseño**:
+`app/prueba_estado.py` atiende el turno 1 en una pasarela y el turno 2 en otra
+distinta —objetos nuevos, otro modelo de mentira, nada compartido en memoria— y
+comprueba que en la petición de la segunda están los mensajes de la primera.
+Verificado también con una llamada real: tras `prueba_pasarela`, el estado
+aparece en Redis con `esperando: "documento"` y la historia entera.
+
+Lo que viaja es la conversación (historia, silencios, documentos ya probados,
+consumo, qué se estaba esperando). Lo que NO viaja es el audio, y esa
+distinción es la que lo hace barato: **una escritura por turno, no una por
+trozo de 20 ms**. El prompt del sistema tampoco viaja, a propósito: si viajara,
+una pasarela con el prompt nuevo seguiría atendiendo con el viejo durante horas
+y las mediciones por prompt del ADR 0005 dejarían de significar nada. Hay
+prueba de las dos cosas.
+
+**Lo que queda de este punto:** el `docker compose up -d` es manual, y una
+llamada solo se retoma si el navegador vuelve con `?llamada=<id>`. Levantar dos
+pasarelas de verdad detrás de un balanceador no se ha hecho: lo que está
+demostrado es que el estado no las ata, no que el despliegue exista.
 
 ### ~~9. Coste por conversación~~ INSTRUMENTADO el 2026-09-24, falta medirlo
 Los tokens se cuentan por paso, por turno y por conversación, y el contador
