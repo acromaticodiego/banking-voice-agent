@@ -504,9 +504,12 @@ Sin adornos, y por orden de lo que más acerca esto a una llamada de verdad:
    micrófono y un hablante**. Ese es el techo del proyecto ahora mismo, y hoy
    ya causó un problema: un cambio calibrado contra esa única sala hubo que
    revertirlo (la número 12 de la lista de arriba).
-3. **Barge-in**: hoy, mientras el agente habla, se ignora la entrada. Es una
-   decisión declarada —sin cancelación de eco el micrófono capta la propia voz
-   del agente— y es la métrica que falta.
+3. **Barge-in por navegador.** Interrumpir al agente ya funciona **por
+   teléfono**: 400 ms de voz seguida le cortan la palabra, lo que dijo quien
+   interrumpe no se pierde, y se manda `clear` para que la línea deje de sonar.
+   Se comprobó sin micrófono, con el emulador. En el navegador sigue apagado a
+   propósito: sin cancelación de eco comprobada, el sistema se interrumpiría a
+   sí mismo.
 4. **El despliegue de varias pasarelas.** El expediente (PostgreSQL) y el
    estado compartido (Redis) ya están, y hay una prueba que atiende un turno en
    una pasarela y el siguiente en otra distinta. Lo que falta es el despliegue

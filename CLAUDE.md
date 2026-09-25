@@ -71,6 +71,7 @@ docker compose up -d       # PostgreSQL (expediente) y Redis. Sin esto el
 .\.venv\Scripts\python.exe -m app.prueba_expediente        # el expediente. SIN Postgres sale con codigo 2, no con 0
 .\.venv\Scripts\python.exe -m app.prueba_estado            # turno 1 en una pasarela, turno 2 en otra. SIN Redis, codigo 2
 .\.venv\Scripts\python.exe -m app.prueba_telefonia         # el canal de Twilio, sin Twilio. G.711 contra audioop
+.\.venv\Scripts\python.exe -m app.prueba_interrupcion      # cortar al agente (metrica 6), sin microfono
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
@@ -649,12 +650,35 @@ del turno y no solo la apertura—. Hace falta grabar, y grabar es cosa de Juan
 Diego: unos minutos de voz y de ruido de fondo en otro sitio, mejor con el
 móvil en manos libres.
 
-### 6. Barge-in, que exige cancelación de eco
-Hoy, mientras el agente habla, **se ignora la entrada**, y está declarado como
-decisión: sin cancelación de eco el micrófono capta la propia voz del agente y
-el sistema se contesta a sí mismo. El navegador ofrece `echoCancellation` y ya
-está pedido en `getUserMedia`, pero no se ha comprobado que baste. Es la
-métrica 6 y es lo que más se nota en una demo: poder interrumpir al agente.
+### ~~6. Barge-in~~ HECHO POR TELÉFONO el 2026-09-24. Por navegador, no
+Llevaba semanas bloqueado por dos razones ciertas —sin cancelación de eco el
+micrófono capta la propia voz del agente, y había que oírlo para saber si
+funciona—. **El canal telefónico quita las dos**: la línea ya cancela el eco, y
+el emulador de Twilio permite mandar voz mientras el agente habla y mirar qué
+pasa. Así que se implementó y se comprobó entero, sin micrófono y sin nadie
+delante (`app/prueba_interrupcion.py`).
+
+  · Hace falta **400 ms de voz seguida** para cortar. La racha se rompe con un
+    solo trozo de silencio, que es lo que distingue una interrupción de tres
+    sílabas sueltas.
+  · **El audio de la interrupción no se pierde**: los 2 s anteriores se guardan
+    y pasan a ser el principio del turno nuevo. Sin eso, quien interrumpe
+    diciendo "espere, mi cédula es otra" sería oído desde "cédula es otra".
+  · Por la línea se manda **`clear`**, que es lo que hace que el corte se note:
+    sin él el agente se calla por dentro y sigue sonando por el teléfono varios
+    segundos.
+
+**Los 400 ms están razonados y NO medidos, y hay que decirlo.** El
+razonamiento: un "ajá" o una tos rondan los 200 ms y una palabra entera pasa de
+400. Medirlo de verdad necesita grabaciones de gente interrumpiendo —con la
+duración de cada interjección—, y eso va con el punto 5.
+
+**Y por navegador sigue apagado, a propósito.** `permitir_interrupcion` está en
+falso salvo en el canal de Twilio; en la página web, sin cancelación de eco
+comprobada, el sistema se interrumpiría a sí mismo cada vez que abriera la
+boca. El navegador ofrece `echoCancellation` y ya está pedido en
+`getUserMedia`, pero **no se ha comprobado que baste**, y eso sí necesita a
+Juan Diego con el micrófono.
 
 ### 7. Telefonía real con Twilio Media Streams
 **Falsa alarma del 24/09, que conviene conocer antes de repetirla:** pareció
@@ -813,10 +837,33 @@ manera de que el número del reservado se pueda comparar con algo.
 
 **Lo que esos cambios NO tocan, y conviene saberlo antes de preocuparse:** la
 evaluación corre sobre turnos de **texto**, no de audio (`caso.turnos` son
-frases). Ni el filtro ni el detector entran en esa ruta, así que no
-contaminan la comparación entre corridas; lo que sí cambió para la evaluación
-fue el agente del 24/09 por la mañana (turno vacío y tres intentos de
-documento).
+frases). Ni el filtro ni el detector de voz entran en esa ruta. Lo que **sí**
+cambió para la evaluación el 24/09, y hay que tenerlo delante al comparar:
+
+  · por la mañana, el **turno vacío** y los **tres intentos de documento**;
+  · por la tarde, el **detector de procedimientos inventados**, que hace que
+    "dijo lo que no le consta" cuente más cosas. **Las cifras anteriores al
+    24/09 no son comparables con las de después.**
+
+`estabilidad.py` reclasifica con el detector del día, así que releer lo
+guardado sí compara bien. Pero la tabla de LOS NÚMEROS lleva cifras de antes:
+por eso las 3 corridas del paso 1 no son una formalidad.
+
+### Lo que se hizo el 24/09 después de quedarse sin cuota
+
+Cinco puntos del plan cayeron en una tarde, todos sin gastar una petición:
+
+| | |
+|---|---|
+| **ADR 0008** | el filtro de voz. 16 de 64 clips de silencio se transcribían como frases; con él, 0. **Está en el sistema** |
+| **ADR 0009** | el detector de voz adaptativo. **Revertido el mismo día**: rompía el cierre del turno y el problema que resolvía no existía |
+| **procedimientos** | el detector caza "acuda a una sucursal", "necesitamos que esté presente", los plazos y las promesas de que alguien llamará. 10 de 147 respuestas reales, 0 falsos positivos |
+| **punto 8** | expediente en PostgreSQL y estado en Redis, los dos verificados contra las bases de verdad |
+| **punto 7** | el canal de Twilio: G.711 propio verificado contra `audioop` en los 65 536 valores, protocolo emulado, endpoint probado con socket real |
+| **punto 6** | barge-in **por teléfono**: 400 ms de voz cortan al agente, el audio no se pierde, se manda `clear` |
+
+Y el precio de Groq quedó confirmado (0,075 y 0,30 $/millón), así que la
+métrica 5 sale sola con la corrida del reservado.
 
 ### 0. Antes de nada: ¿hay cuota?
 
@@ -872,19 +919,28 @@ tokens ya se cuentan.
 
 ### Si no hay cuota, esto avanza sin gastar nada
 
-En este orden de valor:
+Las tres cosas que estaban en esta lista se hicieron el 24/09 (barge-in por
+teléfono, expediente y estado, el ADR 0008). Lo que queda sin cuota, por orden
+de valor:
 
-1. **Barge-in** (punto 6): es lo que más se nota en una demo y lo único que
-   falta de las seis métricas junto al coste. Hace falta probarlo a mano con el
-   micrófono, así que requiere a Juan Diego delante.
-2. **El expediente en PostgreSQL y el estado en Redis** (punto 8): el proyecto
-   promete que al colgar queda un expediente y hoy se pierde al cerrar el
-   proceso. Es la mayor distancia entre lo que promete y lo que hace.
-3. ~~**El ADR que falta**~~ HECHO el 24/09 con el día de cuota ya quemado: es
-   el ADR 0008, y salió con su medición de 106 clips sin gastar un token.
+1. **Grabar voz en otra habitación** (punto 5). Es el techo de todo lo medido:
+   una sola sala, un micrófono, un hablante. El 24/09 eso ya costó una
+   reversión entera (ADR 0009). No hace falta cuota ni tocar código:
+   `probe/confianza_asr.py`, `probe/sordera_asr.py` y `probe/umbral_voz.py`
+   miden con lo que haya. **Requiere a Juan Diego con un micrófono**, unos
+   minutos de voz y de ruido de fondo en otro sitio.
+2. **La llamada real por Twilio** (punto 7). El canal está comprobado entero;
+   falta cuenta, número y túnel. Los pasos y las trampas, en
+   `docs/telefonia.md`; antes de marcar, `probe\check_telefonia.py`.
+   **Requiere a Juan Diego** creando dos cuentas gratuitas.
+3. **Barge-in por navegador** (lo que queda del punto 6). Por teléfono está
+   hecho; en la web sigue apagado porque no se ha comprobado que el
+   `echoCancellation` del navegador baste. **Requiere a Juan Diego con el
+   micrófono.**
+4. **Métrica 3, corrección de las llamadas a herramientas.** Es la única de las
+   seis que no se ha empezado, y no está claro que aporte mucho: el detector de
+   fundamento ya mira si lo dicho tiene respaldo, que es la mitad interesante.
 
-Y una que no estaba en la lista y ahora sí, porque el 0008 la dejó preparada:
-**grabar voz en otra habitación** (punto 5). No hace falta cuota, solo un
-micrófono y un rato de ruido de fondo; `probe/confianza_asr.py` mide con lo que
-haya sin tocar código, y hoy todo el proyecto descansa sobre el suelo de ruido
-de una sola sala callada.
+Ojo con el patrón: **casi todo lo que queda necesita a Juan Diego**, no código.
+Lo que un agente puede avanzar solo se está acabando, y eso es una señal de que
+el proyecto está más cerca del final de lo que parece.

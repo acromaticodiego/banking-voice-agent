@@ -96,6 +96,7 @@ class PuenteTwilio:
         self.trozos_enviados = 0
         self.marcas_recibidas = 0
         self.dtmf: list = []
+        self.interrupciones = 0
 
     # ------------------------------------------------------------- recepción
 
@@ -156,6 +157,13 @@ class PuenteTwilio:
         for aviso in self.llamada.empujar(muestras):
             if aviso.tipo == "oido":
                 self.transcripciones.append(aviso.texto)
+            elif aviso.tipo == "interrumpido":
+                # Quien llama ha cortado al agente. `clear` tira lo que Twilio
+                # tenga en cola, y eso es lo que hace que el corte se NOTE: sin
+                # él, el agente se calla en el sistema y sigue oyéndose por la
+                # línea varios segundos, que es peor que no interrumpir.
+                self.interrupciones += 1
+                salida.append(self.callar())
             elif aviso.tipo == "dice":
                 self.dicho_por_el_agente.append(aviso.texto)
                 salida.extend(self.hablar(aviso.datos["pcm"],
