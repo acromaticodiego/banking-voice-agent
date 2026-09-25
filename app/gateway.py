@@ -122,8 +122,12 @@ async def twilio_stream(ws: WebSocket) -> None:
     await ws.accept()
     agente = Agente(PIEZAS["groq"], PIEZAS["modelo"], BASE_HERRAMIENTAS,
                     adelantar=True)
+    # `permitir_interrupcion=True` solo aquí: por teléfono la línea ya cancela
+    # el eco, así que se puede escuchar mientras el agente habla. En el
+    # navegador sigue apagado, y el motivo está en `app/vivo.py`.
     llamada = Llamada(PIEZAS["asr"], PIEZAS["voz"], agente,
-                      expediente=PIEZAS.get("expediente"))
+                      expediente=PIEZAS.get("expediente"),
+                      permitir_interrupcion=True)
     puente = PuenteTwilio(llamada)
     almacen_estado = PIEZAS.get("estado")
 

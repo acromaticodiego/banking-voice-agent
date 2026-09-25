@@ -34,6 +34,26 @@ from app.fin_de_turno import parece_incompleto
 
 FRECUENCIA = 16000
 TROZO_MS = 20
+
+# Cuánta voz seguida hace falta para cortar al agente mientras habla.
+#
+# **Este número está razonado y NO medido**, y conviene que se sepa. El
+# razonamiento: un "ajá" o una tos duran del orden de 200 ms y no deben cortar
+# a nadie; una palabra entera pasa de 400. Por debajo, el agente se callaría
+# cada vez que alguien carraspea; por encima, quien interrumpe tiene que gritar
+# media frase antes de que le hagan caso, que es exactamente la sensación que
+# el barge-in viene a quitar.
+#
+# Lo que falta para medirlo de verdad son grabaciones de gente interrumpiendo:
+# interjecciones, toses y frases cortas, con la duración de cada una. Con eso
+# el corte se elige con datos en vez de con un párrafo. Está en el punto 5 del
+# plan, junto a las demás voces.
+MS_PARA_INTERRUMPIR = 400
+
+# Cuánto audio se guarda mientras el agente habla, por si resulta ser una
+# interrupción. Si se tirara, el turno nuevo empezaría a media palabra: quien
+# interrumpe diría "espera, mi cédula es..." y el sistema oiría "cédula es...".
+MS_DE_GUARDA = 2000
 MUESTRAS_POR_TROZO = FRECUENCIA * TROZO_MS // 1000
 
 # Amplitud media por encima de la cual un trozo de 20 ms cuenta como voz, en la
@@ -62,7 +82,8 @@ class Llamada:
 
     def __init__(self, asr, voz, agente, ventana_ms: int = 300,
                  ventana_larga_ms: int = 1200, voz_minima_ms: int = 600,
-                 max_reanudaciones: int = 2, expediente=None) -> None:
+                 max_reanudaciones: int = 2, expediente=None,
+                 permitir_interrupcion: bool = False) -> None:
         # El expediente es opcional a propósito: la demo tiene que poder correr
         # sin base de datos, y las pruebas del turno no deberían necesitar una.
         # Cuando no hay, el rastro sigue existiendo en los avisos y se pierde
@@ -93,6 +114,15 @@ class Llamada:
         # ambiguo; sabiendo que se pidió el documento, es una cédula a medias.
         self.esperando: str | None = None
         self.hablando = False
+        # Poder cortar al agente mientras habla. Apagado por defecto, y no por
+        # prudencia genérica: en el navegador, sin cancelación de eco, el
+        # micrófono capta la propia voz del agente y el sistema se
+        # interrumpiría a sí mismo cada vez que abre la boca. Por teléfono la
+        # línea ya cancela el eco, y por eso el canal de Twilio lo enciende.
+        self.permitir_interrupcion = permitir_interrupcion
+        self.interrupciones = 0
+        self._voz_durante_respuesta_ms = 0
+        self._audio_de_guarda: list[np.ndarray] = []
 
     # ------------------------------------------------------------------ audio
 
@@ -102,14 +132,80 @@ class Llamada:
     def empujar(self, muestras: np.ndarray):
         """Recibe audio del navegador. Devuelve avisos si hay turno que cerrar.
 
-        Mientras el agente habla se ignora la entrada. Es una decisión, no un
-        descuido: sin cancelación de eco, el micrófono abierto capta la propia
-        voz del agente y el sistema se contesta a sí mismo. El barge-in de
-        verdad necesita esa cancelación y todavía no está.
+        Mientras el agente habla, lo que pase depende de `permitir_interrupcion`:
+
+          · **Apagado** (el navegador): se ignora la entrada. Sin cancelación de
+            eco, el micrófono abierto capta la propia voz del agente y el
+            sistema se contestaría a sí mismo.
+          · **Encendido** (el teléfono): se escucha, y si quien llama habla lo
+            bastante seguido, se le corta la palabra al agente. La línea
+            telefónica ya trae cancelación de eco, así que ahí sí se puede.
         """
         if self.hablando:
-            return []
+            if not self.permitir_interrupcion:
+                return []
+            avisos = self._escuchar_por_si_interrumpe(muestras)
+            # Si interrumpió, el audio guardado —este trozo incluido— ya está
+            # en el buffer y los contadores puestos. NO se llama a `_acumular`:
+            # volvería a meter el mismo trozo y el turno empezaría con un eco
+            # de sí mismo. El turno se cerrará en el siguiente empujón, que ya
+            # llega con `hablando` en falso.
+            return avisos
+        return self._acumular(muestras)
 
+    def _escuchar_por_si_interrumpe(self, muestras: np.ndarray):
+        """¿Está quien llama hablando por encima del agente?
+
+        Cuenta voz **seguida**: la racha se rompe con un solo trozo de
+        silencio. Es lo que distingue una interrupción de verdad de un golpe en
+        la mesa o de una sílaba suelta, y es lo que hace que el número de
+        `MS_PARA_INTERRUMPIR` signifique algo.
+        """
+        self._audio_de_guarda.append(muestras)
+        guarda_maxima = FRECUENCIA * MS_DE_GUARDA // 1000
+        total = sum(len(t) for t in self._audio_de_guarda)
+        while total > guarda_maxima and len(self._audio_de_guarda) > 1:
+            total -= len(self._audio_de_guarda.pop(0))
+
+        for i in range(0, len(muestras), MUESTRAS_POR_TROZO):
+            trozo = muestras[i:i + MUESTRAS_POR_TROZO]
+            if len(trozo) == 0:
+                continue
+            if self._hay_voz(trozo):
+                self._voz_durante_respuesta_ms += TROZO_MS
+            else:
+                self._voz_durante_respuesta_ms = 0
+
+            if self._voz_durante_respuesta_ms >= MS_PARA_INTERRUMPIR:
+                return self._interrumpir()
+        return []
+
+    def _interrumpir(self):
+        """Cortar al agente y quedarse con lo que la persona ya había dicho."""
+        self.hablando = False
+        self.interrupciones += 1
+        ms = self._voz_durante_respuesta_ms
+        self._voz_durante_respuesta_ms = 0
+
+        # Lo guardado pasa a ser el principio del turno nuevo. Sin esto, el
+        # turno empezaría a media palabra.
+        guardado = self._audio_de_guarda
+        self._audio_de_guarda = []
+        self.buffer.extend(guardado)
+        muestras_guardadas = sum(len(t) for t in guardado)
+        self.voz_ms = ms
+        self.silencio_ms = 0
+        self.ultimo_con_voz = time.perf_counter()
+        self.ventana_actual = self.ventana_ms
+
+        return [Aviso("interrumpido", "", {
+            "ms_de_voz": ms,
+            "muestras_recuperadas": int(muestras_guardadas),
+            "interrupciones": self.interrupciones,
+        })]
+
+    def _acumular(self, muestras: np.ndarray):
+        """El camino normal: acumular audio y cerrar el turno cuando toque."""
         self.buffer.append(muestras)
         for i in range(0, len(muestras), MUESTRAS_POR_TROZO):
             trozo = muestras[i:i + MUESTRAS_POR_TROZO]
@@ -301,6 +397,8 @@ class Llamada:
 
     def _reiniciar(self) -> None:
         self.buffer.clear()
+        self._voz_durante_respuesta_ms = 0
+        self._audio_de_guarda = []
         self.silencio_ms = 0
         self.voz_ms = 0
         self.ultimo_con_voz = None
