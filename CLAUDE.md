@@ -695,7 +695,13 @@ para que no se despeguen. Lo que hay que saber de memoria:
     dura para siempre, el trial 30 días.
   · **Twilio reproduce un aviso del trial antes de tu TwiML** y solo se quita
     pagando; en el vídeo se corta en edición.
-  · **Exige `wss://` con certificado válido.** De ahí el túnel.
+  · **Exige `wss://` con certificado válido.** De ahí el túnel. **ngrok ya está
+    en la máquina**, en `Desktop\ngrok-v3-stable-windows-amd64\ngrok.exe`
+    (v3.39.11), y solo le falta el authtoken de una cuenta gratuita: sin él,
+    ngrok v3 no arranca.
+  · Antes de marcar: `probe\check_telefonia.py`, que comprueba las cinco cosas
+    que fallan en silencio, incluida la peor — que el `.env` apunte al túnel de
+    la sesión anterior de ngrok, porque la URL cambia en cada arranque.
   · Twilio NO es software libre, por si vuelve a salir la duda: es un servicio
     de pago con crédito de prueba. La alternativa libre de verdad es
     FreeSWITCH o Asterisk con un softphone, y entonces **no hay número de la

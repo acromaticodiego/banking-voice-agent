@@ -52,13 +52,20 @@ permanente.** Necesitas grabar el vídeo. El vídeo dura para siempre; el trial,
 
 Twilio tiene que alcanzar tu portátil, y exige **`wss://` con certificado
 válido** — no acepta `ws://` ni un certificado autofirmado. Un túnel lo
-resuelve. Ninguno está instalado en esta máquina todavía:
+resuelve, y **ngrok ya está en esta máquina**, versión 3.39.11:
+
+```
+C:\Users\ASUS\Desktop\ngrok-v3-stable-windows-amd64\ngrok.exe
+```
+
+Le falta una sola cosa: el **authtoken**. ngrok v3 no arranca sin él, y sale de
+una cuenta gratuita en `ngrok.com` (Setup & Installation → copiar el token).
+Una vez y para siempre:
 
 ```powershell
-# ngrok: cuenta gratuita, hace falta el token una vez
-choco install ngrok      # o descargarlo de ngrok.com
-ngrok config add-authtoken <tu-token>
-ngrok http 8000
+$ngrok = "C:\Users\ASUS\Desktop\ngrok-v3-stable-windows-amd64\ngrok.exe"
+& $ngrok config add-authtoken <tu-token>
+& $ngrok http 8000
 ```
 
 Eso imprime una URL del tipo `https://algo.ngrok-free.app`. **Cámbiale el
@@ -88,15 +95,28 @@ in**:
 Es `/twilio/voz` —el que devuelve el XML— y **no** `/twilio`, que es el
 WebSocket. Confundirlos da un error de TwiML que no dice gran cosa.
 
-### 5. Levantar todo y llamar
+### 5. Levantar todo, comprobar, y llamar
 
 ```powershell
 docker compose up -d                                          # expediente y estado
 .\.venv\Scripts\python.exe -m uvicorn app.gateway:app --port 8000
-ngrok http 8000                                               # en otra ventana
+& $ngrok http 8000                                            # en otra ventana
 ```
 
-Y llamar al número desde el móvil verificado.
+Y antes de marcar, la comprobación que existe justo para no depurar esto por
+teléfono:
+
+```powershell
+.\.venv\Scripts\python.exe probe\check_telefonia.py
+```
+
+Mira cinco cosas: que la pasarela responda, que el TwiML salga, que haya un
+túnel abierto, que `TWILIO_STREAM_URL` tenga la forma correcta, **y que apunte
+al túnel que está abierto ahora mismo** — la trampa de ngrok gratuito, que
+cambia de URL en cada arranque. Si algo falta, imprime el comando que lo
+arregla.
+
+Con todo en verde, llamar al número desde el móvil verificado.
 
 ## Si algo no va
 
