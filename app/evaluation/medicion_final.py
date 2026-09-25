@@ -78,7 +78,8 @@ sys.path.insert(0, str(RAIZ / "probe"))
 
 from common import cargar_env  # noqa: E402
 
-from app.agent.loop import SISTEMA  # noqa: E402
+from app.agent.loop import HERRAMIENTAS, SISTEMA  # noqa: E402
+from app.evaluation import cuota  # noqa: E402
 from app.evaluation.correr import (BASE, PUERTO, acierta,  # noqa: E402
                                    correr_caso, turno_del_agente)
 from app.evaluation.particion import calibracion, reservado  # noqa: E402
@@ -125,6 +126,61 @@ def esperar_cuota(groq, modelo: str, minimo: int = 6000) -> None:
     print("    AVISO: la cuota no se recuperó; la corrida puede salir sucia")
 
 
+def hay_sitio_para(casos, corridas: int,
+                   libro_vacio_asumido: bool = False) -> tuple[bool, str]:
+    """¿Cabe la medición ENTERA en lo que queda de la ventana de 24 h?
+
+    Esto es lo que faltaba, y faltaba justo donde más dolía.
+    `hay_cuota_para_empezar` comprueba que UNA petición del tamaño real pase, y
+    su propio docstring dice que existe para que no ocurra esto: «si el
+    protocolo arranca, hace dos corridas y se queda sin cuota a la tercera...
+    medio reservado gastado no es medio reservado». Una petición que pasa no
+    dice nada de si caben cinco corridas.
+
+    El 2026-09-25 lo demostró sin tocar el reservado: la sonda de límites
+    respondió «pasa. Hay cuota para medir», y la siguiente corrida de
+    calibración murió a mitad con `Used 199423` de 200 000. Si ese día se
+    hubiera elegido correr el reservado, el canario habría dado luz verde y el
+    conjunto se habría gastado a medias.
+
+    El margen es del 50%. No es un número redondo por gusto: el libro solo ve
+    lo que pasa por el código instrumentado, así que `disponible()` es una cota
+    SUPERIOR de lo que queda, y arrancar con lo justo es arrancar creyendo la
+    cota optimista. Medio conjunto de más cabe en cualquier ventana sana y
+    descarta las ventanas medio gastadas, que son las peligrosas.
+    """
+    necesarios = cuota.estimar(casos, corridas)
+    con_margen = int(necesarios * 1.5)
+    queda = cuota.disponible()
+    if cuota.libro_ciego() and libro_vacio_asumido:
+        return True, (f"el libro está vacío y se ha declarado que la ventana "
+                      f"está limpia: se asume que caben las {corridas} corridas "
+                      f"(~{necesarios} tokens). Queda dicho quién lo asumió")
+    if cuota.libro_ciego():
+        return False, (
+            f"el libro NO TIENE NI UN APUNTE en las últimas 24 h, así que no "
+            f"puede afirmar que caben las {corridas} corridas (~{necesarios} "
+            f"tokens). Un libro vacío no dice «hay cuota», dice «no sé»: puede "
+            f"estar así porque de verdad no se ha gastado nada, o porque el "
+            f"gasto fue por fuera del código que anota. Si la ventana está "
+            f"limpia de verdad, dilo con --libro-sin-apuntes-lo-asumo")
+    if queda >= con_margen:
+        return True, (f"caben las {corridas} corridas: hacen falta ~{necesarios} "
+                      f"tokens (~{con_margen} con margen) y el libro dice que "
+                      f"quedan ~{queda} de {cuota.LIMITE_VENTANA}")
+    espera = cuota.espera_para(con_margen)
+    if espera is None:
+        cuando = (f"NUNCA: {con_margen} tokens no caben en una ventana de "
+                  f"{cuota.LIMITE_VENTANA}. Hay que bajar k o partir la medición")
+    elif espera <= 0:
+        cuando = "ya mismo (el libro acaba de cambiar)"
+    else:
+        cuando = (f"dentro de {espera / 60:.0f} min, sobre las "
+                  f"{time.strftime('%H:%M', time.localtime(time.time() + espera))}")
+    return False, (f"NO caben: hacen falta ~{necesarios} tokens (~{con_margen} "
+                   f"con margen) y quedan ~{queda}. Habrá sitio {cuando}")
+
+
 def es_limite_diario(incidencias: list[dict]) -> bool:
     """¿El problema es el límite DIARIO de tokens?
 
@@ -139,7 +195,7 @@ def es_limite_diario(incidencias: list[dict]) -> bool:
     return any("tokens per day" in i.get("error", "") for i in incidencias)
 
 
-def hay_cuota_para_empezar(groq, modelo: str) -> tuple[bool, str]:
+def hay_cuota_para_empezar(groq, modelo: str) -> tuple[bool, str, bool]:
     """Una petición del tamaño real, ANTES de tocar el reservado.
 
     Esto no es prudencia de más: es que un reservado se gasta al mirarlo, y se
@@ -149,31 +205,66 @@ def hay_cuota_para_empezar(groq, modelo: str) -> tuple[bool, str]:
     visto por pantalla. Medio reservado gastado no es medio reservado: es un
     reservado del que ya se sabe algo.
 
-    El límite diario no sale en ninguna cabecera, así que la única forma de
-    preguntarlo es pedir algo del tamaño de lo que se va a pedir y ver si lo
+    El límite de la ventana no sale en ninguna cabecera, así que la única forma
+    de preguntarlo es pedir algo del tamaño de lo que se va a pedir y ver si lo
     rechazan.
+
+    Devuelve tres cosas, y la tercera es la que faltaba: si el fallo fue por
+    cuota o por otra cosa. El 2026-09-25 esta función anunció que no había
+    cuota cuando lo que había fallado era su propia petición de prueba con un
+    400 (`Tool choice is none, but model called a tool`): el prompt del sistema
+    habla de herramientas, no se le declaraba ninguna, y el modelo intentó
+    llamar a una. Confundir «mi prueba falló» con «no hay sitio» es el mismo
+    error que el proyecto ya cometió tres veces con los límites por minuto y el
+    de la ventana.
+
+    La causa de aquel 400 era que la petición mandaba el prompt del sistema
+    —que le dice al modelo que tiene herramientas— sin declarar ninguna. Se
+    arregla declarándolas, como ya hacía `probe/limites_groq.py`, y no
+    cambiándole la frase al cliente: así la petición es de verdad del tamaño de
+    las que se van a hacer, que es todo el punto de esta comprobación.
     """
     try:
         groq.chat.completions.create(
             model=modelo,
             messages=[{"role": "system", "content": SISTEMA},
                       {"role": "user", "content": "Hola, mi cédula es 1070234567"}],
+            tools=HERRAMIENTAS, tool_choice="auto",
             max_tokens=400, reasoning_effort="low")
-        return True, ""
+        return True, "", True
     except Exception as exc:  # noqa: BLE001
-        return False, f"{type(exc).__name__}: {str(exc)[:200]}"
+        motivo = f"{type(exc).__name__}: {str(exc)[:200]}"
+        return False, motivo, cuota.es_falta_de_cuota(str(exc))
 
 
 def una_corrida(casos, groq, modelo: str) -> dict:
-    """Una pasada por todos los casos, con su contabilidad."""
+    """Una pasada por todos los casos, con su contabilidad.
+
+    El `consumo` no estaba y tenía que estar: hasta el 2026-09-25 este módulo
+    llamaba a `turno_del_agente` sin pasarlo, así que el artefacto de la
+    medición final salía con `consumo: null`. CLAUDE.md, mientras tanto,
+    prometía que la métrica 5 —el coste por conversación— saldría «de regalo»
+    con la corrida del reservado. No habría salido, y arreglarlo después de
+    quemar el reservado significaría no poder medirla nunca sobre ese conjunto.
+    """
     incidencias: list[dict] = []
     agotados: list[str] = []
+    consumo: dict[str, dict] = {}
     hacer_turno = turno_del_agente(groq, modelo, PRESUPUESTO_MS, SISTEMA,
-                                   incidencias, agotados)
+                                   incidencias, agotados, consumo)
     resultados = [correr_caso(c, hacer_turno) for c in casos]
+    entrada = sum(c["tokens_entrada"] for c in consumo.values())
+    salida = sum(c["tokens_salida"] for c in consumo.values())
+    # Al libro de la cuota, corrida a corrida y no al final: si el protocolo se
+    # para en seco a la tercera, lo gastado por las dos primeras tiene que
+    # quedar anotado igual.
+    cuota.anotar(entrada + salida, f"medición sobre {len(casos)} casos")
     return {"resultados": resultados, "incidencias": incidencias,
             "agotados": sorted(set(agotados)),
-            "aciertos": sum(1 for r in resultados if r["acierta"])}
+            "aciertos": sum(1 for r in resultados if r["acierta"]),
+            "consumo": consumo,
+            "tokens_entrada": entrada, "tokens_salida": salida,
+            "peticiones": sum(c["peticiones"] for c in consumo.values())}
 
 
 def main() -> int:
@@ -189,6 +280,12 @@ def main() -> int:
                         help="corridas extra permitidas cuando una sale "
                              "contaminada por fallos del proveedor")
     parser.add_argument("--repetir-medicion-quemada", action="store_true")
+    parser.add_argument("--libro-sin-apuntes-lo-asumo", action="store_true",
+                        help="declarar que la ventana de 24 h está limpia "
+                             "cuando el libro de la cuota no tiene apuntes. "
+                             "Sin esto, un libro vacío NO cuenta como cuota "
+                             "libre, porque no saber no es lo mismo que saber "
+                             "que hay sitio")
     args = parser.parse_args()
 
     if args.ensayo:
@@ -225,15 +322,48 @@ def main() -> int:
           f"{len(casos)} casos, k={args.corridas}, modelo {modelo}, "
           f"presupuesto {PRESUPUESTO_MS:.0f} ms, commit {commit_actual()}\n")
 
+    # Primero el libro y después la petición, en ese orden: el libro no gasta
+    # nada y responde la pregunta grande («¿caben las k corridas?»), mientras
+    # la petición solo responde la pequeña («¿pasa una?»). Preguntar primero lo
+    # barato y lo que más informa.
+    #
+    # En el ensayo se avisa pero no se bloquea: un ensayo que sale sucio no
+    # gasta nada irreversible, y de hecho es la única forma de ver funcionar la
+    # parte del protocolo que se niega a dar un número.
+    cabe, detalle = hay_sitio_para(casos, args.corridas,
+                                   args.libro_sin_apuntes_lo_asumo)
+    print(f"  cuota: {detalle}")
+    if not cabe and not args.ensayo:
+        print("\nNO SE EMPIEZA. Arrancar así es gastar el reservado a medias, "
+              "y medio reservado no es medio reservado: es un reservado del "
+              "que ya se sabe algo.")
+        print("Y el libro de la cuota es una cota OPTIMISTA —solo ve lo que "
+              "pasa por el código instrumentado—, así que si dice que no cabe, "
+              "no cabe.")
+        servidor.should_exit = True
+        hilo.join(timeout=5)
+        return 3
+    if not cabe:
+        print("    (el ensayo sigue de todos modos: no hay nada irreversible "
+              "que perder)")
+
     if not args.ensayo:
-        puede, motivo = hay_cuota_para_empezar(groq, modelo)
+        puede, motivo, por_cuota = hay_cuota_para_empezar(groq, modelo)
         if not puede:
-            print("NO SE EMPIEZA. El proveedor ya está rechazando peticiones "
-                  f"del tamaño real:\n    {motivo}")
+            if por_cuota:
+                print("NO SE EMPIEZA. El proveedor ya está rechazando "
+                      f"peticiones del tamaño real:\n    {motivo}")
+            else:
+                # Se para igual —ante algo irreversible, la duda se resuelve no
+                # empezando— pero sin mentir sobre el motivo.
+                print("NO SE EMPIEZA, y OJO: esto NO es falta de cuota. La "
+                      f"petición de prueba falló por otra cosa:\n    {motivo}")
+                print("    Se para de todos modos porque el reservado no "
+                      "admite empezar con dudas, pero el diagnóstico es otro: "
+                      "arréglalo y vuelve, no esperes a que haya cuota.")
             print("\nArrancar ahora significaría gastar el reservado a medias, "
                   "y medio reservado no es medio reservado: es un reservado del "
-                  "que ya se sabe algo. Vuelve cuando haya cuota "
-                  "(probe/limites_groq.py lo dice).")
+                  "que ya se sabe algo.")
             servidor.should_exit = True
             hilo.join(timeout=5)
             return 3
@@ -254,9 +384,25 @@ def main() -> int:
                   f"proveedor. Se repite, no se promedia.")
             descartadas.append(corrida)
             if es_limite_diario(corrida["incidencias"]):
-                print("\n    Es el límite DIARIO de tokens. Reintentar hoy no "
-                      "arregla nada: se para aquí en vez de gastar cuota en "
-                      "corridas que ya se sabe que van a salir sucias.")
+                print("\n    Es el límite de la VENTANA de 24 h. Reintentar "
+                      "ahora no arregla nada: se para aquí en vez de gastar "
+                      "cuota en corridas que ya se sabe que van a salir "
+                      "sucias.")
+                # El cuerpo del 429 es el único sitio donde Groq dice el gasto
+                # real de la ventana. Aprovecharlo para poner el libro al día
+                # es gratis y evita que la próxima vez vuelva a prometer cuota
+                # que no hay.
+                for i in corrida["incidencias"]:
+                    if cuota.corregir_con_429(str(i.get("error", ""))):
+                        print(f"    Libro al día con lo que dijo el 429: "
+                              f"{cuota.gastado()} tokens en la ventana.")
+                        break
+                espera = cuota.espera_para(
+                    int(cuota.estimar(casos, args.corridas) * 1.5))
+                if espera:
+                    print(f"    Habrá sitio dentro de {espera / 60:.0f} min, "
+                          f"sobre las "
+                          f"{time.strftime('%H:%M', time.localtime(time.time() + espera))}.")
                 break
             continue
         print(f"    {corrida['aciertos']}/{len(casos)}"
@@ -330,6 +476,31 @@ def main() -> int:
                              if r["numeros_sin_fundamento"]
                              or r["acciones_sin_fundamento"]})
 
+    # -------------------------------------------------- métrica 5, el coste
+    # La unidad que se factura es la CONVERSACIÓN, no el turno ni la corrida:
+    # el coste crece más que linealmente porque cada turno reenvía la historia
+    # anterior, así que medir un turno y multiplicar da un número que nadie
+    # paga. Se divide entre las conversaciones de TODAS las corridas limpias.
+    entrada = sum(c["tokens_entrada"] for c in limpias)
+    salida = sum(c["tokens_salida"] for c in limpias)
+    conversaciones = sum(len(c["consumo"]) for c in limpias)
+    from precios import para  # noqa: PLC0415
+    precio = para(modelo)
+    coste_total = precio.coste(entrada, salida)
+    coste = {
+        "tokens_entrada": entrada,
+        "tokens_salida": salida,
+        "peticiones": sum(c["peticiones"] for c in limpias),
+        "conversaciones": conversaciones,
+        "tokens_por_conversacion": (entrada + salida) / conversaciones
+                                   if conversaciones else None,
+        "dolares_total": coste_total,
+        "dolares_por_conversacion": (coste_total / conversaciones
+                                     if coste_total and conversaciones else None),
+        "precio_fuente": precio.fuente,
+        "precio_fecha": precio.fecha,
+    }
+
     resumen = {
         "conjunto": cual,
         "fecha": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -349,6 +520,7 @@ def main() -> int:
         "promesas_sin_base": promesas,
         "afirmaciones_sin_fundamento": sin_fundamento,
         "reservado_ya_estaba_quemado": bool(args.repetir_medicion_quemada),
+        "coste": coste,
         "por_caso": filas,
         "detalle": limpias,
     }
@@ -367,6 +539,22 @@ def main() -> int:
     if descartadas:
         print(f"  corridas descartadas : {len(descartadas)} por fallos del "
               f"proveedor")
+
+    print(f"\n  MÉTRICA 5, el coste ({conversaciones} conversaciones en "
+          f"{len(limpias)} corridas)")
+    print(f"  consumo              : {entrada + salida} tokens "
+          f"({entrada} de entrada, {salida} de salida)")
+    print(f"  por conversación     : {coste['tokens_por_conversacion']:.0f} "
+          f"tokens de media")
+    if coste_total is None:
+        print(f"  coste                : no se puede decir. El precio de "
+              f"{modelo} está SIN CONFIRMAR ({precio.fuente})")
+    else:
+        print(f"  coste                : {coste_total:.5f} $ en total, "
+              f"{coste['dolares_por_conversacion']:.6f} $ por conversación "
+              f"(precio de {precio.fecha})")
+    print(f"  ventana de 24 h      : quedan ~{cuota.disponible()} tokens de "
+          f"{cuota.LIMITE_VENTANA} según el libro")
 
     destino.write_text(json.dumps(resumen, indent=2, ensure_ascii=False),
                        encoding="utf-8")

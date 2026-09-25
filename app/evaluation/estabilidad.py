@@ -72,6 +72,11 @@ def main() -> int:
     parser.add_argument("--prompt", choices=["actual", "anterior"],
                         default=None,
                         help="solo las corridas con esta versión del prompt")
+    parser.add_argument("--commit", default=None,
+                        help="solo las corridas hechas con esta versión del "
+                             "agente (el commit corto). Las de antes del "
+                             "2026-09-25 no lo guardaban: para esas, "
+                             "--commit \"sin anotar\"")
     parser.add_argument("--presupuesto-ms", type=float, default=None,
                         help="solo las corridas con este reloj de turno")
     parser.add_argument("--incluir-contaminadas", action="store_true",
@@ -103,6 +108,8 @@ def main() -> int:
             continue
         if args.presupuesto_ms and presupuesto != args.presupuesto_ms:
             continue
+        if args.commit and datos.get("commit", "sin anotar") != args.commit:
+            continue
         if datos.get("incidencias") and not args.incluir_contaminadas:
             contaminadas += 1
             continue
@@ -129,15 +136,30 @@ def main() -> int:
     # reloj del turno se relajó, y las dos cosas mueven el número. Tres
     # corridas de un brazo y tres del otro, metidas en el mismo saco, dan una
     # mediana de nada con una estabilidad falsa. Mejor negarse que promediar.
+    #
+    # Y el commit, que faltaba y es el que más duele. El 2026-09-25 esta misma
+    # llamada mezcló tres corridas del 24/09 con dos del 25/09 y dio una
+    # mediana de 8/12 sin decir una palabra: el prompt y el presupuesto
+    # coincidían, pero el agente de en medio había cambiado dos veces (el turno
+    # vacío y los tres intentos de documento). La versión de lo medido es parte
+    # de las condiciones, exactamente igual que el prompt.
     condiciones = {(d.get("prompt", "anterior"),
-                    d.get("presupuesto_ms", 3000.0)) for _, d in corridas}
+                    d.get("presupuesto_ms", 3000.0),
+                    d.get("commit", "sin anotar")) for _, d in corridas}
     if len(condiciones) > 1:
         print("Estas corridas no se hicieron en las mismas condiciones:")
-        for prompt, presupuesto in sorted(condiciones):
-            print(f"    prompt {prompt}, presupuesto {presupuesto:.0f} ms")
-        print("  Filtra con --prompt y --presupuesto-ms. Promediarlas daría "
-              "una mediana de dos experimentos distintos y una tabla de "
-              "estabilidad que mide el cambio de condiciones, no al agente.")
+        for prompt, presupuesto, commit in sorted(condiciones):
+            print(f"    prompt {prompt}, presupuesto {presupuesto:.0f} ms, "
+                  f"commit {commit}")
+        print("  Filtra con --prompt, --presupuesto-ms y --commit. "
+              "Promediarlas daría una mediana de dos experimentos distintos y "
+              "una tabla de estabilidad que mide el cambio de condiciones, no "
+              "al agente.")
+        if any(c == "sin anotar" for _, _, c in condiciones):
+            print("  Las corridas anteriores al 2026-09-25 no guardaban el "
+                  "commit, así que salen como «sin anotar» y NO se pueden "
+                  "comparar con las de después: no hay forma de saber con qué "
+                  "agente se midieron.")
         return 1
 
     tabla: dict[str, list[str]] = defaultdict(list)
@@ -152,10 +174,15 @@ def main() -> int:
                                   else obtenido)
 
     n = len(corridas)
-    prompt, presupuesto = condiciones.pop()
+    prompt, presupuesto, commit = condiciones.pop()
     print(f"{args.quien} sobre {args.conjunto}: {n} corrida(s) de "
           f"{tamanos.pop()} casos, prompt {prompt}, presupuesto "
-          f"{presupuesto:.0f} ms, reclasificadas con el clasificador de hoy\n")
+          f"{presupuesto:.0f} ms, agente {commit}, reclasificadas con el "
+          f"clasificador de hoy\n")
+    if commit == "sin anotar":
+        print("  AVISO: estas corridas no guardaron con qué versión del agente "
+              "se midieron, así que pueden ser de agentes distintos. Las de "
+              "aquí en adelante sí lo guardan.\n")
     for nombre, datos in corridas:
         print(f"    {nombre}   {sin_fundamento(datos)}")
     print()

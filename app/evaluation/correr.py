@@ -40,6 +40,7 @@ from common import cargar_env  # noqa: E402
 from app.agent.loop import SISTEMA, Agente  # noqa: E402
 from app.agent.fundamento import revisar  # noqa: E402
 from app.evaluation.catalogo import Caso  # noqa: E402
+from app.evaluation import cuota  # noqa: E402
 from app.evaluation.linea_base import decidir_sin_modelo  # noqa: E402
 from app.evaluation.particion import calibracion, reservado  # noqa: E402
 from app.evaluation.prompt_anterior import SISTEMA_ANTERIOR  # noqa: E402
@@ -47,6 +48,28 @@ from app.tools.service import app as app_herramientas  # noqa: E402
 
 PUERTO = 8151
 BASE = f"http://127.0.0.1:{PUERTO}"
+
+
+def commit_actual() -> str:
+    """Con qué versión del agente se midió.
+
+    Vive aquí y no en `medicion_final.py` —que tenía su propia copia— porque lo
+    necesitan los dos y porque el que faltaba era este. El 2026-09-25,
+    `estabilidad.py` mezcló tres corridas del 24/09 con dos del 25/09 y sacó
+    una mediana de 8/12 sin avisar de nada: el artefacto no guardaba el commit,
+    así que no había forma de saber que eran dos agentes distintos. Y el 24/09
+    habían cambiado el turno vacío y los tres intentos de documento, que es
+    justo lo que mueve estos números.
+
+    Una medición sin la versión de lo medido al lado es una medición a medias.
+    """
+    import subprocess  # noqa: PLC0415
+    try:
+        return subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                              cwd=RAIZ, capture_output=True, text=True,
+                              timeout=10).stdout.strip() or "desconocido"
+    except Exception:  # noqa: BLE001
+        return "desconocido"
 
 # Pedir que repitan se dice de muchas maneras, y la primera versión de esta
 # expresión cazaba muy pocas. El agente contestó "¿podrías confirmarme tu
@@ -381,6 +404,14 @@ def main() -> int:
               f"peticiones, {len(consumo)} conversaciones")
         media = (entrada + salida) / len(consumo)
         print(f"  por conversación    : {media:.0f} tokens de media")
+        # El libro de la cuota. Sin este apunte, mañana nadie sabe cuánto de la
+        # ventana de 24 h gastó esta corrida, y ese desconocimiento es lo que
+        # el 2026-09-25 estuvo a punto de costar el reservado: la cuenta del
+        # día decía que quedaban 52 000 tokens y Groq decía `Used 199423`.
+        cuota.anotar(entrada + salida, f"correr {cual} ({quien})")
+        print(f"  ventana de 24 h     : {cuota.gastado()} tokens gastados de "
+              f"{cuota.LIMITE_VENTANA} según el libro, quedan "
+              f"~{cuota.disponible()}")
         if coste is None:
             print(f"  coste               : no se puede decir. El precio de "
                   f"{modelo} está SIN CONFIRMAR ({precio.fuente})")
@@ -407,6 +438,16 @@ def main() -> int:
         print("    El agente sale de un fallo del modelo escalando a un "
               "humano, así que esos casos tienen un desenlace que NO decidió "
               "él. Esta corrida no es una medición: repítela.")
+        # Un 429 es la única vez que Groq dice el gasto real de la ventana. Es
+        # caro de conseguir —hay que haberse quedado sin cuota— así que cuando
+        # aparece se aprovecha para poner el libro al día.
+        for i in incidencias:
+            desajuste = cuota.corregir_con_429(str(i.get("error", "")))
+            if desajuste:
+                print(f"    El 429 dice que la ventana lleva "
+                      f"{cuota.gastado()} tokens: {desajuste} más de los que "
+                      f"el libro veía. Anotados, con la hora de ahora.")
+                break
 
     servidor.should_exit = True
     hilo.join(timeout=5)
@@ -422,6 +463,10 @@ def main() -> int:
          "consumo": consumo,
          "presupuesto_ms": args.presupuesto_ms,
          "prompt": "anterior" if args.prompt_anterior else "actual",
+         # La procedencia, que faltaba: sin ella `estabilidad.py` no puede
+         # distinguir dos agentes y mezcla versiones sin decirlo.
+         "commit": commit_actual(),
+         "modelo": None if args.linea_base else modelo,
          "incidencias": incidencias, "resultados": resultados},
         indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nGuardado en {destino.name}")
