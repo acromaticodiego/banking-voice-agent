@@ -512,8 +512,12 @@ Sin adornos, y por orden de lo que más acerca esto a una llamada de verdad:
    una pasarela y el siguiente en otra distinta. Lo que falta es el despliegue
    en sí: dos procesos detrás de un balanceador. Lo demostrado es que **el
    estado no las ata**, no que el despliegue exista.
-5. **Telefonía real** (Twilio Media Streams), que trae de regalo el audio de
-   8 kHz de verdad y la latencia de red real.
+5. **La llamada de teléfono de verdad.** El canal de Twilio Media Streams está
+   escrito y comprobado sin cuenta: G.711 µ-law verificado contra la
+   implementación de la biblioteca estándar en los 65 536 valores posibles, el
+   protocolo emulado con un cliente de mentira, y una grabación real que
+   sobrevive al viaje 16 kHz → 8 kHz → µ-law → vuelta → transcripción. Falta
+   **el transporte**: una cuenta, un número y un túnel.
 
 De las seis métricas por las que este proyecto quiere ser juzgado están hechas
 la latencia, la transcripción y la tarea completada sobre calibración. El coste
@@ -528,5 +532,6 @@ la corrección de llamadas a herramientas y el barge-in.
 | texto → voz | `Piper` local / Deepgram Aura-2 | Piper da 136 ms de p95: ninguna ida y vuelta por red lo mejora |
 | modelo | `openai/gpt-oss-20b` en Groq | entra en el presupuesto del turno |
 | fin de habla | Silero VAD + fin de turno por contenido | ver `docs/adr/0002` |
+| telefonía | Twilio Media Streams, G.711 µ-law | el códec, verificado contra la biblioteca estándar en los 65 536 valores; el protocolo, con un cliente que lo emula |
 | estado | Redis | el estado conversacional se escribe una vez por turno; el audio no viaja. Hay una prueba que atiende un turno en una pasarela y el siguiente en otra |
 | expediente | PostgreSQL | tres tablas, lo que devolvió cada herramienta guardado entero. Si la base cae, la llamada sigue y la pérdida se cuenta |

@@ -129,6 +129,16 @@ def main() -> int:
     comprobar("sirve la página", pagina.status_code == 200
               and "AudioWorklet" in pagina.text)
 
+    # El endpoint que Twilio pide al recibir una llamada. Se comprueba aquí y no
+    # en `prueba_telefonia` porque aquí hay un servidor de verdad escuchando:
+    # allí se comprueba el protocolo, y esto es el transporte.
+    voz = httpx.post(f"http://127.0.0.1:{PUERTO}/twilio/voz", timeout=10)
+    comprobar("responde el TwiML que Twilio pide al entrar una llamada",
+              voz.status_code == 200 and "<Connect>" in voz.text
+              and "/twilio" in voz.text, voz.text[:120])
+    comprobar("y lo manda por wss, que es lo único que Twilio acepta",
+              "wss://" in voz.text, voz.text[:120])
+
     ruta = RAIZ / "artifacts" / "muestra-libre-datos.wav"
     if not ruta.exists():
         print(f"falta {ruta}", file=sys.stderr)

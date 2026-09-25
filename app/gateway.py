@@ -14,6 +14,7 @@ Levantar:
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 import time
@@ -21,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -87,6 +88,67 @@ def arrancar() -> None:
         "estado": estado,
     })
     print("\nListo.  ->  http://127.0.0.1:8000/\n")
+
+
+@app.api_route("/twilio/voz", methods=["GET", "POST"])
+async def twilio_voz(peticion: Request) -> Response:
+    """Lo que Twilio pide cuando entra una llamada: a dónde conectarse.
+
+    La URL del WebSocket sale de `TWILIO_STREAM_URL` si está puesta, y si no se
+    construye desde la petición cambiando el esquema a `wss`. Lo segundo
+    funciona detrás de un túnel y es lo que ahorra un paso al probar; lo primero
+    es lo que hay que usar en cualquier sitio serio, porque una URL deducida de
+    una cabecera es una URL que alguien puede cambiar desde fuera.
+    """
+    from app.telefonia import twiml  # noqa: PLC0415
+
+    url = os.environ.get("TWILIO_STREAM_URL")
+    if not url:
+        anfitrion = peticion.headers.get("host", "127.0.0.1:8000")
+        url = f"wss://{anfitrion}/twilio"
+    return Response(content=twiml(url), media_type="application/xml")
+
+
+@app.websocket("/twilio")
+async def twilio_stream(ws: WebSocket) -> None:
+    """Una llamada de teléfono de verdad, si hay un túnel delante.
+
+    Twilio manda todo por texto: JSON con el audio en base64. El puente no sabe
+    de red —`app/telefonia/media_streams.py`— así que aquí solo queda recibir,
+    pasarle el mensaje y enviar lo que devuelva.
+    """
+    from app.telefonia import PuenteTwilio  # noqa: PLC0415
+
+    await ws.accept()
+    agente = Agente(PIEZAS["groq"], PIEZAS["modelo"], BASE_HERRAMIENTAS,
+                    adelantar=True)
+    llamada = Llamada(PIEZAS["asr"], PIEZAS["voz"], agente,
+                      expediente=PIEZAS.get("expediente"))
+    puente = PuenteTwilio(llamada)
+    almacen_estado = PIEZAS.get("estado")
+
+    try:
+        while True:
+            mensaje = await ws.receive()
+            if mensaje.get("type") == "websocket.disconnect":
+                break
+            crudo = mensaje.get("text")
+            if crudo is None:
+                continue
+            for salida in puente.al_recibir(crudo):
+                await ws.send_text(json.dumps(salida))
+            if puente.terminada:
+                break
+            if almacen_estado and puente.transcripciones:
+                almacen_estado.guardar(llamada.id_llamada,
+                                       llamada.exportar_estado())
+    except WebSocketDisconnect:
+        pass
+    finally:
+        llamada.colgar()
+        if puente.call_sid:
+            print(f"  llamada de Twilio {puente.call_sid} terminada: "
+                  f"{len(puente.transcripciones)} turno(s)")
 
 
 @app.get("/", response_class=HTMLResponse)

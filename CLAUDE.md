@@ -44,6 +44,7 @@ levantado, no solo compilando.
 | evaluación | `app/evaluation/` | 20 casos con su rúbrica y su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas, protocolo de la medición final |
 | fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números, acciones y —desde el 24/09— procedimientos inventados. Determinista, sin modelo |
 | confianza del ASR | `app/confianza.py` | resume lo que el modelo sabe de su propia transcripción. Se anota, no decide. ADR 0008 |
+| telefonía | `app/telefonia/` | G.711 µ-law de verdad y el protocolo de Twilio Media Streams, comprobado sin cuenta con un cliente que lo emula |
 | estado compartido | `app/estado.py` | el estado conversacional en Redis, una escritura por turno. Otra pasarela puede retomar la llamada, y hay prueba de que lo hace |
 | expediente | `app/expediente/` | lo que queda al colgar en PostgreSQL: qué se dijo, qué herramienta con qué argumentos, qué devolvió y qué se revisó. Se lee con `-m app.expediente.leer` |
 | detector adaptativo | `app/deteccion_voz.py` | **NO está en uso.** Se puso y se revirtió el 24/09: ver ADR 0009. Se conserva con sus pruebas por el hallazgo |
@@ -69,6 +70,7 @@ docker compose up -d       # PostgreSQL (expediente) y Redis. Sin esto el
 .\.venv\Scripts\python.exe -m app.prueba_deteccion_voz     # el detector de voz y su limite conocido, sin cuota ni GPU
 .\.venv\Scripts\python.exe -m app.prueba_expediente        # el expediente. SIN Postgres sale con codigo 2, no con 0
 .\.venv\Scripts\python.exe -m app.prueba_estado            # turno 1 en una pasarela, turno 2 en otra. SIN Redis, codigo 2
+.\.venv\Scripts\python.exe -m app.prueba_telefonia         # el canal de Twilio, sin Twilio. G.711 contra audioop
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
@@ -661,9 +663,31 @@ punto estaba condenado. Medido contra la clase `Llamada` de verdad, abre 6 de
 6. La sonda modelaba mal el sistema; ver el ADR 0009 y el punto 12 de la lista
 de mediciones falsas.
 
-Es el patrón de la industria y lo que convierte "una página web" en "llamé al
-número desde mi móvil". Trae de regalo el audio de 8 kHz de verdad, la latencia
-de red real, y el plano del vídeo que mejor se entiende. Crédito de prueba.
+**El canal está hecho y comprobado (24/09), y sin gastar un céntimo.** El
+protocolo de Twilio se puede emular: `app/prueba_telefonia.py` ES un cliente de
+Twilio de mentira que manda la misma secuencia —`connected`, `start`, `media`
+en base64, `stop`— y comprueba lo que vuelve.
+
+  · **G.711 µ-law de verdad** (`app/telefonia/g711.py`), no la simulación de
+    pérdida de `probe/linea_telefonica.py`. Verificado contra `audioop` en los
+    **65 536 valores posibles**, y ahí se vio que la primera versión difería en
+    381 de ellos: el estándar trabaja sobre 14 bits, no 16. Medio por ciento de
+    muestras mal no suena a error, suena a mala línea.
+  · **El puente** traduce mensajes a mensajes sin tocar la red, que es lo que
+    permite comprobarlo entero. Usa `mark` para saber cuándo el agente terminó
+    de hablar, en vez de calcularlo por la duración del audio.
+  · **Y lo que de verdad decide**: una grabación real pasada por el canal
+    completo —16 kHz → 8 kHz → µ-law → base64 → vuelta → Whisper— y el
+    documento `1070234567` sobrevive al viaje.
+  · El endpoint TwiML responde contra el servidor levantado
+    (`app/prueba_pasarela.py`).
+
+**Lo que falta, que es solo el transporte:** una cuenta de Twilio, un número y
+un túnel (`TWILIO_STREAM_URL` en el `.env`). Que el socket se abra de verdad y
+que el número suene no se puede comprobar sin llamar por teléfono, y eso está
+dicho en la cabecera de la prueba en vez de disimulado. Lo que sí está
+establecido es que **cuando el audio llegue, el sistema lo entiende y contesta
+en el formato correcto**, que es donde están los errores silenciosos.
 
 ### ~~8. El expediente en PostgreSQL~~ HECHO el 2026-09-24. Redis sigue pendiente
 El expediente está y **verificado contra Postgres de verdad**, no compilando:
