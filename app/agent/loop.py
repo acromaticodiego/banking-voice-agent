@@ -301,6 +301,47 @@ class Agente:
         # se corrige en el siguiente.
         self.documentos_intentados: list[str] = []
 
+    # ----------------------------------------------- estado de la conversación
+
+    def exportar_estado(self) -> dict:
+        """Lo que hace falta para seguir esta conversación en otro proceso.
+
+        Va lo conversacional y **no** las piezas del proceso: el cliente de
+        Groq, el prompt y el presupuesto los tiene ya quien recoja la llamada,
+        y mandarlos por Redis sería mandar configuración disfrazada de estado.
+
+        Tampoco van las consultas adelantadas ni los hilos vivos: pertenecen al
+        turno que se está resolviendo ahora mismo, y un turno no se parte entre
+        dos pasarelas.
+        """
+        return {
+            "historia": self.historia,
+            "silencios": self.silencios,
+            "tokens_entrada": self.tokens_entrada,
+            "tokens_salida": self.tokens_salida,
+            "peticiones": self.peticiones,
+            "documentos_intentados": self.documentos_intentados,
+        }
+
+    def importar_estado(self, estado: dict) -> None:
+        """Retomar una conversación empezada en otro sitio.
+
+        El prompt del sistema NO se sobrescribe con el que venga: se conserva
+        el de este proceso y se le pegan detrás los mensajes de la
+        conversación. Si viajara el prompt, una pasarela con una versión nueva
+        seguiría atendiendo con la vieja durante horas sin que nadie lo notara,
+        y las mediciones por prompt del ADR 0005 dejarían de significar nada.
+        """
+        historia = estado.get("historia") or []
+        sistema = self.historia[0] if self.historia else None
+        conversacion = [m for m in historia if m.get("role") != "system"]
+        self.historia = ([sistema] if sistema else []) + conversacion
+        self.silencios = estado.get("silencios", 0)
+        self.tokens_entrada = estado.get("tokens_entrada", 0)
+        self.tokens_salida = estado.get("tokens_salida", 0)
+        self.peticiones = estado.get("peticiones", 0)
+        self.documentos_intentados = list(estado.get("documentos_intentados") or [])
+
     # ------------------------------------------------------ adelantar consulta
 
     def _lanzar_adelantada(self, dicho: str, clave: str):

@@ -259,6 +259,30 @@ class Llamada:
             # Se pierde ese turno del expediente; la llamada sigue.
             pass
 
+    # ----------------------------------------------- estado de la conversación
+
+    def exportar_estado(self) -> dict:
+        """El estado de la llamada, sin el audio.
+
+        `esperando` es el que más falta hace y el que menos se ve: sin él,
+        "70 234" es un número ambiguo, y sabiendo que el agente acababa de
+        pedir el documento es una cédula a medias. Perderlo al cambiar de
+        pasarela convertiría el fin de turno por contenido en adivinar.
+        """
+        return {
+            "id_llamada": self.id_llamada,
+            "esperando": self.esperando,
+            "dicho_por_quien_llama": self.dicho_por_quien_llama,
+            "agente": self.agente.exportar_estado(),
+        }
+
+    def importar_estado(self, estado: dict) -> None:
+        self.id_llamada = estado.get("id_llamada")
+        self.esperando = estado.get("esperando")
+        self.dicho_por_quien_llama = list(estado.get("dicho_por_quien_llama") or [])
+        if estado.get("agente"):
+            self.agente.importar_estado(estado["agente"])
+
     def colgar(self, motivo: str = "colgo") -> None:
         """Al colgar se cierra el expediente. Si no hay, no pasa nada."""
         if self.expediente is not None and self.id_llamada is not None:
