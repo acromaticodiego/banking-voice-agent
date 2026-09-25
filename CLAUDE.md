@@ -953,12 +953,42 @@ final del reservado, y el orden importa porque el reservado se gasta al mirarlo.
    de margen, y se niega si el libro está ciego. Lo cubre
    `app.evaluation.prueba_canario`, que sustituye `una_corrida` por algo que
    revienta si alguien la llama.
-5. **Dos cosas del agente esperan decisión** y están en la tabla de tarea
-   completada: la fuga de datos en `nombre-no-coincide` (2 de 3 lecturas del
-   25/09, donde la tabla del 24/09 decía 0) y `fraude-en-curso`, que falla las 5
-   veces igual. Decidir si se tocan **antes** del reservado es decisión de Juan
-   Diego, porque tocar el agente después del reservado ya está informado por el
-   resultado.
+5. **DECIDIDO el 25/09 por Juan Diego: el reservado se mide con el agente TAL
+   CUAL, sin arreglar antes nada.** Hay dos fallos vivos y conocidos —la fuga de
+   datos en `nombre-no-coincide` (2 de 3 lecturas) y `fraude-en-curso`, que falla
+   las 5 veces igual— y se miden en vez de taparse: el resumen de la medición
+   final ya cuenta las fugas, así que el reservado describirá el agente que
+   existe, con su fallo dentro.
+
+   Lo que esa decisión obliga a hacer después, y no se puede olvidar: **cualquier
+   arreglo de esos dos fallos queda informado por el resultado del reservado**, y
+   hay que escribirlo al lado de la cifra cada vez que se cite. Y lo que ya no se
+   podrá saber nunca: si el arreglo habría movido el número del reservado. Se
+   acepta a cambio de no aplazarlo —arreglar primero obligaría a rehacer las tres
+   corridas de calibración, y 92 000 + 89 000 tokens no caben en una ventana—.
+
+### El orden exacto del 26/09
+
+```powershell
+# 1. ¿cabe ya? (cero tokens; el reservado necesita ~134.000 con margen)
+.\.venv\Scripts\python.exe probe\limites_groq.py
+
+# 2. la corrida de calibración que falta, para tener 3 limpias del agente de hoy
+.\.venv\Scripts\python.exe -m app.evaluation.correr --presupuesto-ms 15000
+.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual --presupuesto-ms 15000 --commit <el de hoy>
+
+# 3. el reservado, una vez en la vida
+.\.venv\Scripts\python.exe -m app.evaluation.medicion_final --declaro-medicion-final
+```
+
+Cabe: 1 calibración (~31 000) + reservado k=5 (~89 000) = ~120 000 de 200 000.
+Si sale una corrida contaminada y hace falta repetirla, sigue cabiendo.
+
+**Y una cosa por verificar en el paso 2, que no se pudo ver el 25/09:** que
+`correr.py` apunte de verdad su consumo en el libro de la cuota. La línea base no
+gasta tokens, así que ejercitó el módulo entero menos esa línea. Se ve en la
+primera corrida con modelo: al final imprime `ventana de 24 h : N tokens
+gastados`.
 
 **Lo que pasó al intentarlo (24/09, por la tarde):** el canario dijo que NO
 había cuota —20 fallos del proveedor, identificados como límite diario— y el
