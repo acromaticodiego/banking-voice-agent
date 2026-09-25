@@ -129,7 +129,7 @@ def prueba_una_interrupcion_corta_al_agente() -> None:
     llamada, _ = llamada_hablando(["Mi cédula es 1070234567.", "Espere, espere."])
     comprobar("el agente estaba hablando", llamada.hablando is True)
 
-    avisos = llamada.empujar(voz(MS_PARA_INTERRUMPIR + 100, semilla=9))
+    avisos = llamada.empujar(voz(600, semilla=9))      # 600 > 400
     cortes = [a for a in avisos if a.tipo == "interrumpido"]
     comprobar("se avisa de la interrupción", len(cortes) == 1, str(avisos))
     comprobar("y el agente deja de estar hablando", llamada.hablando is False)
@@ -145,7 +145,7 @@ def prueba_un_ruido_corto_no_corta() -> None:
     """La mitad que se olvida."""
     print("  un carraspeo NO le corta la palabra")
     llamada, _ = llamada_hablando(["Hola."])
-    avisos = llamada.empujar(voz(MS_PARA_INTERRUMPIR - 200, semilla=11))
+    avisos = llamada.empujar(voz(200, semilla=11))     # un carraspeo: 200 < 400
     comprobar("no se interrumpe", not [a for a in avisos if a.tipo == "interrumpido"],
               str(avisos))
     comprobar("y el agente sigue hablando", llamada.hablando is True)
@@ -160,25 +160,36 @@ def prueba_un_ruido_corto_no_corta() -> None:
 
 
 def prueba_no_se_pierde_lo_que_dijo() -> None:
+    """La comprobación tiene que ser por DURACIÓN y con la cuenta hecha.
+
+    La primera versión de esta prueba miraba que el turno nuevo durase más de
+    medio segundo, y eso lo cumplía el audio que se empuja DESPUÉS de la
+    interrupción él solo. Se tiró a propósito el audio recuperado y la prueba
+    siguió verde: comprobaba algo cierto que no era lo que decía comprobar.
+
+    Ahora la cuenta está escrita: interrumpen con 600 ms, después se empujan
+    300 más y 500 de silencio. Con el audio recuperado el turno pasa de 1,2 s;
+    sin él se queda en 0,8. El corte en 1,0 distingue los dos casos y no hay
+    forma de que pase por accidente.
+    """
     print("  lo que la persona dice al interrumpir NO se pierde")
-    asr_frases = ["Primer turno.", "Espere, mi cédula es otra."]
-    llamada, _ = llamada_hablando(asr_frases)
+    llamada, _ = llamada_hablando(["Primer turno.", "Espere, mi cédula es otra."])
     asr = llamada.asr
 
-    avisos = llamada.empujar(voz(MS_PARA_INTERRUMPIR + 200, semilla=17))
+    avisos = llamada.empujar(voz(600, semilla=17))
     cortes = [a for a in avisos if a.tipo == "interrumpido"]
     comprobar("se recuperó el audio de la interrupción",
               bool(cortes) and cortes[0].datos["muestras_recuperadas"] > 0,
               str(cortes[0].datos) if cortes else "sin corte")
 
-    # Y el turno siguiente se cierra con ese audio dentro.
     llamada.empujar(voz(300, semilla=17))
     llamada.empujar(silencio(500))
     comprobar("el turno nuevo llegó a transcribirse", len(asr.duraciones) == 2,
               str(asr.duraciones))
     if len(asr.duraciones) == 2:
-        comprobar("y lleva más audio que solo el último trozo",
-                  asr.duraciones[1] > 0.5, f"{asr.duraciones[1]:.2f} s")
+        comprobar("y lleva DENTRO los 600 ms de la interrupción",
+                  asr.duraciones[1] > 1.0,
+                  f"{asr.duraciones[1]:.2f} s: sin el audio recuperado serían 0,8")
 
 
 def prueba_el_navegador_sigue_sordo_a_proposito() -> None:
@@ -230,7 +241,7 @@ def prueba_por_la_linea_se_manda_clear() -> None:
     comprobar("y quedó marcado como hablando", llamada.hablando is True)
 
     # Y ahora se le habla encima.
-    durante = por_la_linea(voz(MS_PARA_INTERRUMPIR + 200, semilla=23))
+    durante = por_la_linea(voz(600, semilla=23))
     eventos = [m.get("event") for m in durante]
     comprobar("se manda `clear` a Twilio", "clear" in eventos, str(eventos[:6]))
     comprobar("el puente cuenta la interrupción", puente.interrupciones == 1,
@@ -240,9 +251,28 @@ def prueba_por_la_linea_se_manda_clear() -> None:
                   for m in durante if m.get("event") == "clear"))
 
 
+def prueba_los_numeros_de_la_prueba_siguen_valiendo() -> None:
+    """Las duraciones de este archivo son fijas —600 ms para interrumpir, 200
+    para no— y solo significan algo si el umbral sigue entre las dos.
+
+    Se escriben fijas y no como `MS_PARA_INTERRUMPIR ± algo` por una razón que
+    se vio al romper el código a propósito: derivadas del parámetro, bajar el
+    umbral a 100 hacía que la prueba pidiera audio de duración negativa y
+    reventara con un `ValueError`. Una prueba que explota en vez de fallar no
+    dice qué está mal. Así, si alguien mueve el umbral, esto lo avisa aquí y
+    las demás comprobaciones siguen significando lo que dicen.
+    """
+    print("  las duraciones de esta prueba siguen teniendo sentido")
+    comprobar("600 ms interrumpen y 200 no, con el umbral actual",
+              200 < MS_PARA_INTERRUMPIR < 600,
+              f"MS_PARA_INTERRUMPIR = {MS_PARA_INTERRUMPIR}: hay que revisar "
+              f"las duraciones de este archivo")
+
+
 def main() -> int:
     print("Interrumpir al agente (métrica 6), por el canal telefónico\n")
-    for prueba in (prueba_una_interrupcion_corta_al_agente,
+    for prueba in (prueba_los_numeros_de_la_prueba_siguen_valiendo,
+                   prueba_una_interrupcion_corta_al_agente,
                    prueba_un_ruido_corto_no_corta,
                    prueba_no_se_pierde_lo_que_dijo,
                    prueba_el_navegador_sigue_sordo_a_proposito,
