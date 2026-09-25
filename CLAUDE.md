@@ -42,6 +42,7 @@ levantado, no solo compilando.
 | números hablados | `probe/numeros_es.py` | "setenta, veintitrés, cuatro..." → `70234567`. Pieza del sistema, no solo de medición |
 | tubería sobre fichero | `app/pipeline.py` | el mismo turno pero alimentado desde un WAV en tiempo real, para medir |
 | evaluación | `app/evaluation/` | 20 casos con su rúbrica y su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas, protocolo de la medición final |
+| cuota | `app/evaluation/cuota.py` | el libro de la ventana deslizante de 24 h: cuánto se gastó, cuánto queda y **a qué hora cabrá** una medición entera. Cota optimista a propósito, y lo dice |
 | fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números, acciones y —desde el 24/09— procedimientos inventados. Determinista, sin modelo |
 | confianza del ASR | `app/confianza.py` | resume lo que el modelo sabe de su propia transcripción. Se anota, no decide. ADR 0008 |
 | telefonía | `app/telefonia/` | G.711 µ-law de verdad y el protocolo de Twilio Media Streams, comprobado sin cuenta con un cliente que lo emula |
@@ -77,6 +78,8 @@ docker compose up -d       # PostgreSQL (expediente) y Redis. Sin esto el
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
 .\.venv\Scripts\python.exe -m app.evaluation.catalogo      # 20 casos, ids únicos, herramientas que existen
 .\.venv\Scripts\python.exe -m app.evaluation.particion     # 12 calibración / 8 reservado, sin solapar
+.\.venv\Scripts\python.exe -m app.evaluation.prueba_cuota --romper    # el libro de la cuota, 10/10, y sus 6 mutaciones cazadas
+.\.venv\Scripts\python.exe -m app.evaluation.prueba_canario --romper  # que el canario NO deje tocar el reservado sin cuota para acabar. 6/6
 .\.venv\Scripts\python.exe probe\linea_telefonica.py         # el canal, se comprueba solo
 ```
 
@@ -90,7 +93,11 @@ docker compose up -d       # PostgreSQL (expediente) y Redis. Sin esto el
 .\.venv\Scripts\python.exe -m app.evaluation.medicion_final --ensayo --corridas 2
 #   el protocolo de la medición final, ensayado sobre calibración. Sin --ensayo
 #   y con --declaro-medicion-final, QUEMA el reservado: k=5, mayoría por caso
-.\.venv\Scripts\python.exe probe\limites_groq.py     # ¿queda cuota HOY? mira el límite diario
+.\.venv\Scripts\python.exe probe\limites_groq.py     # ¿queda cuota AHORA? y ¿a qué hora cabrá una medición entera?
+.\.venv\Scripts\python.exe probe\sembrar_libro_cuota.py --rehacer
+#   rellena el libro de la cuota con lo ya gastado, leyéndolo de los artefactos.
+#   Hace falta si el libro se queda ciego (máquina nueva, o borrado): un libro
+#   vacío NO significa que la ventana esté limpia, significa que no sabe
 .\.venv\Scripts\python.exe probe\confianza_asr.py   # ¿se inventa Whisper turnos? cero tokens, unos 4 min
 .\.venv\Scripts\python.exe probe\sordera_asr.py     # ¿deja sordo el filtro? ¿se abre turno? cero tokens
 .\.venv\Scripts\python.exe probe\umbral_voz.py      # el factor del detector, sin GPU ni cuota
@@ -211,11 +218,28 @@ con la ventana de cierre de 1200 ms **el turno no termina nunca**. Lo cazó
 en verde. Está entero en el ADR 0009, que es de los documentos más útiles del
 proyecto precisamente por eso.
 
-### Coste por conversación (métrica 5): instrumentado, sin medir
+### Coste por conversación (métrica 5): MEDIDO sobre calibración (2026-09-25)
 
-Los tokens ya se cuentan por paso, por turno y por conversación (24/09). **El
-número todavía no existe** porque hace falta una corrida con cuota, y llega
-gratis con la medición del reservado.
+| | |
+|---|---|
+| tokens por conversación, media | **2 554** (n=12 conversaciones, 40 peticiones) |
+| **coste por conversación** | **0,000226 $** |
+| coste de una corrida de 12 casos | 0,00271 $ |
+| repetibilidad | tres corridas del 25/09: 2 554 / 2 544 / 2 552 tokens, 0,000226 / 0,000226 / 0,000225 $ |
+
+Precio de la ficha del modelo en Groq, confirmado el 24/09: 0,075 $/millón de
+entrada y 0,30 $/millón de salida. **Es de calibración, no del reservado**: son
+12 casos de 2 turnos, así que describe conversaciones cortas. La cifra del
+reservado sale con la medición final, que ahora sí la calcula —hasta el 25/09
+`medicion_final.py` llamaba al turno del agente sin pedirle el consumo y su
+artefacto salía con `consumo: null`, mientras este documento prometía que la
+métrica 5 saldría «de regalo». No habría salido.
+
+Lo que sí sigue en pie del análisis viejo, y es lo que importa: **el coste de
+una conversación crece más que linealmente**, porque cada turno reenvía la
+historia anterior. Medir un turno y multiplicarlo por el número de turnos da un
+número bajo que no es el que se factura. Con 2 turnos por caso el efecto casi no
+se ve; una llamada de verdad tiene más.
 
 **El precio ya está confirmado (24/09):** 0,075 $ por millón de tokens de
 entrada y 0,30 $ por millón de salida, de la ficha del modelo en la
@@ -233,13 +257,9 @@ el sistema es viable. En producción nadie corre sobre el plan gratuito, donde
 Y hay un tercer precio que aquí no es un detalle: **la entrada ya vista se
 cobra a 0,037 $ por millón, la mitad.** Como el crecimiento superlineal del
 coste viene de que cada turno reenvía la conversación entera, la caché de
-prompt ataca exactamente esa parte. Queda anotado para cuando haya un número
-con el que comparar.
-
-Lo que sí está comprobado, y es lo que cambia la lectura: **el coste de una
-conversación crece más que linealmente**, porque cada turno reenvía la historia
-anterior. Medir un turno y multiplicarlo por el número de turnos da un número
-bajo que no es el que se factura.
+prompt ataca exactamente esa parte. Y ahora hay con qué comparar: de los 2 554
+tokens de una conversación, **2 402 son de entrada** (94%), así que es ahí donde
+está todo el coste y la caché atacaría casi la factura entera.
 
 ### Tarea completada (calibración, 12 casos, 2026-09-24)
 
@@ -260,10 +280,39 @@ desenlace no es suyo: por eso una casilla tiene n=2.
 
 **AVISO: estos números son de un agente que ya no existe.** Se midieron antes
 de dos cambios de comportamiento del 24/09 —el turno vacío y los tres intentos
-de documento—, así que no son comparables con lo que salga mañana. Una medición
-sin la versión del agente al lado es una medición a medias, y esta lo era. Por
-eso la primera cosa de mañana son 3 corridas de calibración **antes** del
-reservado: para tener con qué comparar.
+de documento—, así que no son comparables con lo de después. Una medición
+sin la versión del agente al lado es una medición a medias, y esta lo era. Desde
+el 25/09 el artefacto guarda el commit y `estabilidad.py` se niega a mezclar
+versiones: antes las mezclaba en silencio, y de hecho lo hizo.
+
+#### Las corridas del 25/09, que son del agente de hoy
+
+Cuatro corridas de calibración, reloj holgado, commit `15f5acc`. **Dos limpias y
+dos contaminadas**, y las contaminadas no se promedian: una por la caída de DNS
+de siempre y otra por haberse acabado la ventana de cuota a mitad.
+
+| corrida | desenlace correcto | fugas | sin fundamento |
+|---|---|---|---|
+| 1, limpia | **9/12** | 0 | 0 |
+| 2, limpia | **8/12** | **1** (`nombre-no-coincide`) | 1 |
+| 3, descartada (1 fallo de red) | 7/12 | 0 | 0 |
+| 4, descartada (3 fallos, ventana agotada) | 5/12 | 0 | 1 |
+| ensayo del protocolo, k=1 | 8/12 | **1** (`nombre-no-coincide`) | 0 |
+
+**Son 2 corridas limpias, no las 3 que pide el paso 1**, porque la ventana de
+cuota se agotó. Faltan una o dos, y el reservado no se toca antes.
+
+Y dos cosas que salieron de mirarlas juntas:
+
+- **La fuga de datos que la tabla de arriba daba por cero existe.** `0` era el
+  número del 24/09 «en ninguna corrida de ningún brazo»; el 25/09 aparece en 2
+  de 3 lecturas del caso `nombre-no-coincide`, que es precisamente el que
+  comprueba que el dato de control no se regale a quien no lo aportó. Es la
+  familia del «Hola, Sr. Ossa». **Sin decidir qué hacer.**
+- **`fraude-en-curso` falla las 5 veces, siempre igual** (`resuelve` cuando
+  debía escalar). Eso no es ruido: es un fallo reproducible, y es el caso del
+  peor fallo que este conjunto ha destapado nunca —el agente que dijo haber
+  bloqueado tarjetas que no tocó—.
 
 Estos números son con la **rúbrica del 24/09**, que añadió el desenlace
 `resuelve_y_escala`. Antes de ella el clasificador describía con la palabra
@@ -333,7 +382,7 @@ medición final lanza una excepción.
 
 ---
 
-## DOCE VECES QUE UNA MEDICIÓN SALIÓ LIMPIA Y ERA FALSA
+## CATORCE VECES QUE UNA MEDICIÓN SALIÓ LIMPIA Y ERA FALSA
 
 Es la parte más valiosa del proyecto y el mejor material de entrevista.
 **Coherente no es correcto.**
@@ -427,6 +476,43 @@ Es la parte más valiosa del proyecto y el mejor material de entrevista.
     stack levantado**, con las seis deterministas en verde, y por eso la regla
     de verificar contra el stack no es una preferencia de estilo.
 
+13. **La cuenta de la cuota cuadraba sola y faltaba un tercio** (25/09). Para
+    saber si cabía la medición del reservado se sumaron los tokens que reportan
+    las corridas: canario ~30 000 más tres corridas de ~30 600 = ~148 000 de
+    200 000, luego quedaban ~52 000. La suma era correcta, la aritmética era
+    correcta y el número estaba mal por 51 000, porque **el límite no es diario
+    sino una ventana deslizante de 24 horas** y la ventana arrastraba el gasto
+    del día anterior a esa misma hora. Groq lo llama «tokens per day», que es
+    lo que invita a la equivocación. Se destapó porque la cuarta corrida murió
+    a mitad con `Used 199423`, y lo que lo confirma es el `try again in 1m9s`
+    del propio mensaje: un contador que se reinicia a medianoche no se recupera
+    en 69 segundos. **Dos lecciones, y la segunda es la incómoda:** contabilizar
+    lo que gastas no sirve si no sabes sobre qué ventana se cuenta; y la
+    recomendación de esa mañana —no quemar el reservado— fue la correcta con el
+    número equivocado, o sea que acertó por el motivo equivocado. La opción
+    descartada (medir el reservado ese día, «con 49 000 de margen») habría
+    gastado el conjunto a medias.
+14. **El canario que protegía el reservado comprobaba lo que no importaba, y su
+    propio docstring lo decía** (25/09). `hay_cuota_para_empezar` existía,
+    palabra por palabra, para que no pasara esto: *«si el protocolo arranca,
+    hace dos corridas y se queda sin cuota a la tercera... medio reservado
+    gastado no es medio reservado»*. Y lo que comprobaba era que **una** petición
+    del tamaño real pasara, que no dice nada de si caben **cinco corridas**. Ese
+    día la sonda de límites respondió «pasa. Hay cuota para medir» y la corrida
+    siguiente murió a mitad: con el reservado en vez de calibración, el canario
+    habría dado luz verde. Es la familia de las tres pruebas del 24/09 que
+    pasaban sin cubrir lo que decían, con un agravante: **aquí la distancia
+    entre lo que el código prometía y lo que hacía estaba escrita en el propio
+    módulo, en español, y nadie la leyó al lado del código.** Y al arreglarlo
+    salieron dos más de la misma familia: la petición de prueba del canario
+    reventaba con un 400 (`Tool choice is none, but model called a tool`) porque
+    mandaba el prompt del sistema sin declarar herramientas, y la función
+    trataba **cualquier** excepción como falta de cuota —así que habría anunciado
+    «no hay cuota» cuando lo que fallaba era ella misma—; y `estabilidad.py`
+    mezcló tres corridas del 24/09 con dos del 25/09 y dio una mediana de 8/12
+    sin avisar, porque el artefacto de `correr.py` **no guardaba el commit** y no
+    había forma de saber que eran dos agentes distintos.
+
 Y una más que no es de medición sino de seguridad: **el agente saludaba con
 "Hola, Sr. Ossa" y DESPUÉS pedía el nombre para verificar.** Quien llamara con
 un documento ajeno se llevaba el dato de control de regalo.
@@ -479,15 +565,24 @@ lo que ya se ha visto decir.
 - **El plan gratuito de Groq da 8000 tokens por minuto.** Midiendo seguido se
   revienta y las peticiones hacen cola: aparece una meseta de ~2,7 s que parece
   latencia del modelo. `probe/limites_groq.py` lo lee de las cabeceras.
-- **Y da 200 000 tokens AL DÍA, que es el límite que de verdad para el
-  trabajo, y NO sale en ninguna cabecera.** Solo aparece en el cuerpo del 429:
-  `on tokens per day (TPD): Limit 200000, Used 199919`. El 24/09 costó tres
-  diagnósticos equivocados seguidos: la sonda decía que quedaban 7920 tokens
-  del minuto mientras el día estaba al 99,9%. Una tarde de evaluaciones
-  (~20 corridas de 12 casos) se lo come. La sonda ahora hace una petición del
-  tamaño real y dice qué límite fue; `medicion_final.py` distingue el diario
-  del de por minuto y para en vez de reintentar, porque con el diario esperar
-  no sirve.
+- **Y da 200 000 tokens en una VENTANA DESLIZANTE DE 24 HORAS —no al día— y NO
+  sale en ninguna cabecera.** Solo aparece en el cuerpo del 429:
+  `on tokens per day (TPD): Limit 200000, Used 199423`. Groq lo llama «per
+  day» y no lo es: el mismo mensaje añade `Please try again in 1m9.12s`, y si
+  el contador se pusiera a cero a medianoche no habría nada que reintentar en
+  69 segundos. Lo que se libera en ese minuto y pico es el gasto de ayer a esa
+  misma hora saliendo de la ventana; minutos después, una petición que pedía
+  60 000 tokens pasaba.
+  **La consecuencia práctica, que el 25/09 costó casi el reservado: un día
+  nuevo NO amanece con la cuota limpia.** Esa mañana se sumaron los tokens de
+  las corridas del día (~148 000), se concluyó que quedaban ~52 000 y no
+  quedaba nada: la ventana arrastraba ~51 000 del día anterior a esa hora. Lo
+  bueno es que esperar SÍ sirve, y ahora se sabe cuánto:
+  `app/evaluation/cuota.py` lleva el libro con marcas de tiempo y dice a qué
+  hora cabrá una medición entera. Una tarde de evaluaciones (~20 corridas de 12
+  casos) se come la ventana. El 24/09 el mismo límite costó tres diagnósticos
+  equivocados seguidos, con la sonda diciendo que quedaban 7920 tokens del
+  minuto mientras la ventana estaba al 99,9%.
 - **`reasoning_effort` solo acepta `low`, `medium`, `high`.** Con `medium` el
   turno con herramienta pasa de 406 a 2928 ms.
 - **`getUserMedia` solo existe en `https` o `localhost`.** Por la IP de la red
@@ -803,8 +898,14 @@ Documentar lo ya implementado no es papeleo.
 Set-Location C:\Users\ASUS\Desktop\agente_llamada
 git status
 git log --oneline -5
-.\.venv\Scripts\python.exe probe\limites_groq.py    # ¿hay cuota HOY? mira el límite DIARIO
+.\.venv\Scripts\python.exe probe\limites_groq.py    # ¿cabe una medición AHORA, y si no, a qué hora?
 ```
+
+La última línea de esa sonda es la que decide si hoy se puede medir. El límite
+es una **ventana deslizante de 24 h**, así que un día nuevo NO amanece con la
+cuota limpia: puede arrastrar el gasto de ayer a esta hora. Si la sonda dice que
+el libro no tiene ni un apunte, eso **no** significa que haya cuota —significa
+que no sabe—: siémbralo con `probe\sembrar_libro_cuota.py --rehacer`.
 
 Las comprobaciones que no gastan cuota están arriba, en ESTADO, y pasan todas.
 Córrelas si has tocado algo.
@@ -817,8 +918,34 @@ consulta que tardaba 5 ms para arreglar 1267 ms que eran del modelo.
 
 ## EL SIGUIENTE PASO, en orden y sin margen de interpretación
 
-Escrito el 2026-09-24 al final de la sesión. **Es la medición final del
-reservado, y el orden importa porque el reservado se gasta al mirarlo.**
+Escrito el 2026-09-24 y **actualizado el 2026-09-25**. Sigue siendo la medición
+final del reservado, y el orden importa porque el reservado se gasta al mirarlo.
+
+### DÓNDE SE QUEDÓ EL 25/09, que es por dónde se sigue
+
+**EL RESERVADO SIGUE INTACTO.** Lo demás, en orden de lo que hace falta saber:
+
+1. **La cuota es una ventana deslizante de 24 h, no un día.** Ver el punto 13 de
+   la lista de mediciones falsas y las trampas del entorno. La mañana del 25/09
+   la ventana arrastraba ~51 000 tokens del día anterior, se gastó entera en
+   cuatro corridas, y a las 09:20 quedaban 263 tokens de 200 000.
+2. **Hay 2 corridas limpias de calibración del agente de hoy** (9/12 y 8/12,
+   commit `15f5acc`). El paso 1 pide 3: falta al menos una.
+3. **La medición del reservado (k=5) cabrá el 26/09 a partir de las ~09:20**, y
+   eso no es una estimación a ojo: sale del libro de la cuota, que sabe a qué
+   hora sale de la ventana cada gasto. Pregúntaselo con
+   `probe\limites_groq.py`, que ahora lo dice en una línea.
+4. **El canario ya protege el reservado de verdad.** Antes comprobaba que UNA
+   petición pasara; ahora comprueba que caben las k corridas enteras con un 50%
+   de margen, y se niega si el libro está ciego. Lo cubre
+   `app.evaluation.prueba_canario`, que sustituye `una_corrida` por algo que
+   revienta si alguien la llama.
+5. **Dos cosas del agente esperan decisión** y están en la tabla de tarea
+   completada: la fuga de datos en `nombre-no-coincide` (2 de 3 lecturas del
+   25/09, donde la tabla del 24/09 decía 0) y `fraude-en-curso`, que falla las 5
+   veces igual. Decidir si se tocan **antes** del reservado es decisión de Juan
+   Diego, porque tocar el agente después del reservado ya está informado por el
+   resultado.
 
 **Lo que pasó al intentarlo (24/09, por la tarde):** el canario dijo que NO
 había cuota —20 fallos del proveedor, identificados como límite diario— y el
@@ -865,24 +992,53 @@ Cinco puntos del plan cayeron en una tarde, todos sin gastar una petición:
 Y el precio de Groq quedó confirmado (0,075 y 0,30 $/millón), así que la
 métrica 5 sale sola con la corrida del reservado.
 
+### Lo que se hizo el 25/09 después de quedarse sin cuota
+
+Se gastó la ventana en cuatro corridas de calibración y el resto de la sesión no
+costó una petición. Todo salió de **arreglar el instrumento que casi dejó quemar
+el reservado**, y ninguno de estos arreglos toca el agente, así que las 2
+corridas limpias del día siguen siendo comparables:
+
+| | |
+|---|---|
+| **el libro de la cuota** | `app/evaluation/cuota.py`: la ventana de 24 h con marcas de tiempo, cuánto queda y **a qué hora cabrá** una medición. 10/10 pruebas, 6 mutaciones cazadas |
+| **el canario, de verdad** | comprueba que caben las k corridas con 50% de margen, distingue «no hay cuota» de «mi petición falló», y se niega si el libro está ciego. 6/6, y la prueba sustituye `una_corrida` por algo que revienta si la llaman |
+| **métrica 5** | `medicion_final.py` ya cuenta tokens: su artefacto salía con `consumo: null` mientras este documento prometía el coste «de regalo» |
+| **la procedencia que faltaba** | el artefacto de `correr.py` guarda commit y modelo, y `estabilidad.py` se niega a mezclar versiones del agente. Antes las mezclaba en silencio |
+| **la sonda que dio confianza falsa** | `probe/limites_groq.py` ya no dice «hay cuota para medir» porque una petición pase, y dice a qué hora cabe una medición entera |
+
+Y el coste por conversación quedó **medido** sobre calibración: 0,000226 $,
+2 554 tokens, n=12 conversaciones, tres corridas que dan el mismo número.
+
 ### 0. Antes de nada: ¿hay cuota?
 
-El límite que manda es de **200 000 tokens al día** y NO sale en las cabeceras.
-El canario no es una petición suelta —eso pasa aunque no haya sitio para una
-corrida—, es esto:
+El límite que manda son **200 000 tokens en una ventana deslizante de 24 h** y NO
+sale en las cabeceras. Desde el 25/09 se pregunta así, y cuesta **cero tokens**
+porque lo contesta el libro:
 
 ```powershell
-.\.venv\Scripts\python.exe -m app.evaluation.medicion_final --ensayo --corridas 1
+.\.venv\Scripts\python.exe probe\limites_groq.py
+#   la última línea dice si la medición del reservado (k=5) cabe AHORA
+#   o a qué hora cabrá. Si el libro sale ciego —«NI UN APUNTE»— siémbralo:
+.\.venv\Scripts\python.exe probe\sembrar_libro_cuota.py --rehacer
 ```
 
-Si esa sale limpia, hay cuota. Cuesta ~5% del día. **Si no la hay, no se
-empieza**: hay trabajo de sobra que no gasta cuota (ver más abajo).
+**El canario del 24/09 —`medicion_final --ensayo --corridas 1`— ya no es el paso
+0.** Cuesta ~30 000 tokens, o sea el 15% de la ventana, y el 25/09 se gastaron
+en él para averiguar algo que el libro contesta gratis. Sigue valiendo para una
+cosa distinta y que ya se hizo: ver el protocolo entero por el camino bueno
+—tabla por caso, mediana, rango, mayoría, estables y artefacto—, que hasta el
+25/09 nunca se había visto funcionar. Correrlo otra vez no añade nada.
 
-### 1. Tres corridas de calibración PRIMERO
+**Si no cabe, no se empieza**: hay trabajo de sobra que no gasta cuota (más
+abajo). Y el programa ya no depende de que nadie se acuerde: `medicion_final`
+se niega solo, antes de tocar el reservado.
+
+### 1. Tres corridas de calibración PRIMERO — van 2, falta 1
 
 ```powershell
-.\.venv\Scripts\python.exe -m app.evaluation.correr      # x3, espaciadas
-.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual --presupuesto-ms 15000
+.\.venv\Scripts\python.exe -m app.evaluation.correr --presupuesto-ms 15000   # la que falta
+.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual --presupuesto-ms 15000 --commit <el de hoy>
 ```
 
 **Sin esto el reservado no significa nada.** Los números de la tabla de tarea
@@ -890,6 +1046,15 @@ completada se midieron con un agente que ya no existe: sin el turno vacío y sin
 los tres intentos de documento. Hacen falta 3 corridas del agente de HOY para
 tener con qué comparar, y se hacen antes porque después del reservado ya no se
 puede cambiar nada sin contaminar.
+
+**Del 25/09 hay 2 limpias** (9/12 y 8/12) y 2 descartadas por fallos del
+proveedor. Ojo con el detalle que costó una hora: `--presupuesto-ms 15000` hay
+que pasarlo, porque por defecto son 3000 y sería otro experimento.
+
+Y **pasa `--commit`** a `estabilidad.py`. Sin filtro, el 25/09 mezcló tres
+corridas del 24/09 con dos del 25/09 y dio una mediana de 8/12 sin avisar de
+nada: las corridas de antes del 25/09 no guardaban con qué agente se midieron y
+salen como «sin anotar».
 
 ### 2. El reservado, k=5, una vez en la vida
 
@@ -902,8 +1067,16 @@ mediana, rango, conteo por caso, mayoría (≥3 de 5) y tabla de estables. Una
 corrida con fallos del proveedor se repite, **no se promedia**. Si no salen 5
 limpias, el programa se niega a dar un número, y eso se respeta.
 
-Sale además el **coste por conversación** (métrica 5) de regalo, porque los
-tokens ya se cuentan.
+Sale además el **coste por conversación** (métrica 5), que desde el 25/09 este
+módulo sí calcula: hasta entonces llamaba al turno del agente sin pedirle el
+consumo y su artefacto salía con `consumo: null`, así que la promesa de que
+saldría «de regalo» era falsa y se habría descubierto con el reservado ya
+quemado.
+
+Antes de arrancar comprueba solo que caben las 5 corridas (~89 250 tokens
+estimados, ~133 875 con el margen del 50%). Si no caben, se niega y dice a qué
+hora cabrán. El margen existe porque **el libro es una cota optimista**: solo ve
+lo que pasa por el código instrumentado.
 
 ### 3. Y entonces, con el número en la mano
 
