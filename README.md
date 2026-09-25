@@ -516,8 +516,10 @@ Sin adornos, y por orden de lo que más acerca esto a una llamada de verdad:
    escrito y comprobado sin cuenta: G.711 µ-law verificado contra la
    implementación de la biblioteca estándar en los 65 536 valores posibles, el
    protocolo emulado con un cliente de mentira, y una grabación real que
-   sobrevive al viaje 16 kHz → 8 kHz → µ-law → vuelta → transcripción. Falta
-   **el transporte**: una cuenta, un número y un túnel.
+   sobrevive al viaje 16 kHz → 8 kHz → µ-law → vuelta → transcripción, y el
+   endpoint devuelve audio por un socket real. Falta **Twilio en sí**: una
+   cuenta, un número y un túnel, con los pasos en
+   [`docs/telefonia.md`](docs/telefonia.md).
 
 De las seis métricas por las que este proyecto quiere ser juzgado están hechas
 la latencia, la transcripción y la tarea completada sobre calibración. El coste

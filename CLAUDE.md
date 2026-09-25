@@ -682,12 +682,27 @@ en base64, `stop`— y comprueba lo que vuelve.
   · El endpoint TwiML responde contra el servidor levantado
     (`app/prueba_pasarela.py`).
 
-**Lo que falta, que es solo el transporte:** una cuenta de Twilio, un número y
-un túnel (`TWILIO_STREAM_URL` en el `.env`). Que el socket se abra de verdad y
-que el número suene no se puede comprobar sin llamar por teléfono, y eso está
-dicho en la cabecera de la prueba en vez de disimulado. Lo que sí está
-establecido es que **cuando el audio llegue, el sistema lo entiende y contesta
-en el formato correcto**, que es donde están los errores silenciosos.
+Y el transporte local también: `prueba_pasarela` llama al endpoint `/twilio`
+con un WebSocket de verdad y recibe **230 trozos de audio µ-law y su marca de
+fin**. Lo único sin comprobar es Twilio en sí.
+
+**Lo que falta, que es solo eso:** una cuenta, un número y un túnel. Los pasos
+exactos, con las trampas, están en **`docs/telefonia.md`**; no se repiten aquí
+para que no se despeguen. Lo que hay que saber de memoria:
+
+  · **Es gratis:** el trial da 75 minutos de voz y un número durante 30 días, y
+    para grabar la demo sobra. Y no hace falta telefonía permanente: el vídeo
+    dura para siempre, el trial 30 días.
+  · **Twilio reproduce un aviso del trial antes de tu TwiML** y solo se quita
+    pagando; en el vídeo se corta en edición.
+  · **Exige `wss://` con certificado válido.** De ahí el túnel.
+  · Twilio NO es software libre, por si vuelve a salir la duda: es un servicio
+    de pago con crédito de prueba. La alternativa libre de verdad es
+    FreeSWITCH o Asterisk con un softphone, y entonces **no hay número de la
+    red telefónica**: se marca desde una app SIP, no desde el marcador del
+    móvil. Se descartó para esto porque cuesta horas —hay que compilar
+    `mod_audio_stream`, que es un módulo C++ de terceros— y porque el CV de
+    Juan Diego ya demuestra FreeSWITCH.
 
 ### ~~8. El expediente en PostgreSQL~~ HECHO el 2026-09-24. Redis sigue pendiente
 El expediente está y **verificado contra Postgres de verdad**, no compilando:

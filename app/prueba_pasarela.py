@@ -14,6 +14,7 @@ Uso:  .\.venv\Scripts\python.exe -m app.prueba_pasarela
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import sys
 import threading
@@ -112,6 +113,52 @@ async def hablar_y_escuchar(ruta: Path) -> dict:
     return recogido
 
 
+async def llamada_de_twilio(ruta_wav: Path) -> dict:
+    """Una llamada entera por el endpoint de Twilio, con un WebSocket de verdad.
+
+    El emulador de la secuencia de Twilio se importa de `app.prueba_telefonia`
+    en vez de copiarse: dos emuladores del mismo protocolo se despegan en
+    cuanto alguien toca uno, y entonces una de las dos pruebas empieza a
+    comprobar un protocolo que no existe.
+
+    Lo que esto añade sobre `prueba_telefonia` es el transporte local: que el
+    endpoint acepte el socket, que reciba texto y que devuelva texto. Lo único
+    que queda sin comprobar después de esto es Twilio en sí y el túnel.
+    """
+    from app.prueba_telefonia import mensajes_de_twilio  # noqa: PLC0415
+
+    with wave.open(str(ruta_wav), "rb") as w:
+        crudo = w.readframes(w.getnframes())
+    audio = np.frombuffer(crudo, dtype=np.int16).astype(np.float32) / 32768.0
+
+    recogido: dict = {"media": 0, "marcas": 0, "bytes_audio": 0, "otros": []}
+    async with websockets.connect(f"ws://127.0.0.1:{PUERTO}/twilio",
+                                  max_size=None) as ws:
+        async def recoger():
+            async for crudo_mensaje in ws:
+                mensaje = json.loads(crudo_mensaje)
+                if mensaje.get("event") == "media":
+                    recogido["media"] += 1
+                    recogido["bytes_audio"] += len(
+                        base64.b64decode(mensaje["media"]["payload"]))
+                elif mensaje.get("event") == "mark":
+                    recogido["marcas"] += 1
+                else:
+                    recogido["otros"].append(mensaje.get("event"))
+
+        tarea = asyncio.ensure_future(recoger())
+        for mensaje in mensajes_de_twilio(audio):
+            if mensaje["event"] == "stop":
+                # El stop va al final, después de esperar la respuesta.
+                await asyncio.sleep(14)
+                await ws.send(json.dumps(mensaje))
+                break
+            await ws.send(json.dumps(mensaje))
+        await asyncio.sleep(1)
+        tarea.cancel()
+    return recogido
+
+
 def main() -> int:
     servidor = uvicorn.Server(uvicorn.Config(app, port=PUERTO, log_level="error"))
     hilo = threading.Thread(target=servidor.run, daemon=True)
@@ -138,6 +185,22 @@ def main() -> int:
               and "/twilio" in voz.text, voz.text[:120])
     comprobar("y lo manda por wss, que es lo único que Twilio acepta",
               "wss://" in voz.text, voz.text[:120])
+
+    # --- y la llamada de teléfono completa, por el socket de verdad
+    ruta_twilio = RAIZ / "artifacts" / "muestra-documento.wav"
+    if ruta_twilio.exists():
+        print()
+        print("  llamando por el endpoint de Twilio (socket real, audio µ-law)...")
+        t = asyncio.run(llamada_de_twilio(ruta_twilio))
+        print(f"  de vuelta: {t['media']} trozos de audio "
+              f"({t['bytes_audio']} bytes de µ-law), {t['marcas']} marca(s)")
+        comprobar("el endpoint de Twilio acepta el socket y contesta audio",
+                  t["media"] > 0, str(t))
+        comprobar("en trozos de 160 bytes, que son los 20 ms de la línea",
+                  t["bytes_audio"] % 160 == 0,
+                  f"{t['bytes_audio']} bytes no es múltiplo de 160")
+        comprobar("y manda la marca de fin para saber cuándo calló",
+                  t["marcas"] > 0, str(t["marcas"]))
 
     ruta = RAIZ / "artifacts" / "muestra-libre-datos.wav"
     if not ruta.exists():
