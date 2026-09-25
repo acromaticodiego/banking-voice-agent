@@ -2,15 +2,15 @@
 
 Agente de voz telefónico para verificación de identidad y atención al cliente:
 mantiene una conversación, decide qué preguntar, llama herramientas, se recupera
-cuando algo falla, y trabaja contra un reloj. De cada turno queda un rastro con
-qué se dijo, qué herramienta se llamó, con qué argumentos y qué devolvió
-—hoy en memoria; persistirlo es de lo que falta, y está dicho abajo—.
+cuando algo falla, y trabaja contra un reloj. Al colgar queda un expediente en
+PostgreSQL con qué se dijo, qué herramienta se llamó, con qué argumentos, qué
+devolvió y qué se revisó de lo que el agente contestó.
 
 **Estado (2026-09-24): el sistema funciona de punta a punta y está medido.**
 Se habla por el micrófono del navegador, el agente decide, llama herramientas,
 se recupera cuando fallan y contesta hablando. Lo que falta está al final, sin
-adornos: el expediente todavía vive en memoria y se pierde al colgar, no hay
-telefonía real, y la evaluación sobre el conjunto reservado no se ha hecho
+adornos: no hay telefonía real, no hay barge-in, y la evaluación sobre el
+conjunto reservado no se ha hecho
 —el reservado sigue **sin tocar**, que es lo que le da valor—.
 
 > **Lo que de verdad merece la pena de este repositorio no son los números
@@ -507,11 +507,19 @@ Sin adornos, y por orden de lo que más acerca esto a una llamada de verdad:
 3. **Barge-in**: hoy, mientras el agente habla, se ignora la entrada. Es una
    decisión declarada —sin cancelación de eco el micrófono capta la propia voz
    del agente— y es la métrica que falta.
-4. **El expediente en PostgreSQL y el estado en Redis.** El rastro de cada
-   turno existe y se pierde al colgar. Es la mayor distancia entre lo que el
-   proyecto promete y lo que hace.
-5. **Telefonía real** (Twilio Media Streams), que trae de regalo el audio de
-   8 kHz de verdad y la latencia de red real.
+4. **El despliegue de varias pasarelas.** El expediente (PostgreSQL) y el
+   estado compartido (Redis) ya están, y hay una prueba que atiende un turno en
+   una pasarela y el siguiente en otra distinta. Lo que falta es el despliegue
+   en sí: dos procesos detrás de un balanceador. Lo demostrado es que **el
+   estado no las ata**, no que el despliegue exista.
+5. **La llamada de teléfono de verdad.** El canal de Twilio Media Streams está
+   escrito y comprobado sin cuenta: G.711 µ-law verificado contra la
+   implementación de la biblioteca estándar en los 65 536 valores posibles, el
+   protocolo emulado con un cliente de mentira, y una grabación real que
+   sobrevive al viaje 16 kHz → 8 kHz → µ-law → vuelta → transcripción, y el
+   endpoint devuelve audio por un socket real. Falta **Twilio en sí**: una
+   cuenta, un número y un túnel, con los pasos en
+   [`docs/telefonia.md`](docs/telefonia.md).
 
 De las seis métricas por las que este proyecto quiere ser juzgado están hechas
 la latencia, la transcripción y la tarea completada sobre calibración. El coste
@@ -526,5 +534,6 @@ la corrección de llamadas a herramientas y el barge-in.
 | texto → voz | `Piper` local / Deepgram Aura-2 | Piper da 136 ms de p95: ninguna ida y vuelta por red lo mejora |
 | modelo | `openai/gpt-oss-20b` en Groq | entra en el presupuesto del turno |
 | fin de habla | Silero VAD + fin de turno por contenido | ver `docs/adr/0002` |
-| estado | Redis | **previsto, no implementado.** La pasarela no guarda nada suyo, así que escala horizontal *por diseño* — pero eso hoy no está demostrado |
-| expediente | PostgreSQL | **previsto, no implementado.** Hoy el rastro vive en memoria |
+| telefonía | Twilio Media Streams, G.711 µ-law | el códec, verificado contra la biblioteca estándar en los 65 536 valores; el protocolo, con un cliente que lo emula |
+| estado | Redis | el estado conversacional se escribe una vez por turno; el audio no viaja. Hay una prueba que atiende un turno en una pasarela y el siguiente en otra |
+| expediente | PostgreSQL | tres tablas, lo que devolvió cada herramienta guardado entero. Si la base cae, la llamada sigue y la pérdida se cuenta |

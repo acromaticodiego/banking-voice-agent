@@ -6,20 +6,30 @@ Aquí **no existe todavía**: llega cuando quien habla lo produce, y el sistema 
 puede mirar el futuro. Es la misma tubería, pero empujada en vez de tirada.
 
 Todo el estado de la llamada vive en este objeto, uno por conexión. La pasarela
-no guarda nada suyo: si mañana este estado se mueve a Redis, se pueden levantar
-N pasarelas detrás de un balanceador y cualquiera atiende cualquier turno. Esa
-es la frase que hay que poder defender, y por eso el estado está aquí y no
-repartido por la pasarela.
+no guarda nada suyo, y desde el 2026-09-24 **eso está demostrado y no solo
+diseñado**: el estado conversacional se escribe en Redis al cerrar cada turno
+(`app/estado.py`), y `app/prueba_estado.py` atiende el primer turno en una
+pasarela y el segundo en otra distinta, con objetos nuevos y nada compartido en
+memoria, comprobando que en la petición de la segunda están los mensajes de la
+primera.
+
+Lo que NO viaja es el audio: el buffer de una intervención se llena y se vacía
+dentro de un mismo turno, y un turno lo atiende entera la pasarela que tiene el
+WebSocket abierto. Por eso esto se escribe una vez por turno y no una vez por
+trozo de 20 ms, que es lo que lo hace barato.
 """
 
 from __future__ import annotations
 
 import time
+import uuid
 from dataclasses import dataclass, field
 
 import numpy as np
 
+from app.agent.fundamento import revisar
 from app.confianza import resumir
+from app.expediente import TurnoAnotado, pasos_desde_rastro
 from app.fin_de_turno import parece_incompleto
 
 FRECUENCIA = 16000
@@ -52,7 +62,19 @@ class Llamada:
 
     def __init__(self, asr, voz, agente, ventana_ms: int = 300,
                  ventana_larga_ms: int = 1200, voz_minima_ms: int = 600,
-                 max_reanudaciones: int = 2) -> None:
+                 max_reanudaciones: int = 2, expediente=None) -> None:
+        # El expediente es opcional a propósito: la demo tiene que poder correr
+        # sin base de datos, y las pruebas del turno no deberían necesitar una.
+        # Cuando no hay, el rastro sigue existiendo en los avisos y se pierde
+        # al colgar, que es lo que pasaba siempre hasta el 2026-09-24.
+        self.expediente = expediente
+        # El id existe siempre, aunque no haya expediente: es también la
+        # llave con la que otra pasarela puede retomar esta llamada.
+        self.id_llamada = (expediente.abrir() if expediente is not None
+                           else str(uuid.uuid4()))
+        # Lo que ha dicho quien llama, para que el detector de fundamento
+        # sepa que repetir un documento dictado no es inventárselo.
+        self.dicho_por_quien_llama: list[str] = []
         self.asr = asr
         self.voz = voz
         self.agente = agente
@@ -143,6 +165,8 @@ class Llamada:
                           {"motivo": motivo, "parcial": dicho,
                            "confianza": senales})]
 
+        if dicho:
+            self.dicho_por_quien_llama.append(dicho)
         avisos.append(Aviso("oido", dicho, {"ms_asr": round(ms_asr),
                                             "confianza": senales}))
         avisos.append(Aviso("estado", "pensando"))
@@ -186,6 +210,9 @@ class Llamada:
             "reanudaciones": self.reanudaciones,
         }))
 
+        self._anotar(turno, dicho, senales, ms_asr, primer_audio_ms,
+                     primer_dato_ms)
+
         # Si el agente acaba de pedir el documento, el siguiente turno lo sabe.
         bajo = turno.texto.lower()
         if "documento" in bajo or "cédula" in bajo or "cedula" in bajo:
@@ -195,6 +222,82 @@ class Llamada:
 
         self._reiniciar()
         return avisos
+
+    def _anotar(self, turno, dicho: str, senales: dict, ms_asr: float,
+                primer_audio_ms: float | None,
+                primer_dato_ms: float | None) -> None:
+        """Deja el turno escrito donde sobreviva a colgar.
+
+        La revisión de fundamento se hace aquí y no en el bucle del agente
+        porque es lo que convierte un registro en un expediente: no basta con
+        guardar qué dijo, hay que guardar si lo que dijo tenía de dónde salir.
+        Es determinista y no llama a ningún modelo, así que no cuesta nada del
+        presupuesto del turno.
+
+        Nada de esto puede tumbar la llamada: el almacén ya se traga sus
+        errores y los cuenta, y aun así esto va envuelto, porque un fallo al
+        REUNIR los datos sería un fallo en la ruta de la voz.
+        """
+        if self.expediente is None or self.id_llamada is None:
+            return
+        try:
+            resultados = [p.resultado for p in turno.rastro
+                          if p.tipo == "herramienta" and p.resultado is not None]
+            herramientas = [p.detalle.split(" ")[0] for p in turno.rastro
+                            if p.tipo == "herramienta"]
+            revision = revisar(turno.texto, resultados,
+                               self.dicho_por_quien_llama, herramientas)
+            self.expediente.anotar_turno(self.id_llamada, TurnoAnotado(
+                oido=dicho,
+                contestado=turno.texto,
+                puente=turno.puente,
+                confianza=senales,
+                sin_fundamento={"numeros": revision.numeros,
+                                "acciones": revision.acciones,
+                                "procedimientos": revision.procedimientos},
+                ms_asr=round(ms_asr),
+                ms_total=round(turno.ms_total),
+                ms_primer_audio=round(primer_audio_ms) if primer_audio_ms else None,
+                ms_primer_dato=round(primer_dato_ms) if primer_dato_ms else None,
+                agotado=turno.agotado,
+                silencio=turno.silencio,
+                tokens_entrada=turno.tokens_entrada,
+                tokens_salida=turno.tokens_salida,
+                peticiones=turno.peticiones,
+                clave=turno.clave,
+                pasos=pasos_desde_rastro(turno.rastro)))
+        except Exception:  # noqa: BLE001
+            # Se pierde ese turno del expediente; la llamada sigue.
+            pass
+
+    # ----------------------------------------------- estado de la conversación
+
+    def exportar_estado(self) -> dict:
+        """El estado de la llamada, sin el audio.
+
+        `esperando` es el que más falta hace y el que menos se ve: sin él,
+        "70 234" es un número ambiguo, y sabiendo que el agente acababa de
+        pedir el documento es una cédula a medias. Perderlo al cambiar de
+        pasarela convertiría el fin de turno por contenido en adivinar.
+        """
+        return {
+            "id_llamada": self.id_llamada,
+            "esperando": self.esperando,
+            "dicho_por_quien_llama": self.dicho_por_quien_llama,
+            "agente": self.agente.exportar_estado(),
+        }
+
+    def importar_estado(self, estado: dict) -> None:
+        self.id_llamada = estado.get("id_llamada")
+        self.esperando = estado.get("esperando")
+        self.dicho_por_quien_llama = list(estado.get("dicho_por_quien_llama") or [])
+        if estado.get("agente"):
+            self.agente.importar_estado(estado["agente"])
+
+    def colgar(self, motivo: str = "colgo") -> None:
+        """Al colgar se cierra el expediente. Si no hay, no pasa nada."""
+        if self.expediente is not None and self.id_llamada is not None:
+            self.expediente.cerrar(self.id_llamada, motivo)
 
     def _reiniciar(self) -> None:
         self.buffer.clear()

@@ -14,6 +14,7 @@ Levantar:
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 import time
@@ -21,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -66,6 +67,15 @@ def arrancar() -> None:
     print("Cargando texto a voz...")
     voz = PiperVoice.load(str(RAIZ / "voices" / "es_MX-claude-high.onnx"))
 
+    from app.estado import desde_entorno as estado_desde_entorno
+    from app.expediente import desde_entorno
+    expediente = desde_entorno()
+    print(f"Expediente: {type(expediente).__name__}")
+    estado = estado_desde_entorno()
+    print(f"Estado de la llamada: {type(estado).__name__}"
+          + ("" if estado.compartido else "  (NO compartido: no se puede "
+                                          "retomar en otra pasarela)"))
+
     entorno = cargar_env()
     from groq import Groq
     PIEZAS.update({
@@ -74,8 +84,71 @@ def arrancar() -> None:
         "groq": Groq(api_key=entorno["GROQ_API_KEY"].strip(), max_retries=0),
         "modelo": entorno.get("GROQ_MODEL", "openai/gpt-oss-20b").strip(),
         "dispositivo": dispositivo,
+        "expediente": expediente,
+        "estado": estado,
     })
     print("\nListo.  ->  http://127.0.0.1:8000/\n")
+
+
+@app.api_route("/twilio/voz", methods=["GET", "POST"])
+async def twilio_voz(peticion: Request) -> Response:
+    """Lo que Twilio pide cuando entra una llamada: a dónde conectarse.
+
+    La URL del WebSocket sale de `TWILIO_STREAM_URL` si está puesta, y si no se
+    construye desde la petición cambiando el esquema a `wss`. Lo segundo
+    funciona detrás de un túnel y es lo que ahorra un paso al probar; lo primero
+    es lo que hay que usar en cualquier sitio serio, porque una URL deducida de
+    una cabecera es una URL que alguien puede cambiar desde fuera.
+    """
+    from app.telefonia import twiml  # noqa: PLC0415
+
+    url = os.environ.get("TWILIO_STREAM_URL")
+    if not url:
+        anfitrion = peticion.headers.get("host", "127.0.0.1:8000")
+        url = f"wss://{anfitrion}/twilio"
+    return Response(content=twiml(url), media_type="application/xml")
+
+
+@app.websocket("/twilio")
+async def twilio_stream(ws: WebSocket) -> None:
+    """Una llamada de teléfono de verdad, si hay un túnel delante.
+
+    Twilio manda todo por texto: JSON con el audio en base64. El puente no sabe
+    de red —`app/telefonia/media_streams.py`— así que aquí solo queda recibir,
+    pasarle el mensaje y enviar lo que devuelva.
+    """
+    from app.telefonia import PuenteTwilio  # noqa: PLC0415
+
+    await ws.accept()
+    agente = Agente(PIEZAS["groq"], PIEZAS["modelo"], BASE_HERRAMIENTAS,
+                    adelantar=True)
+    llamada = Llamada(PIEZAS["asr"], PIEZAS["voz"], agente,
+                      expediente=PIEZAS.get("expediente"))
+    puente = PuenteTwilio(llamada)
+    almacen_estado = PIEZAS.get("estado")
+
+    try:
+        while True:
+            mensaje = await ws.receive()
+            if mensaje.get("type") == "websocket.disconnect":
+                break
+            crudo = mensaje.get("text")
+            if crudo is None:
+                continue
+            for salida in puente.al_recibir(crudo):
+                await ws.send_text(json.dumps(salida))
+            if puente.terminada:
+                break
+            if almacen_estado and puente.transcripciones:
+                almacen_estado.guardar(llamada.id_llamada,
+                                       llamada.exportar_estado())
+    except WebSocketDisconnect:
+        pass
+    finally:
+        llamada.colgar()
+        if puente.call_sid:
+            print(f"  llamada de Twilio {puente.call_sid} terminada: "
+                  f"{len(puente.transcripciones)} turno(s)")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -88,11 +161,26 @@ async def conversacion(ws: WebSocket) -> None:
     await ws.accept()
     agente = Agente(PIEZAS["groq"], PIEZAS["modelo"], BASE_HERRAMIENTAS,
                     adelantar=True)
-    llamada = Llamada(PIEZAS["asr"], PIEZAS["voz"], agente)
+    llamada = Llamada(PIEZAS["asr"], PIEZAS["voz"], agente,
+                      expediente=PIEZAS.get("expediente"))
+
+    # Retomar una llamada empezada en otra pasarela. El navegador vuelve con
+    # `?llamada=<id>` y aquí se recoge la conversación donde se quedó: es lo
+    # que hace cierta la frase de que esta pasarela no guarda nada suyo.
+    almacen_estado = PIEZAS.get("estado")
+    retomada = ws.query_params.get("llamada")
+    if retomada and almacen_estado is not None:
+        guardado = almacen_estado.cargar(retomada)
+        if guardado:
+            llamada.importar_estado(guardado)
+            print(f"  llamada {retomada} retomada en esta pasarela")
 
     await ws.send_text(json.dumps({
         "tipo": "estado", "texto": "escuchando",
-        "datos": {"dispositivo": PIEZAS["dispositivo"]}}))
+        "datos": {"dispositivo": PIEZAS["dispositivo"],
+                  "llamada": llamada.id_llamada,
+                  "retomada": bool(retomada and almacen_estado
+                                   and almacen_estado.cargar(retomada))}}))
 
     try:
         while True:
@@ -116,6 +204,12 @@ async def conversacion(ws: WebSocket) -> None:
                                      dtype=np.int16).astype(np.float32) / 32768.0
             avisos = llamada.empujar(muestras)
 
+            # Un turno cerrado es el momento de guardar: una vez por turno y
+            # no una vez por trozo de audio, que es lo que hace esto barato.
+            if any(a.tipo == "tiempos" for a in avisos) and almacen_estado:
+                almacen_estado.guardar(llamada.id_llamada,
+                                       llamada.exportar_estado())
+
             for aviso in avisos:
                 if aviso.tipo == "dice":
                     # El audio va en binario y la etiqueta en texto justo antes,
@@ -132,3 +226,8 @@ async def conversacion(ws: WebSocket) -> None:
                         "datos": aviso.datos}))
     except WebSocketDisconnect:
         pass
+    finally:
+        # Colgar es el momento en que el expediente deja de crecer, así que es
+        # el momento de cerrarlo. Va en `finally` porque una llamada que acaba
+        # mal es justo la que más falta hace poder leer después.
+        llamada.colgar()

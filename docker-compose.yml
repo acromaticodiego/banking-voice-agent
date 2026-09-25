@@ -1,0 +1,48 @@
+# Las dos piezas de estado que el proyecto prometía y no tenía.
+#
+# PostgreSQL guarda el expediente: qué se dijo, qué herramienta se llamó, con
+# qué argumentos, qué devolvió y qué se revisó. Redis guarda el estado de la
+# llamada en curso, que es lo que permite defender que la pasarela no guarda
+# nada suyo y escala horizontal.
+#
+# Puertos corridos a propósito (55432, 56379): si alguien tiene un Postgres o
+# un Redis de verdad en esta máquina, esto no se pelea con ellos ni —peor— se
+# conecta a ellos por descuido y escribe en la base equivocada.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: agente_postgres
+    environment:
+      POSTGRES_USER: agente
+      POSTGRES_PASSWORD: agente_local
+      POSTGRES_DB: expediente
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres_datos:/var/lib/postgresql/data
+    healthcheck:
+      # Sin esto, el contenedor se declara "arriba" en cuanto arranca el
+      # proceso y las primeras conexiones fallan. Un arranque que miente hace
+      # perder media hora buscando el fallo en el sitio equivocado.
+      test: ["CMD-SHELL", "pg_isready -U agente -d expediente"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    # 8 y no 7: la 7 no se pudo descargar (el DNS de esta máquina se
+    # cae cada pocos minutos) y la 8 ya estaba aquí. Para lo que se usa
+    # —guardar el estado de una llamada— da igual la mayor.
+    image: redis:8-alpine
+    container_name: agente_redis
+    ports:
+      - "56379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres_datos:

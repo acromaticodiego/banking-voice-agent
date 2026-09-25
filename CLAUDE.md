@@ -44,11 +44,16 @@ levantado, no solo compilando.
 | evaluación | `app/evaluation/` | 20 casos con su rúbrica y su motivo, partición con reservado bajo llave, corredor, línea base sin modelo, estabilidad entre corridas, protocolo de la medición final |
 | fundamento | `app/agent/fundamento.py` | compara lo que dice el agente con lo que devolvieron las herramientas: números, acciones y —desde el 24/09— procedimientos inventados. Determinista, sin modelo |
 | confianza del ASR | `app/confianza.py` | resume lo que el modelo sabe de su propia transcripción. Se anota, no decide. ADR 0008 |
+| telefonía | `app/telefonia/` | G.711 µ-law de verdad y el protocolo de Twilio Media Streams, comprobado sin cuenta con un cliente que lo emula |
+| estado compartido | `app/estado.py` | el estado conversacional en Redis, una escritura por turno. Otra pasarela puede retomar la llamada, y hay prueba de que lo hace |
+| expediente | `app/expediente/` | lo que queda al colgar en PostgreSQL: qué se dijo, qué herramienta con qué argumentos, qué devolvió y qué se revisó. Se lee con `-m app.expediente.leer` |
 | detector adaptativo | `app/deteccion_voz.py` | **NO está en uso.** Se puso y se revirtió el 24/09: ver ADR 0009. Se conserva con sus pruebas por el hallazgo |
 | canal telefónico | `probe/linea_telefonica.py` | 300–3400 Hz, 8 kHz y µ-law: el audio como llega por una llamada. Se comprueba solo |
 
 **Levantar la demo:**
 ```powershell
+docker compose up -d       # PostgreSQL (expediente) y Redis. Sin esto el
+                           # sistema corre igual, pero el expediente se pierde
 .\.venv\Scripts\python.exe -m uvicorn app.gateway:app --port 8000
 # y abrir http://127.0.0.1:8000/   (NO por la IP: el micrófono solo va en localhost o https)
 ```
@@ -63,6 +68,9 @@ levantado, no solo compilando.
 .\.venv\Scripts\python.exe -m app.agent.prueba_reintentos    # tres documentos antes de escalar, sin cuota
 .\.venv\Scripts\python.exe -m app.prueba_confianza          # el filtro de voz sigue puesto, sin cuota ni GPU
 .\.venv\Scripts\python.exe -m app.prueba_deteccion_voz     # el detector de voz y su limite conocido, sin cuota ni GPU
+.\.venv\Scripts\python.exe -m app.prueba_expediente        # el expediente. SIN Postgres sale con codigo 2, no con 0
+.\.venv\Scripts\python.exe -m app.prueba_estado            # turno 1 en una pasarela, turno 2 en otra. SIN Redis, codigo 2
+.\.venv\Scripts\python.exe -m app.prueba_telefonia         # el canal de Twilio, sin Twilio. G.711 contra audioop
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
@@ -655,17 +663,86 @@ punto estaba condenado. Medido contra la clase `Llamada` de verdad, abre 6 de
 6. La sonda modelaba mal el sistema; ver el ADR 0009 y el punto 12 de la lista
 de mediciones falsas.
 
-Es el patrón de la industria y lo que convierte "una página web" en "llamé al
-número desde mi móvil". Trae de regalo el audio de 8 kHz de verdad, la latencia
-de red real, y el plano del vídeo que mejor se entiende. Crédito de prueba.
+**El canal está hecho y comprobado (24/09), y sin gastar un céntimo.** El
+protocolo de Twilio se puede emular: `app/prueba_telefonia.py` ES un cliente de
+Twilio de mentira que manda la misma secuencia —`connected`, `start`, `media`
+en base64, `stop`— y comprueba lo que vuelve.
 
-### 8. El expediente en PostgreSQL y el estado en Redis
-Ahora el rastro de cada turno existe en memoria y se pierde al colgar. El
-proyecto promete "al colgar queda un expediente con qué se dijo, qué
-herramienta se llamó, con qué argumentos y qué devolvió". Eso hay que
-escribirlo. Y mover el estado de `Llamada` a Redis es lo que permite defender
-la frase de que la pasarela no guarda nada y escala horizontal — **hoy es
-verdad por diseño pero no está demostrado**.
+  · **G.711 µ-law de verdad** (`app/telefonia/g711.py`), no la simulación de
+    pérdida de `probe/linea_telefonica.py`. Verificado contra `audioop` en los
+    **65 536 valores posibles**, y ahí se vio que la primera versión difería en
+    381 de ellos: el estándar trabaja sobre 14 bits, no 16. Medio por ciento de
+    muestras mal no suena a error, suena a mala línea.
+  · **El puente** traduce mensajes a mensajes sin tocar la red, que es lo que
+    permite comprobarlo entero. Usa `mark` para saber cuándo el agente terminó
+    de hablar, en vez de calcularlo por la duración del audio.
+  · **Y lo que de verdad decide**: una grabación real pasada por el canal
+    completo —16 kHz → 8 kHz → µ-law → base64 → vuelta → Whisper— y el
+    documento `1070234567` sobrevive al viaje.
+  · El endpoint TwiML responde contra el servidor levantado
+    (`app/prueba_pasarela.py`).
+
+Y el transporte local también: `prueba_pasarela` llama al endpoint `/twilio`
+con un WebSocket de verdad y recibe **230 trozos de audio µ-law y su marca de
+fin**. Lo único sin comprobar es Twilio en sí.
+
+**Lo que falta, que es solo eso:** una cuenta, un número y un túnel. Los pasos
+exactos, con las trampas, están en **`docs/telefonia.md`**; no se repiten aquí
+para que no se despeguen. Lo que hay que saber de memoria:
+
+  · **Es gratis:** el trial da 75 minutos de voz y un número durante 30 días, y
+    para grabar la demo sobra. Y no hace falta telefonía permanente: el vídeo
+    dura para siempre, el trial 30 días.
+  · **Twilio reproduce un aviso del trial antes de tu TwiML** y solo se quita
+    pagando; en el vídeo se corta en edición.
+  · **Exige `wss://` con certificado válido.** De ahí el túnel. **ngrok ya está
+    en la máquina**, en `Desktop\ngrok-v3-stable-windows-amd64\ngrok.exe`
+    (v3.39.11), y solo le falta el authtoken de una cuenta gratuita: sin él,
+    ngrok v3 no arranca.
+  · Antes de marcar: `probe\check_telefonia.py`, que comprueba las cinco cosas
+    que fallan en silencio, incluida la peor — que el `.env` apunte al túnel de
+    la sesión anterior de ngrok, porque la URL cambia en cada arranque.
+  · Twilio NO es software libre, por si vuelve a salir la duda: es un servicio
+    de pago con crédito de prueba. La alternativa libre de verdad es
+    FreeSWITCH o Asterisk con un softphone, y entonces **no hay número de la
+    red telefónica**: se marca desde una app SIP, no desde el marcador del
+    móvil. Se descartó para esto porque cuesta horas —hay que compilar
+    `mod_audio_stream`, que es un módulo C++ de terceros— y porque el CV de
+    Juan Diego ya demuestra FreeSWITCH.
+
+### ~~8. El expediente en PostgreSQL~~ HECHO el 2026-09-24. Redis sigue pendiente
+El expediente está y **verificado contra Postgres de verdad**, no compilando:
+tres tablas (`llamada`, `turno`, `paso`), lo que devolvió cada herramienta
+guardado entero y sin resumir, más la confianza del ASR (ADR 0008), la clave
+de idempotencia (ADR 0007) y lo que el detector marcó sin fundamento. Una
+llamada real de `prueba_pasarela` queda leíble con
+`python -m app.expediente.leer <id>`.
+
+La decisión que lo gobierna, escrita en la cabecera del módulo: **una base de
+datos caída no puede tumbar una llamada en curso**. Se sigue atendiendo y se
+anota la pérdida; `fallos` y `ultimo_error` son parte de la interfaz, porque un
+expediente que se pierde en silencio es peor que no tenerlo.
+
+**Y el estado en Redis también, el mismo día.** La frase "la pasarela no
+guarda nada suyo y escala horizontal" **ya no es una promesa de diseño**:
+`app/prueba_estado.py` atiende el turno 1 en una pasarela y el turno 2 en otra
+distinta —objetos nuevos, otro modelo de mentira, nada compartido en memoria— y
+comprueba que en la petición de la segunda están los mensajes de la primera.
+Verificado también con una llamada real: tras `prueba_pasarela`, el estado
+aparece en Redis con `esperando: "documento"` y la historia entera.
+
+Lo que viaja es la conversación (historia, silencios, documentos ya probados,
+consumo, qué se estaba esperando). Lo que NO viaja es el audio, y esa
+distinción es la que lo hace barato: **una escritura por turno, no una por
+trozo de 20 ms**. El prompt del sistema tampoco viaja, a propósito: si viajara,
+una pasarela con el prompt nuevo seguiría atendiendo con el viejo durante horas
+y las mediciones por prompt del ADR 0005 dejarían de significar nada. Hay
+prueba de las dos cosas.
+
+**Lo que queda de este punto:** el `docker compose up -d` es manual, y una
+llamada solo se retoma si el navegador vuelve con `?llamada=<id>`. Levantar dos
+pasarelas de verdad detrás de un balanceador no se ha hecho: lo que está
+demostrado es que el estado no las ata, no que el despliegue exista.
 
 ### ~~9. Coste por conversación~~ INSTRUMENTADO el 2026-09-24, falta medirlo
 Los tokens se cuentan por paso, por turno y por conversación, y el contador
