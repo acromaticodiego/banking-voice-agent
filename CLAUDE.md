@@ -71,6 +71,7 @@ docker compose up -d       # PostgreSQL (expediente) y Redis. Sin esto el
 .\.venv\Scripts\python.exe -m app.prueba_expediente        # el expediente. SIN Postgres sale con codigo 2, no con 0
 .\.venv\Scripts\python.exe -m app.prueba_estado            # turno 1 en una pasarela, turno 2 en otra. SIN Redis, codigo 2
 .\.venv\Scripts\python.exe -m app.prueba_telefonia         # el canal de Twilio, sin Twilio. G.711 contra audioop
+.\.venv\Scripts\python.exe -m app.prueba_interrupcion      # cortar al agente (metrica 6), sin microfono
 .\.venv\Scripts\python.exe -m app.prueba_pasarela            # 5/5, con audio real de vuelta
 .\.venv\Scripts\python.exe -m app.fin_de_turno               # 15/15
 .\.venv\Scripts\python.exe probe\numeros_es.py               # 14/14
@@ -649,12 +650,35 @@ del turno y no solo la apertura—. Hace falta grabar, y grabar es cosa de Juan
 Diego: unos minutos de voz y de ruido de fondo en otro sitio, mejor con el
 móvil en manos libres.
 
-### 6. Barge-in, que exige cancelación de eco
-Hoy, mientras el agente habla, **se ignora la entrada**, y está declarado como
-decisión: sin cancelación de eco el micrófono capta la propia voz del agente y
-el sistema se contesta a sí mismo. El navegador ofrece `echoCancellation` y ya
-está pedido en `getUserMedia`, pero no se ha comprobado que baste. Es la
-métrica 6 y es lo que más se nota en una demo: poder interrumpir al agente.
+### ~~6. Barge-in~~ HECHO POR TELÉFONO el 2026-09-24. Por navegador, no
+Llevaba semanas bloqueado por dos razones ciertas —sin cancelación de eco el
+micrófono capta la propia voz del agente, y había que oírlo para saber si
+funciona—. **El canal telefónico quita las dos**: la línea ya cancela el eco, y
+el emulador de Twilio permite mandar voz mientras el agente habla y mirar qué
+pasa. Así que se implementó y se comprobó entero, sin micrófono y sin nadie
+delante (`app/prueba_interrupcion.py`).
+
+  · Hace falta **400 ms de voz seguida** para cortar. La racha se rompe con un
+    solo trozo de silencio, que es lo que distingue una interrupción de tres
+    sílabas sueltas.
+  · **El audio de la interrupción no se pierde**: los 2 s anteriores se guardan
+    y pasan a ser el principio del turno nuevo. Sin eso, quien interrumpe
+    diciendo "espere, mi cédula es otra" sería oído desde "cédula es otra".
+  · Por la línea se manda **`clear`**, que es lo que hace que el corte se note:
+    sin él el agente se calla por dentro y sigue sonando por el teléfono varios
+    segundos.
+
+**Los 400 ms están razonados y NO medidos, y hay que decirlo.** El
+razonamiento: un "ajá" o una tos rondan los 200 ms y una palabra entera pasa de
+400. Medirlo de verdad necesita grabaciones de gente interrumpiendo —con la
+duración de cada interjección—, y eso va con el punto 5.
+
+**Y por navegador sigue apagado, a propósito.** `permitir_interrupcion` está en
+falso salvo en el canal de Twilio; en la página web, sin cancelación de eco
+comprobada, el sistema se interrumpiría a sí mismo cada vez que abriera la
+boca. El navegador ofrece `echoCancellation` y ya está pedido en
+`getUserMedia`, pero **no se ha comprobado que baste**, y eso sí necesita a
+Juan Diego con el micrófono.
 
 ### 7. Telefonía real con Twilio Media Streams
 **Falsa alarma del 24/09, que conviene conocer antes de repetirla:** pareció
