@@ -131,15 +131,27 @@ def prueba_el_reservado_no_se_toca_cuando_no_cabe() -> None:
     medición que no cabía y el reservado se habría gastado a medias.
     """
     con_libro([(time.time() - HORA, 199_737)])
-    original, argv = medicion_final.una_corrida, sys.argv
+    original, argv, raiz = (medicion_final.una_corrida, sys.argv,
+                            medicion_final.RAIZ)
     medicion_final.una_corrida = _explota
     sys.argv = ["medicion_final", "--declaro-medicion-final"]
-    try:
-        codigo = medicion_final.main()
-    except SeCorrioElReservado as exc:
-        raise AssertionError(str(exc)) from exc
-    finally:
-        medicion_final.una_corrida, sys.argv = original, argv
+    # RAIZ va a un temporal desde el 2026-09-26, y el motivo es que el reservado
+    # ya está medido: con el artefacto de verdad en su sitio, `main` salía con 1
+    # por el guardia de «este conjunto ya se midió» y **nunca llegaba al
+    # canario**. La prueba seguía en verde el día anterior y habría dejado de
+    # cubrir lo que dice el día siguiente, sin avisar. Con RAIZ redirigida, el
+    # artefacto no existe en ese directorio y el flujo llega donde tiene que
+    # llegar.
+    with tempfile.TemporaryDirectory() as temporal:
+        (Path(temporal) / "artifacts").mkdir()
+        medicion_final.RAIZ = Path(temporal)
+        try:
+            codigo = medicion_final.main()
+        except SeCorrioElReservado as exc:
+            raise AssertionError(str(exc)) from exc
+        finally:
+            (medicion_final.una_corrida, sys.argv,
+             medicion_final.RAIZ) = original, argv, raiz
     assert codigo == 3, f"esperaba salir con 3 (no se empieza), salió {codigo}"
 
 
