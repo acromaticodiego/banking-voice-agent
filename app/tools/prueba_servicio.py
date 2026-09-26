@@ -95,6 +95,20 @@ def main() -> int:
             # NINGUNA respuesta, ni en la que verifica ni en la que rechaza. Es
             # lo único que hace imposible la fuga en vez de improbable: el
             # modelo no puede decir lo que nunca ha recibido.
+            #
+            # La primera versión de esta comprobación NO cazaba nada, y se
+            # descubrió rompiéndola a propósito el 2026-09-26: hacía
+            # `bruto.replace(nombre_declarado, "")` antes de buscar, con la idea
+            # de no confundir un eco del nombre declarado con una fuga. Al volver
+            # a añadir `"nombre": cliente["nombre"]` a la respuesta, el replace
+            # borraba exactamente la cadena que había que detectar y la prueba
+            # seguía en verde. Es la categoría 11 de la lista de mediciones
+            # falsas —una prueba que pasa con lo que dice proteger roto— cometida
+            # dentro de la prueba escrita para evitarla.
+            #
+            # Se busca en el texto crudo, sin limpiar nada. La herramienta no
+            # tiene por qué hacer eco del nombre declarado, así que si aparece es
+            # un problema de todos modos.
             for cuerpo in ({"documento": "1070234567"},
                            {"documento": "1070234567",
                             "nombre_declarado": "Juan Diego Ossa"},
@@ -102,10 +116,8 @@ def main() -> int:
                             "nombre_declarado": "Andrés Gómez Ríos"},
                            {"documento": "9999999"}):
                 bruto = c.post("/consultar_identidad", json=cuerpo).text
-                sin_titular = "Ossa" not in bruto.replace(
-                    str(cuerpo.get("nombre_declarado", "")), "")
                 comprobar(f"el nombre del titular no sale con {list(cuerpo)}",
-                          sin_titular, bruto)
+                          "Ossa" not in bruto, bruto)
 
             r = c.post("/estado_tarjeta", json={"id_cliente": "CL-0001"}).json()
             comprobar("devuelve la tarjeta bloqueada",
