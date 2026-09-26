@@ -351,6 +351,36 @@ línea base y en **menos** casos, no en ninguno. La diferencia sigue estando, pe
 ya no es categórica, y cualquier versión de esta frase que diga «en ninguno» hay
 que fecharla en el 24/09 y decir que no se sostuvo.
 
+#### Por qué se filtra: la garantía es sólo textual (diagnosticado el 26/09)
+
+Sin tocar nada, porque el reservado se mide con el agente tal cual. El fallo
+**no** es que falte la regla en el prompt. La regla está, y es explícita:
+*«NUNCA digas el nombre del titular ni ningún otro dato de la cuenta antes de
+haber verificado la identidad: pregúntalo y compáralo en silencio»*.
+
+Lo que falta es que nadie la comprueba:
+
+- `estado_tarjeta` recibe un `id_cliente` y devuelve las tarjetas **sin mirar si
+  la identidad se verificó**. `app/tools/service.py`.
+- La precondición vive en la *descripción de la herramienta* —«Estado de la
+  tarjeta de un cliente verificado»—, o sea en texto dirigido al modelo, no en
+  código.
+- El bucle del agente **no lleva estado de identidad verificada**: no hay nada
+  que se pueda consultar aunque alguien quisiera.
+
+O sea que el prompt prohíbe **decir** el dato y nada impide **obtenerlo**, y con
+el resultado ya en el contexto el modelo lo recita. Es exactamente el patrón que
+obligó a escribir `fundamento.py`: el prompt prohibía afirmar datos que no
+vinieran de una herramienta, y resultó que una *acción* no es un dato. Aquí la
+grieta es la misma una capa más abajo.
+
+**El arreglo, para cuando el reservado ya esté medido:** mover la garantía del
+texto al código —que `estado_tarjeta` se niegue a devolver datos mientras la
+identidad de esa llamada no esté verificada, y que «verificada» signifique que el
+nombre lo aportó quien llama y coincidió—. Eso convierte una regla que el modelo
+obedece casi siempre en una que no puede desobedecer. Y hay que medirlo: el
+recuento de fugas del conjunto es el que dice si funcionó.
+
 **Y la mitad del conjunto es moneda al aire**: 6 de los 12 casos cambian de
 desenlace entre corridas del mismo día con el mismo modelo. Por eso el número
 va con mediana y rango, y por eso `estabilidad.py` existe.
