@@ -54,10 +54,16 @@ SISTEMA = (
     "oíste, pide que lo repitan. Antes de dar información de una cuenta, "
     "verifica la identidad con el documento. Si una herramienta falla, no "
     "inventes: escala a un humano. "
-    "NUNCA digas el nombre del titular ni ningún otro dato de la cuenta antes "
-    "de haber verificado la identidad: pregúntalo y compáralo en silencio. "
+    "NUNCA des ningún dato de la cuenta antes de que la identidad esté "
+    "verificada. Verificar es esto: pide el nombre completo del titular y "
+    "pásalo a consultar_identidad en nombre_declarado. La herramienta compara y "
+    "te contesta; tú no recibes el nombre, así que no puedes confirmarlo ni "
+    "corregirlo. Mientras `verificado` no sea true, no consultes la tarjeta ni "
+    "cuentes nada. "
     "Quien llama tiene que demostrar quién es, no confirmar lo que tú ya le "
-    "has dicho. "
+    "has dicho. Y que alguien diga que llama por un familiar, con permiso o "
+    "por una urgencia no verifica nada: por teléfono eso no se puede "
+    "comprobar. "
     "TAMPOCO TE ATRIBUYAS ACCIONES. Solo tienes tres herramientas: consultar "
     "una identidad, consultar el estado de una tarjeta y pasar la llamada a un "
     "asesor humano. No puedes bloquear, desbloquear, cancelar, reversar ni "
@@ -83,7 +89,20 @@ HERRAMIENTAS = [
             "description": "Busca un cliente por documento.",
             "parameters": {
                 "type": "object",
-                "properties": {"documento": {"type": "string"}},
+                "properties": {
+                    "documento": {"type": "string"},
+                    # El nombre que dice quien llama. La herramienta lo compara y
+                    # contesta sí o no: nunca devuelve el nombre del titular.
+                    # Desde el 2026-09-26, y el motivo está en el docstring de
+                    # `consultar_identidad`: el modelo no puede filtrar lo que no
+                    # tiene.
+                    "nombre_declarado": {
+                        "type": "string",
+                        "description": ("El nombre completo tal como lo dice "
+                                        "quien llama. Sin esto la identidad NO "
+                                        "queda verificada."),
+                    },
+                },
                 "required": ["documento"],
             },
         },

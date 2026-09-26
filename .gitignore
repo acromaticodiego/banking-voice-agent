@@ -12,6 +12,12 @@ artifacts/*.wav
 artifacts/*.mp3
 artifacts/*.raw
 
+# El libro de la cuota de Groq (app/evaluation/cuota.py). Se ignora porque es
+# estado operativo de UNA cuenta y cambia en cada corrida: versionarlo llenaría
+# el historial de apuntes sin ningún resultado dentro. Lo que hay que poder
+# auditar —los tokens de cada medición— ya va en el artefacto de esa medición.
+artifacts/consumo-groq.jsonl
+
 # Binarios y voces de Piper: pesan y se descargan, no se versionan.
 vendor/
 

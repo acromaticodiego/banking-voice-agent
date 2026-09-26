@@ -72,6 +72,20 @@ def main() -> int:
     parser.add_argument("--prompt", choices=["actual", "anterior"],
                         default=None,
                         help="solo las corridas con esta versión del prompt")
+    parser.add_argument("--version", default=None,
+                        help="solo las corridas hechas con esta versión del "
+                             "agente: la huella (app/agent, app/tools, catálogo "
+                             "y partición) o «commit <corto>» para las que no "
+                             "la tengan. Acepta varias separadas por coma, y "
+                             "eso significa que HAS COMPROBADO con git "
+                             "rev-parse que son el mismo agente")
+    parser.add_argument("--desde", default=None,
+                        help="solo las corridas guardadas desde esta fecha "
+                             "(AAAAMMDD). Hace falta porque «sin anotar» mete "
+                             "en el mismo saco todas las corridas anteriores al "
+                             "2026-09-25, y esas sí son de agentes distintos: "
+                             "el 24/09 cambiaron el turno vacío y los tres "
+                             "intentos de documento")
     parser.add_argument("--presupuesto-ms", type=float, default=None,
                         help="solo las corridas con este reloj de turno")
     parser.add_argument("--incluir-contaminadas", action="store_true",
@@ -93,6 +107,12 @@ def main() -> int:
         datos = json.loads(fichero.read_text(encoding="utf-8"))
         if args.casos and datos["total"] != args.casos:
             continue
+        # La fecha sale del nombre del fichero, no del `mtime`: un git checkout
+        # o una copia cambian el mtime y no cambian el nombre.
+        if args.desde:
+            marca = fichero.stem.split("-")[-2:]
+            if not marca or marca[0] < args.desde:
+                continue
         # Las corridas de antes del 2026-09-24 no guardaban ni el prompt ni el
         # presupuesto, así que se etiquetan con lo que eran entonces: el prompt
         # de antes y el reloj de 3000 ms. Inventarles un "desconocido" las
@@ -103,6 +123,11 @@ def main() -> int:
             continue
         if args.presupuesto_ms and presupuesto != args.presupuesto_ms:
             continue
+        if args.version:
+            version = (datos.get("huella_agente")
+                       or f"commit {datos.get('commit', 'sin anotar')}")
+            if version not in [v.strip() for v in args.version.split(",")]:
+                continue
         if datos.get("incidencias") and not args.incluir_contaminadas:
             contaminadas += 1
             continue
@@ -129,15 +154,53 @@ def main() -> int:
     # reloj del turno se relajó, y las dos cosas mueven el número. Tres
     # corridas de un brazo y tres del otro, metidas en el mismo saco, dan una
     # mediana de nada con una estabilidad falsa. Mejor negarse que promediar.
+    #
+    # Y la versión de lo medido, que faltaba y es la que más duele. El
+    # 2026-09-25 esta misma llamada mezcló tres corridas del 24/09 con dos del
+    # 25/09 y dio una mediana de 8/12 sin decir una palabra: el prompt y el
+    # presupuesto coincidían, pero el agente de en medio había cambiado dos
+    # veces (el turno vacío y los tres intentos de documento).
+    #
+    # Se compara la HUELLA del agente y no el commit, y la diferencia importó a
+    # las pocas horas de escribir esto. El 26/09 las tres corridas limpias
+    # salieron con dos commits distintos —los de en medio arreglaron el libro de
+    # la cuota y el canario, o sea el instrumento— y el agente era byte por byte
+    # el mismo. Comparar por commit las habría separado por un motivo
+    # equivocado: acierta en la dirección segura, pero bloquea una comparación
+    # legítima. La huella cubre app/agent, app/tools, el catálogo y la
+    # partición, que es lo que de verdad participa en el resultado.
+    # Pasar varias versiones a `--version` es declarar «he comprobado que son el
+    # mismo agente», así que la dimensión se colapsa a propósito y se avisa más
+    # abajo. La alternativa —negarse igual— obligaría a no poder comparar nunca
+    # corridas legítimas separadas por un commit que solo tocó una sonda.
+    declaradas_iguales = bool(args.version and "," in args.version)
+
+    def version_de(d: dict) -> str:
+        if declaradas_iguales:
+            return f"varias, declaradas iguales: {args.version}"
+        return d.get("huella_agente") or f"commit {d.get('commit', 'sin anotar')}"
+
     condiciones = {(d.get("prompt", "anterior"),
-                    d.get("presupuesto_ms", 3000.0)) for _, d in corridas}
+                    d.get("presupuesto_ms", 3000.0),
+                    version_de(d)) for _, d in corridas}
     if len(condiciones) > 1:
         print("Estas corridas no se hicieron en las mismas condiciones:")
-        for prompt, presupuesto in sorted(condiciones):
-            print(f"    prompt {prompt}, presupuesto {presupuesto:.0f} ms")
-        print("  Filtra con --prompt y --presupuesto-ms. Promediarlas daría "
-              "una mediana de dos experimentos distintos y una tabla de "
-              "estabilidad que mide el cambio de condiciones, no al agente.")
+        for prompt, presupuesto, version in sorted(condiciones):
+            print(f"    prompt {prompt}, presupuesto {presupuesto:.0f} ms, "
+                  f"agente {version}")
+        print("  Filtra con --prompt, --presupuesto-ms y --version. "
+              "Promediarlas daría una mediana de dos experimentos distintos y "
+              "una tabla de estabilidad que mide el cambio de condiciones, no "
+              "al agente.")
+        if any("sin anotar" in v for _, _, v in condiciones):
+            print("  Las corridas anteriores al 2026-09-25 no guardaban con qué "
+                  "agente se midieron y salen como «sin anotar».")
+        print("\n  Si has COMPROBADO que son el mismo agente, pásalas juntas: "
+              "--version \"a,b\". La comprobación es esta, y hay que hacerla, no "
+              "suponerla:")
+        for camino in ("app/agent", "app/tools", "app/evaluation/catalogo.py",
+                       "app/evaluation/particion.py"):
+            print(f"      git rev-parse <commitA>:{camino} <commitB>:{camino}")
         return 1
 
     tabla: dict[str, list[str]] = defaultdict(list)
@@ -152,10 +215,21 @@ def main() -> int:
                                   else obtenido)
 
     n = len(corridas)
-    prompt, presupuesto = condiciones.pop()
+    prompt, presupuesto, version = condiciones.pop()
     print(f"{args.quien} sobre {args.conjunto}: {n} corrida(s) de "
           f"{tamanos.pop()} casos, prompt {prompt}, presupuesto "
-          f"{presupuesto:.0f} ms, reclasificadas con el clasificador de hoy\n")
+          f"{presupuesto:.0f} ms, agente {version}, reclasificadas con el "
+          f"clasificador de hoy\n")
+    if "sin anotar" in version:
+        print("  AVISO: estas corridas no guardaron con qué versión del agente "
+              "se midieron, así que pueden ser de agentes distintos. Las de "
+              "aquí en adelante sí lo guardan.\n")
+    if args.version and "," in args.version:
+        print(f"  Se están juntando {len(args.version.split(','))} versiones "
+              f"porque quien llamó lo pidió explícitamente: {args.version}.")
+        print("  Eso vale SOLO si se comprobó con git rev-parse que el agente "
+              "es el mismo. Si no se comprobó, este número mezcla dos "
+              "experimentos.\n")
     for nombre, datos in corridas:
         print(f"    {nombre}   {sin_fundamento(datos)}")
     print()

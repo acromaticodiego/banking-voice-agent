@@ -50,20 +50,86 @@ def main() -> int:
         with httpx.Client(base_url=BASE, timeout=10) as c:
             comprobar("responde /salud", c.get("/salud").json()["estado"] == "vivo")
 
+            # --------------------------------------------- la verificación
+            # El documento solo, sin nombre: existe pero NO está verificado, y
+            # sobre todo NO sale el id_cliente. Antes del 2026-09-26 esta misma
+            # llamada devolvía el nombre del titular, y ahí estaba la fuga.
             r = c.post("/consultar_identidad", json={"documento": "1070234567"}).json()
-            comprobar("encuentra al cliente", r.get("id_cliente") == "CL-0001", str(r))
+            comprobar("el documento solo no verifica",
+                      r.get("encontrado") is True and r.get("verificado") is False,
+                      str(r))
+            comprobar("sin verificar no hay id_cliente", "id_cliente" not in r, str(r))
+            comprobar("dice qué hacer", "nombre_declarado" in str(r), str(r))
 
             # El documento viene de la voz: el ASR puede meter puntos o espacios.
-            r = c.post("/consultar_identidad", json={"documento": "1.070.234.567"}).json()
-            comprobar("limpia puntos del documento", r.get("id_cliente") == "CL-0001", str(r))
+            r = c.post("/consultar_identidad",
+                       json={"documento": "1.070.234.567",
+                             "nombre_declarado": "Juan Diego Ossa"}).json()
+            comprobar("limpia puntos del documento y verifica",
+                      r.get("id_cliente") == "CL-0001", str(r))
 
-            r = c.post("/consultar_identidad", json={"documento": "9999999"}).json()
-            comprobar("distingue no encontrado de error",
-                      r.get("encontrado") is False, str(r))
+            # El caso que el conjunto de evaluación no perdona: nombre que no es
+            # del titular. No verifica y no dice cuál era el bueno.
+            r = c.post("/consultar_identidad",
+                       json={"documento": "1070234567",
+                             "nombre_declarado": "Andrés Gómez Ríos"}).json()
+            comprobar("un nombre ajeno no verifica",
+                      r.get("verificado") is False and r.get("nombre_coincide") is False,
+                      str(r))
+
+            # Tolerancias y límites de la comparación, que son una decisión y
+            # están razonados en `_nombre_coincide`.
+            for declarado, vale in (("Juan Diego Ossa", True), ("Juan Ossa", True),
+                                    ("juan diego ossa", True), ("JUAN OSSA", True),
+                                    ("Diego Ossa", True), ("Ossa", False),
+                                    ("Juan Diego", False),
+                                    ("Juan Diego Ossa Restrepo", False),
+                                    ("", False)):
+                r = c.post("/consultar_identidad",
+                           json={"documento": "1070234567",
+                                 "nombre_declarado": declarado}).json()
+                comprobar(f"nombre {declarado!r} -> {'verifica' if vale else 'no'}",
+                          bool(r.get("verificado")) is vale, str(r))
+
+            # EL INVARIANTE FUERTE: el nombre del titular no puede aparecer en
+            # NINGUNA respuesta, ni en la que verifica ni en la que rechaza. Es
+            # lo único que hace imposible la fuga en vez de improbable: el
+            # modelo no puede decir lo que nunca ha recibido.
+            #
+            # La primera versión de esta comprobación NO cazaba nada, y se
+            # descubrió rompiéndola a propósito el 2026-09-26: hacía
+            # `bruto.replace(nombre_declarado, "")` antes de buscar, con la idea
+            # de no confundir un eco del nombre declarado con una fuga. Al volver
+            # a añadir `"nombre": cliente["nombre"]` a la respuesta, el replace
+            # borraba exactamente la cadena que había que detectar y la prueba
+            # seguía en verde. Es la categoría 11 de la lista de mediciones
+            # falsas —una prueba que pasa con lo que dice proteger roto— cometida
+            # dentro de la prueba escrita para evitarla.
+            #
+            # Se busca en el texto crudo, sin limpiar nada. La herramienta no
+            # tiene por qué hacer eco del nombre declarado, así que si aparece es
+            # un problema de todos modos.
+            for cuerpo in ({"documento": "1070234567"},
+                           {"documento": "1070234567",
+                            "nombre_declarado": "Juan Diego Ossa"},
+                           {"documento": "1070234567",
+                            "nombre_declarado": "Andrés Gómez Ríos"},
+                           {"documento": "9999999"}):
+                bruto = c.post("/consultar_identidad", json=cuerpo).text
+                comprobar(f"el nombre del titular no sale con {list(cuerpo)}",
+                          "Ossa" not in bruto, bruto)
 
             r = c.post("/estado_tarjeta", json={"id_cliente": "CL-0001"}).json()
             comprobar("devuelve la tarjeta bloqueada",
                       r["tarjetas"][0]["estado"] == "bloqueada", str(r))
+
+            # Un id_cliente inventado no da datos, y lo dice con lo que hay que
+            # hacer: es el atajo que quedaría si alguien adivinara el formato.
+            r = c.post("/estado_tarjeta", json={"id_cliente": "CL-9999"}).json()
+            comprobar("un id_cliente inventado no da tarjetas",
+                      r.get("encontrado") is False and "tarjetas" not in r, str(r))
+            comprobar("y explica que hay que verificar primero",
+                      "consultar_identidad" in str(r.get("_que_hacer", "")), str(r))
 
             # Idempotencia: el mismo turno reintentado no abre dos tickets.
             uno = c.post("/escalar_a_humano",

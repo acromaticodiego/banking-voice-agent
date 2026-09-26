@@ -28,6 +28,15 @@ PATRON = re.compile(r"\b(\d{6,11})\b")
 PIDE_DATOS_AJENOS = re.compile(
     r"\b(saldo|a nombre de qui[eé]n|de la cuenta de|su cuenta)\b", re.I)
 
+# El nombre que declara quien llama, a la manera de las reglas: «soy X», «me
+# llamo X», o un nombre propio suelto de dos o más palabras capitalizadas, que
+# es como llega cuando el agente lo ha pedido y contestan solo el nombre.
+# Deliberadamente tosco. Una regla no entiende, reconoce formas.
+_NOMBRE = re.compile(
+    r"(?:soy|me llamo|mi nombre es)\s+([A-ZÁÉÍÓÚÑ][\wáéíóúñ]+"
+    r"(?:\s+[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)+)"
+    r"|^\s*([A-ZÁÉÍÓÚÑ][\wáéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)+)\s*\.?\s*$")
+
 
 def _escalar(base: str, motivo: str) -> dict:
     """Escala de verdad, llamando a la herramienta.
@@ -73,14 +82,30 @@ def decidir_sin_modelo(caso, frase: str,
         return ("Tuve un problema para verificar su identidad. Le paso con un "
                 "asesor.", ["escalar_a_humano"], [ticket])
 
+    # El nombre, si es que lo han dicho. Las reglas hacen lo que puede hacer una
+    # regla: buscar un patrón. Desde el 2026-09-26 `consultar_identidad` no
+    # devuelve el nombre del titular, lo COMPARA, así que sin nombre declarado no
+    # hay `id_cliente` y no hay nada que recitar. Eso cambia los números de la
+    # línea base y hay que decirlo: los de antes del arreglo no son comparables
+    # con los de después, igual que para el agente.
+    nombre = _NOMBRE.search(frase)
+    cuerpo = {"documento": encontrado.group(1)}
+    if nombre:
+        # Dos grupos alternativos: «soy X» y el nombre suelto. Solo uno casa.
+        cuerpo["nombre_declarado"] = (nombre.group(1) or nombre.group(2)).strip()
     with httpx.Client(timeout=10) as c:
-        r = c.post(f"{base}/consultar_identidad",
-                   json={"documento": encontrado.group(1)}).json()
+        r = c.post(f"{base}/consultar_identidad", json=cuerpo).json()
     if not r.get("encontrado"):
         ticket = _escalar(base, "documento no encontrado")
         return ("No encontré ese documento en el sistema. Le paso con un "
                 "asesor.", ["consultar_identidad", "escalar_a_humano"],
                 [r, ticket])
+    if not r.get("verificado"):
+        # Aquí es donde un árbol de reglas se queda corto, y ahora se ve: no
+        # sabe pedir el nombre y volver a intentarlo dentro del mismo turno.
+        # Antes tampoco sabía, pero la herramienta le daba los datos igual.
+        return ("Necesito verificar su identidad antes de darle información. "
+                "¿Cuál es su nombre completo?", ["consultar_identidad"], [r])
 
     with httpx.Client(timeout=10) as c:
         t = c.post(f"{base}/estado_tarjeta",

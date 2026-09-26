@@ -113,13 +113,34 @@ def main() -> int:
                   con_puntos["_intentos_en_esta_llamada"] == 1,
                   str(agente3.documentos_intentados))
 
-        print("\n[4] El documento que SÍ existe no lleva anotación")
+        print("\n[4] El documento que SÍ existe no lleva anotación DEL AGENTE")
         agente4 = Agente(ModeloProhibido(), "prohibido", BASE)
         encontrado = consultar(agente4, BUENO)
         comprobar("lo encuentra", encontrado["encontrado"] is True)
-        comprobar("y el resultado va limpio, sin campos del agente",
-                  not any(c.startswith("_") for c in encontrado),
+        # Hasta el 2026-09-26 esto comprobaba que no hubiera NINGÚN campo con
+        # `_`, y dejó de describir el sistema en cuanto `consultar_identidad`
+        # pasó a verificar el nombre: un documento que existe pero sin verificar
+        # vuelve con `_falta` y `_que_hacer`, que los pone el SERVICIO.
+        #
+        # Lo que el prefijo `_` marca —y esto es lo que la prueba tiene que
+        # cuidar— no es «lo puso el agente» sino «esto es guía para el modelo, no
+        # un dato del core». Lo que sigue importando es que el agente no cuente
+        # intentos de documento cuando no hay ningún documento equivocado.
+        for campo in ("_intentos_en_esta_llamada", "_intentos_antes_de_escalar"):
+            comprobar(f"el agente no anota {campo}", campo not in encontrado,
+                      str(list(encontrado)))
+        comprobar("la guía que trae es la del servicio, que pide el nombre",
+                  encontrado.get("_falta") == "nombre_declarado",
                   str(list(encontrado)))
+        # Y que los dos caminos no se pisen, que es lo que haría que una guía
+        # tapara la otra: el agente anota solo cuando NO se encuentra el
+        # documento y el servicio guía solo cuando SÍ existe.
+        no_encontrado = consultar(Agente(ModeloProhibido(), "prohibido", BASE),
+                                  MALOS[0])
+        comprobar("y con documento inexistente la guía es la del agente",
+                  "_intentos_en_esta_llamada" in no_encontrado
+                  and "_falta" not in no_encontrado,
+                  str(list(no_encontrado)))
 
         print("\n[5] Una herramienta caída NO cuenta como documento malo")
         # Si el core se cae, eso no es un documento equivocado. Contarlo haría

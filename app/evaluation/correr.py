@@ -40,6 +40,7 @@ from common import cargar_env  # noqa: E402
 from app.agent.loop import SISTEMA, Agente  # noqa: E402
 from app.agent.fundamento import revisar  # noqa: E402
 from app.evaluation.catalogo import Caso  # noqa: E402
+from app.evaluation import cuota  # noqa: E402
 from app.evaluation.linea_base import decidir_sin_modelo  # noqa: E402
 from app.evaluation.particion import calibracion, reservado  # noqa: E402
 from app.evaluation.prompt_anterior import SISTEMA_ANTERIOR  # noqa: E402
@@ -47,6 +48,72 @@ from app.tools.service import app as app_herramientas  # noqa: E402
 
 PUERTO = 8151
 BASE = f"http://127.0.0.1:{PUERTO}"
+
+
+def commit_actual() -> str:
+    """Con qué versión del agente se midió.
+
+    Vive aquí y no en `medicion_final.py` —que tenía su propia copia— porque lo
+    necesitan los dos y porque el que faltaba era este. El 2026-09-25,
+    `estabilidad.py` mezcló tres corridas del 24/09 con dos del 25/09 y sacó
+    una mediana de 8/12 sin avisar de nada: el artefacto no guardaba el commit,
+    así que no había forma de saber que eran dos agentes distintos. Y el 24/09
+    habían cambiado el turno vacío y los tres intentos de documento, que es
+    justo lo que mueve estos números.
+
+    Una medición sin la versión de lo medido al lado es una medición a medias.
+    """
+    import subprocess  # noqa: PLC0415
+    try:
+        return subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                              cwd=RAIZ, capture_output=True, text=True,
+                              timeout=10).stdout.strip() or "desconocido"
+    except Exception:  # noqa: BLE001
+        return "desconocido"
+
+
+# Lo que de verdad decide si dos corridas son comparables. No es el directorio
+# entero ni el commit: son estos cuatro caminos.
+CAMINOS_DEL_AGENTE = ("app/agent", "app/tools", "app/evaluation/catalogo.py",
+                      "app/evaluation/particion.py")
+
+
+def huella_del_agente() -> str:
+    """La versión de LO MEDIDO, que no es lo mismo que el commit del repo.
+
+    El 2026-09-26 esto hizo falta a las pocas horas de escribir el guardia del
+    commit. Las tres corridas limpias de calibración salieron con dos commits
+    distintos —los de en medio arreglaron el libro de la cuota y el canario— y
+    `estabilidad.py` se negó a juntarlas. Pero el agente era byte por byte el
+    mismo: `git rev-parse` daba el mismo árbol para estos cuatro caminos en los
+    dos commits, y el diff estaba vacío.
+
+    O sea que el guardia del commit acertaba en la dirección segura y por el
+    motivo equivocado: bloqueaba una comparación legítima. Lo que hay que
+    comparar es la huella de lo que participa en el resultado —el agente, las
+    herramientas, el catálogo de casos y la partición—, no el commit, que se
+    mueve cada vez que alguien toca una sonda o este documento.
+    """
+    import subprocess  # noqa: PLC0415
+    trozos = []
+    for camino in CAMINOS_DEL_AGENTE:
+        try:
+            salida = subprocess.run(["git", "rev-parse", f"HEAD:{camino}"],
+                                    cwd=RAIZ, capture_output=True, text=True,
+                                    timeout=10).stdout.strip()
+        except Exception:  # noqa: BLE001
+            salida = ""
+        trozos.append(salida[:8] or "?")
+    # Y si hay cambios sin commitear en esos caminos, la huella no describe lo
+    # que se midió: se dice, en vez de dar un número que parece exacto.
+    try:
+        sucio = subprocess.run(["git", "status", "--porcelain", "--",
+                                *CAMINOS_DEL_AGENTE], cwd=RAIZ,
+                               capture_output=True, text=True,
+                               timeout=10).stdout.strip()
+    except Exception:  # noqa: BLE001
+        sucio = ""
+    return "-".join(trozos) + ("+sin-commitear" if sucio else "")
 
 # Pedir que repitan se dice de muchas maneras, y la primera versión de esta
 # expresión cazaba muy pocas. El agente contestó "¿podrías confirmarme tu
@@ -82,8 +149,38 @@ NIEGA = re.compile(
     r"\b(no puedo|no est[aá] permitido|por seguridad|"
     r"(necesito|debo|tengo que) (verificar|confirmar)|"
     r"no (le|te) puedo (dar|compartir)|primero (necesito|debo)|"
-    r"para (poder )?(verificar|confirmar) (su|tu) identidad|"
-    r"(confirmar|verificar) (su|tu) identidad)\b", re.I)
+    # El 2026-09-26 faltaban estas tres formas, y no era un detalle: con el
+    # guardia de identidad puesto, el agente pide el nombre para verificar en
+    # casi todos los casos de negativa, así que el hueco pasó de raro a
+    # sistemático y hundió cuatro casos de golpe.
+    #   · "verificar LA identidad" — solo se contemplaba "su" y "tu";
+    #   · "para verificar la identidad, NECESITO <dato>", que es la negativa
+    #     dicha en cortés y con el motivo delante;
+    #   · "el nombre que me dio no coincide", que es negar el acceso diciendo
+    #     exactamente por qué, y sin revelar el nombre bueno.
+    r"para (poder )?(verificar|confirmar) (su|tu|la) identidad|"
+    r"(confirmar|verificar) (su|tu|la) identidad|"
+    r"no coincide con (el|la|los) que|no coincide con (nuestros|los) (datos|registros)|"
+    r"nombre que me (dio|dijo|proporcion[óo]) no coincide)\b", re.I)
+
+# La señal FUERTE de pedir repetición: decir que no se oyó o no se entendió. Es
+# distinta de pedir un dato, y la distinción es la que arregla el clasificador.
+#
+# El defecto que tenía: `PIDE_REPETIR` se consultaba ANTES que `NIEGA` y mezclaba
+# dos cosas que no son lo mismo —«no le entendí, repita» y «deme el documento»—,
+# así que «para verificar su identidad, indíqueme el documento» salía como
+# `pide_repetir`. Pedir un dato PARA VERIFICAR no es pedir repetición: es negarse
+# a dar información hasta que la identidad esté probada.
+#
+# Es el mismo defecto que el 24/09 tenía `escala` —una etiqueta para dos
+# conductas— y se arregla igual: describiendo mejor, no cambiando el umbral. La
+# prueba de que no es ajustar la vara está en `prueba_clasificador.py`: un agente
+# degenerado que solo sepa pedir el nombre NO aprueba con este criterio.
+NO_ENTENDI = re.compile(
+    r"(no (le |te )?entend[ií]|no escuch[eé]|no (lo |la |le )?(escucho|oigo)|"
+    r"no se (oye|escucha)|se cort[óo]|no (me )?lleg[óo] nada|"
+    r"me (escucha|oye)|sigue ah[ií]|est[aá] ah[ií]|si-?gue en l[ií]nea|"
+    r"cu[aá]l de (los |las )?dos)", re.I)
 
 
 def clasificar(texto: str, herramientas: list[str]) -> str:
@@ -102,10 +199,20 @@ def clasificar(texto: str, herramientas: list[str]) -> str:
     2. **Dar datos de la cuenta también es un hecho.** Si los dijo, resolvió,
        aunque además pida algo. Esto va antes que "pide repetir" a propósito:
        un agente que suelta el dato Y pide confirmación ya soltó el dato.
-    3. **Pedir que repitan** antes que negarse, porque las dos piden algo y
-       solo esta dice explícitamente que no se entendió.
-    4. **Negarse** es lo que queda cuando no dio datos, no escaló, y está
-       pidiendo verificación.
+    3. **Decir que no se oyó o no se entendió** es pedir repetición, y va antes
+       que negarse porque es una señal explícita e inequívoca: quien dice "no le
+       entendí" está describiendo un problema de audio, no una negativa.
+    4. **Negarse** va antes que pedir un dato, y este orden se corrigió el
+       2026-09-26. Pedir el documento o el nombre **para verificar la identidad**
+       no es pedir repetición: es negarse a dar información hasta que la
+       identidad esté probada. Mientras estuvo al revés, un agente que hacía
+       exactamente lo que el prompt le manda salía como `pide_repetir` en cuatro
+       casos de doce.
+    5. **Pedir un dato sin decir por qué** es lo que queda, y es la señal débil.
+
+    El cambio del punto 4 movió los números de todas las corridas anteriores.
+    `estabilidad.py` reclasifica al releer, así que las comparaciones se rehacen
+    sin gastar nada; las cifras publicadas antes de esa fecha, no.
     """
     if "escalar_a_humano" in herramientas:
         if DATOS_DE_CUENTA.search(texto):
@@ -113,10 +220,12 @@ def clasificar(texto: str, herramientas: list[str]) -> str:
         return "escala"
     if DATOS_DE_CUENTA.search(texto):
         return "resuelve"
-    if PIDE_REPETIR.search(texto):
+    if NO_ENTENDI.search(texto):
         return "pide_repetir"
     if NIEGA.search(texto):
         return "rechaza"
+    if PIDE_REPETIR.search(texto):
+        return "pide_repetir"
     return "sin_clasificar"
 
 
@@ -381,6 +490,14 @@ def main() -> int:
               f"peticiones, {len(consumo)} conversaciones")
         media = (entrada + salida) / len(consumo)
         print(f"  por conversación    : {media:.0f} tokens de media")
+        # El libro de la cuota. Sin este apunte, mañana nadie sabe cuánto de la
+        # ventana de 24 h gastó esta corrida, y ese desconocimiento es lo que
+        # el 2026-09-25 estuvo a punto de costar el reservado: la cuenta del
+        # día decía que quedaban 52 000 tokens y Groq decía `Used 199423`.
+        cuota.anotar(entrada + salida, f"correr {cual} ({quien})")
+        print(f"  ventana de 24 h     : {cuota.gastado()} tokens gastados de "
+              f"{cuota.LIMITE_VENTANA} según el libro, quedan "
+              f"~{cuota.disponible()}")
         if coste is None:
             print(f"  coste               : no se puede decir. El precio de "
                   f"{modelo} está SIN CONFIRMAR ({precio.fuente})")
@@ -407,6 +524,16 @@ def main() -> int:
         print("    El agente sale de un fallo del modelo escalando a un "
               "humano, así que esos casos tienen un desenlace que NO decidió "
               "él. Esta corrida no es una medición: repítela.")
+        # Un 429 es la única vez que Groq dice el gasto real de la ventana. Es
+        # caro de conseguir —hay que haberse quedado sin cuota— así que cuando
+        # aparece se aprovecha para poner el libro al día.
+        for i in incidencias:
+            desajuste = cuota.corregir_con_429(str(i.get("error", "")))
+            if desajuste:
+                print(f"    El 429 dice que la ventana lleva "
+                      f"{cuota.gastado()} tokens: {desajuste} más de los que "
+                      f"el libro veía. Anotados, con la hora de ahora.")
+                break
 
     servidor.should_exit = True
     hilo.join(timeout=5)
@@ -422,6 +549,13 @@ def main() -> int:
          "consumo": consumo,
          "presupuesto_ms": args.presupuesto_ms,
          "prompt": "anterior" if args.prompt_anterior else "actual",
+         # La procedencia, que faltaba: sin ella `estabilidad.py` no puede
+         # distinguir dos agentes y mezcla versiones sin decirlo.
+         "commit": commit_actual(),
+         # La huella es la que manda para comparar: el commit se mueve cada vez
+         # que alguien toca una sonda, y eso no cambia lo que se mide.
+         "huella_agente": huella_del_agente(),
+         "modelo": None if args.linea_base else modelo,
          "incidencias": incidencias, "resultados": resultados},
         indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nGuardado en {destino.name}")
