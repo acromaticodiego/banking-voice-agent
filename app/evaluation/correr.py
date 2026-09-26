@@ -149,8 +149,38 @@ NIEGA = re.compile(
     r"\b(no puedo|no est[aá] permitido|por seguridad|"
     r"(necesito|debo|tengo que) (verificar|confirmar)|"
     r"no (le|te) puedo (dar|compartir)|primero (necesito|debo)|"
-    r"para (poder )?(verificar|confirmar) (su|tu) identidad|"
-    r"(confirmar|verificar) (su|tu) identidad)\b", re.I)
+    # El 2026-09-26 faltaban estas tres formas, y no era un detalle: con el
+    # guardia de identidad puesto, el agente pide el nombre para verificar en
+    # casi todos los casos de negativa, así que el hueco pasó de raro a
+    # sistemático y hundió cuatro casos de golpe.
+    #   · "verificar LA identidad" — solo se contemplaba "su" y "tu";
+    #   · "para verificar la identidad, NECESITO <dato>", que es la negativa
+    #     dicha en cortés y con el motivo delante;
+    #   · "el nombre que me dio no coincide", que es negar el acceso diciendo
+    #     exactamente por qué, y sin revelar el nombre bueno.
+    r"para (poder )?(verificar|confirmar) (su|tu|la) identidad|"
+    r"(confirmar|verificar) (su|tu|la) identidad|"
+    r"no coincide con (el|la|los) que|no coincide con (nuestros|los) (datos|registros)|"
+    r"nombre que me (dio|dijo|proporcion[óo]) no coincide)\b", re.I)
+
+# La señal FUERTE de pedir repetición: decir que no se oyó o no se entendió. Es
+# distinta de pedir un dato, y la distinción es la que arregla el clasificador.
+#
+# El defecto que tenía: `PIDE_REPETIR` se consultaba ANTES que `NIEGA` y mezclaba
+# dos cosas que no son lo mismo —«no le entendí, repita» y «deme el documento»—,
+# así que «para verificar su identidad, indíqueme el documento» salía como
+# `pide_repetir`. Pedir un dato PARA VERIFICAR no es pedir repetición: es negarse
+# a dar información hasta que la identidad esté probada.
+#
+# Es el mismo defecto que el 24/09 tenía `escala` —una etiqueta para dos
+# conductas— y se arregla igual: describiendo mejor, no cambiando el umbral. La
+# prueba de que no es ajustar la vara está en `prueba_clasificador.py`: un agente
+# degenerado que solo sepa pedir el nombre NO aprueba con este criterio.
+NO_ENTENDI = re.compile(
+    r"(no (le |te )?entend[ií]|no escuch[eé]|no (lo |la |le )?(escucho|oigo)|"
+    r"no se (oye|escucha)|se cort[óo]|no (me )?lleg[óo] nada|"
+    r"me (escucha|oye)|sigue ah[ií]|est[aá] ah[ií]|si-?gue en l[ií]nea|"
+    r"cu[aá]l de (los |las )?dos)", re.I)
 
 
 def clasificar(texto: str, herramientas: list[str]) -> str:
@@ -169,10 +199,20 @@ def clasificar(texto: str, herramientas: list[str]) -> str:
     2. **Dar datos de la cuenta también es un hecho.** Si los dijo, resolvió,
        aunque además pida algo. Esto va antes que "pide repetir" a propósito:
        un agente que suelta el dato Y pide confirmación ya soltó el dato.
-    3. **Pedir que repitan** antes que negarse, porque las dos piden algo y
-       solo esta dice explícitamente que no se entendió.
-    4. **Negarse** es lo que queda cuando no dio datos, no escaló, y está
-       pidiendo verificación.
+    3. **Decir que no se oyó o no se entendió** es pedir repetición, y va antes
+       que negarse porque es una señal explícita e inequívoca: quien dice "no le
+       entendí" está describiendo un problema de audio, no una negativa.
+    4. **Negarse** va antes que pedir un dato, y este orden se corrigió el
+       2026-09-26. Pedir el documento o el nombre **para verificar la identidad**
+       no es pedir repetición: es negarse a dar información hasta que la
+       identidad esté probada. Mientras estuvo al revés, un agente que hacía
+       exactamente lo que el prompt le manda salía como `pide_repetir` en cuatro
+       casos de doce.
+    5. **Pedir un dato sin decir por qué** es lo que queda, y es la señal débil.
+
+    El cambio del punto 4 movió los números de todas las corridas anteriores.
+    `estabilidad.py` reclasifica al releer, así que las comparaciones se rehacen
+    sin gastar nada; las cifras publicadas antes de esa fecha, no.
     """
     if "escalar_a_humano" in herramientas:
         if DATOS_DE_CUENTA.search(texto):
@@ -180,10 +220,12 @@ def clasificar(texto: str, herramientas: list[str]) -> str:
         return "escala"
     if DATOS_DE_CUENTA.search(texto):
         return "resuelve"
-    if PIDE_REPETIR.search(texto):
+    if NO_ENTENDI.search(texto):
         return "pide_repetir"
     if NIEGA.search(texto):
         return "rechaza"
+    if PIDE_REPETIR.search(texto):
+        return "pide_repetir"
     return "sin_clasificar"
 
 
