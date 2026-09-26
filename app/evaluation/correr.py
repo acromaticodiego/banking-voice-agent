@@ -71,6 +71,50 @@ def commit_actual() -> str:
     except Exception:  # noqa: BLE001
         return "desconocido"
 
+
+# Lo que de verdad decide si dos corridas son comparables. No es el directorio
+# entero ni el commit: son estos cuatro caminos.
+CAMINOS_DEL_AGENTE = ("app/agent", "app/tools", "app/evaluation/catalogo.py",
+                      "app/evaluation/particion.py")
+
+
+def huella_del_agente() -> str:
+    """La versión de LO MEDIDO, que no es lo mismo que el commit del repo.
+
+    El 2026-09-26 esto hizo falta a las pocas horas de escribir el guardia del
+    commit. Las tres corridas limpias de calibración salieron con dos commits
+    distintos —los de en medio arreglaron el libro de la cuota y el canario— y
+    `estabilidad.py` se negó a juntarlas. Pero el agente era byte por byte el
+    mismo: `git rev-parse` daba el mismo árbol para estos cuatro caminos en los
+    dos commits, y el diff estaba vacío.
+
+    O sea que el guardia del commit acertaba en la dirección segura y por el
+    motivo equivocado: bloqueaba una comparación legítima. Lo que hay que
+    comparar es la huella de lo que participa en el resultado —el agente, las
+    herramientas, el catálogo de casos y la partición—, no el commit, que se
+    mueve cada vez que alguien toca una sonda o este documento.
+    """
+    import subprocess  # noqa: PLC0415
+    trozos = []
+    for camino in CAMINOS_DEL_AGENTE:
+        try:
+            salida = subprocess.run(["git", "rev-parse", f"HEAD:{camino}"],
+                                    cwd=RAIZ, capture_output=True, text=True,
+                                    timeout=10).stdout.strip()
+        except Exception:  # noqa: BLE001
+            salida = ""
+        trozos.append(salida[:8] or "?")
+    # Y si hay cambios sin commitear en esos caminos, la huella no describe lo
+    # que se midió: se dice, en vez de dar un número que parece exacto.
+    try:
+        sucio = subprocess.run(["git", "status", "--porcelain", "--",
+                                *CAMINOS_DEL_AGENTE], cwd=RAIZ,
+                               capture_output=True, text=True,
+                               timeout=10).stdout.strip()
+    except Exception:  # noqa: BLE001
+        sucio = ""
+    return "-".join(trozos) + ("+sin-commitear" if sucio else "")
+
 # Pedir que repitan se dice de muchas maneras, y la primera versión de esta
 # expresión cazaba muy pocas. El agente contestó "¿podrías confirmarme tu
 # cédula completa?" y salió como `sin_clasificar`: un fallo del clasificador
@@ -466,6 +510,9 @@ def main() -> int:
          # La procedencia, que faltaba: sin ella `estabilidad.py` no puede
          # distinguir dos agentes y mezcla versiones sin decirlo.
          "commit": commit_actual(),
+         # La huella es la que manda para comparar: el commit se mueve cada vez
+         # que alguien toca una sonda, y eso no cambia lo que se mide.
+         "huella_agente": huella_del_agente(),
          "modelo": None if args.linea_base else modelo,
          "incidencias": incidencias, "resultados": resultados},
         indent=2, ensure_ascii=False), encoding="utf-8")
