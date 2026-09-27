@@ -442,11 +442,34 @@ class Agente:
         no el core bancario. Inventarse campos con pinta de datos del banco
         sería, precisamente, lo que el ADR 0005 prohíbe.
         """
-        if nombre != "consultar_identidad" or resultado.get("encontrado"):
-            return resultado
         if resultado.get("error"):
-            # La herramienta se cayó; eso no es un documento equivocado y
-            # contarlo como intento haría escalar por el motivo que no es.
+            # La herramienta no respondió, y eso NO es un dato equivocado.
+            #
+            # Contarlo como intento haría escalar por el motivo que no es, y eso
+            # ya estaba resuelto. Lo que se vio el 2026-09-27 es lo otro: que el
+            # modelo **confunde las dos cosas al hablar**. Con el core caído dijo
+            # *«no pude verificar su documento, ¿podría repetirlo?»* y se quedó
+            # ahí, en vez de escalar. Repetir el documento no arregla una
+            # herramienta caída: deja al cliente dictando cifras a un sistema que
+            # no responde.
+            #
+            # El prompt ya dice las dos reglas —«si una herramienta falla, escala»
+            # y «si un documento no aparece, no te rindas a la primera»— y son
+            # las dos correctas; el problema es que el modelo tiene que decidir
+            # cuál aplica, y el resultado no se lo decía. El documento no
+            # encontrado venía con su `_que_hacer` y el fallo de la herramienta
+            # no traía ninguno, así que la única guía que veía era la del caso
+            # equivocado. Es la misma lección que la fuga de datos: la garantía
+            # que vive solo en el prompt se desobedece, y la que viene dentro del
+            # resultado, no.
+            anotado = dict(resultado)
+            anotado["_que_hacer"] = (
+                "La herramienta no respondió: esto NO es un dato equivocado y NO "
+                "se arregla pidiendo que lo repitan. No lo intentes otra vez y no "
+                "inventes ningún dato: di en una frase que hay un problema "
+                "técnico y pasa la llamada a un asesor humano.")
+            return anotado
+        if nombre != "consultar_identidad" or resultado.get("encontrado"):
             return resultado
         documento = "".join(c for c in str(argumentos.get("documento", ""))
                             if c.isdigit())
