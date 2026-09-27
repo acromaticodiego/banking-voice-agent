@@ -1,0 +1,10 @@
+{
+  "fichero": "muestra-libre-cobro.wav",
+  "frase": "libre-cobro",
+  "tipo": "espontanea",
+  "segundos": 23.1,
+  "frecuencia_hz": 16000,
+  "pico": 5065,
+  "dispositivo": "[1] Varios micrófonos (2- Realtek(R",
+  "pregunta": "SIGUE LA MISMA LLAMADA. El agente te dice:\n\n   — Gracias, ya lo verifiqué. Veo que la tarjeta se bloqueó\n     por un movimiento raro. ¿Me cuenta qué pasó?\n\nLO QUE SABES:\n   · un cobro de 347.200 pesos\n   · el martes pasado\n   · en un almacén que no conoces\n   · tú no lo hiciste\n\nEXPLÍCASELO CON TUS PALABRAS."
+}
