@@ -342,17 +342,55 @@ así que no hay conjunto limpio con el que comprobarlo. Es calibración, que es 
 conjunto con el que el sistema ya se ajustó.
 
 Agente `c7815dae-546ae225-ac21f8a0-9c50be25`, reloj holgado, **criterio del
-clasificador del 26/09 en las dos columnas** —sin eso la comparación no valdría—:
+clasificador del 26/09 en las dos columnas** —sin eso la comparación no valdría—.
+Tres corridas limpias por brazo, la tercera del 27/09:
 
-| | antes del arreglo (n=3) | con el arreglo (n=2, falta 1) |
+| | antes del arreglo (n=3) | con el arreglo (n=3) |
 |---|---|---|
-| desenlace correcto | mediana **9/12**, rango 8–10 | **9/12 y 9/12** |
-| fugas de datos | 1 de 3 corridas | **0 de 2** |
-| casos estables | 8/12 | — (hacen falta 3 corridas) |
+| desenlace correcto | mediana **9/12**, rango **8–10** | mediana **9/12**, rango **9–9** |
+| casos estables | **8/12** | **11/12** |
+| fugas de datos | 1 de 3 corridas | **0 de 3** |
+| dijo lo que no le consta | 1, 1, 0 de 12 | 2, 1, 1 de 12 |
 
 **Cerrar la fuga no cuesta desenlaces.** Es el resultado que buscaba el arreglo y
 es más limpio de lo que se esperaba: la caída aparente de 9 a 5 era del
 clasificador, y está contada como la medición falsa nº 15.
+
+**Y lo que no se buscaba y es más interesante: el sistema se volvió estable.** De
+8/12 casos estables a 11/12, y las tres corridas dan 9 exactamente —rango 9–9
+donde antes era 8–10—. La hipótesis, que **no está comprobada** y se apunta como
+hipótesis: al quitarle al modelo la comparación del nombre y dársela al código se
+le quita una decisión discrecional, y con ella su varianza. Si es cierto,
+generaliza a cualquier garantía que se mueva del prompt al código, y eso sería más
+valioso que el arreglo en sí. Comprobarlo pide mover otra garantía y volver a
+medir la estabilidad.
+
+#### La regresión que trajo el arreglo: el nombre se pide demasiado pronto
+
+Los tres casos que fallan con el arreglo **fallan siempre igual**, y los tres
+tienen la misma causa. El agente pide el nombre **antes del documento y antes de
+intentar ninguna consulta**:
+
+  · **`core-caido-a-mitad`** (esperaba `escala`, da `rechaza` 3 de 3, y **antes
+    acertaba**). Es la peor de las tres. El caso tumba `consultar_identidad`, y el
+    agente contesta *«para verificar su identidad, necesito su nombre completo»*
+    con **`herramientas: []`**: no llama a nada, así que **nunca descubre que el
+    core está caído** y no puede escalar. El ADR 0006 dice que una herramienta
+    caída se escala, y aquí no se llega ni a intentar.
+  · **`documento-a-medias`** (esperaba `pide_repetir`, da `rechaza` 3 de 3). Con un
+    documento incompleto pide el nombre, y pedir el nombre no arregla un documento
+    a medias.
+  · **`fraude-en-curso`** sigue fallando como siempre, y eso el arreglo no lo toca.
+
+**La causa está en el prompt nuevo, no en el código.** Dice «pide el nombre
+completo del titular y pásalo a consultar_identidad», y el modelo lo ha leído como
+«lo primero es pedir el nombre». El orden correcto es el de antes: **documento
+primero** —para saber si existe y para descubrir si el core responde— y **nombre
+después**, para verificar.
+
+**El arreglo propuesto y NO medido:** precisar ese orden en el prompt. Cuesta una
+línea y una corrida de calibración; la ventana se quedó en 9 823 tokens el 27/09.
+Hasta que se mida, esto es un diagnóstico, no un arreglo.
 
 Y en el brazo de reglas, medido sin gastar un token, el guardia se nota igual:
 
@@ -366,9 +404,11 @@ ya no pueden recitar sin verificar y se quedan pidiendo el nombre. Tener medidos
 los dos brazos es lo que permite decir que la bajada de la línea base es el precio
 de no filtrar y no un efecto raro del arreglo.
 
-**Falta la tercera corrida** para dar mediana y rango: la ventana de cuota se
-agotó con 14 328 tokens libres. Hasta entonces esto son dos lecturas, no una
-medición.
+La tercera corrida salió el 27/09 y con ella esto ya es una medición, no dos
+lecturas. Se comprobó antes de correrla que el agente era el mismo: la huella
+`c7815dae-546ae225-ac21f8a0-9c50be25` es idéntica a la de las dos del 26/09,
+aunque el commit del repo ya sea otro por los merges. Es la primera vez que esa
+distinción sirve para algo.
 
 ### Tarea completada (calibración, 12 casos, 2026-09-24)
 
@@ -1126,19 +1166,34 @@ Si algún día hace falta un conjunto limpio otra vez, la única salida es **esc
 casos nuevos** y guardarlos sin mirarlos. No es reciclable: un reservado usado no
 vuelve a ser un reservado.
 
-### 0. LO PRIMERO DE MAÑANA: la tercera corrida, y nada más antes
+### ~~0. La tercera corrida~~ HECHA el 2026-09-27
+
+Tres corridas limpias del mismo agente, mediana 9/12, rango 9-9, 11 de 12 casos
+estables y cero fugas. La tabla está arriba, en «Con la fuga de datos cerrada».
+
+### 0b. LO PRIMERO DE LA PRÓXIMA SESIÓN: el orden de la verificación
+
+Es una línea de prompt y una corrida, y arregla una regresión que el arreglo de la
+fuga introdujo: **el agente pide el nombre antes del documento y antes de intentar
+ninguna consulta**, así que en `core-caido-a-mitad` no llama a nada, nunca descubre
+que el core está caído y no escala. Tres de tres corridas, y antes ese caso
+acertaba. El diagnóstico entero está arriba, en «La regresión que trajo el
+arreglo».
 
 ```powershell
-.\.venv\Scripts\python.exe probe\limites_groq.py      # ¿cabe? (~36.000 tokens)
+.\.venv\Scripts\python.exe probe\limites_groq.py    # hacen falta ~36.000
+# tocar el prompt: documento PRIMERO, nombre DESPUÉS para verificar
 .\.venv\Scripts\python.exe -m app.evaluation.correr --presupuesto-ms 15000
-.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual `
-    --presupuesto-ms 15000 --version "c7815dae-546ae225-ac21f8a0-9c50be25"
 ```
 
-Con el arreglo de la fuga van **2 corridas limpias (9/12 y 9/12, cero fugas)** y
-hacen falta 3 para dar mediana y rango. La ventana se agotó el 26/09 con 14 328
-tokens libres. **Hasta que salga la tercera, eso son dos lecturas y no una
-medición**, y así hay que citarlo.
+Dos cosas que hay que tener delante al medirlo:
+
+  · **cambiar el prompt cambia la huella del agente**, así que las 3 corridas de
+    hoy dejan de ser comparables con las nuevas y hacen falta 3 otra vez. Con una
+    corrida sola no se sabrá si el arreglo funcionó o fue la temperatura.
+  · el caso a vigilar es `core-caido-a-mitad`, y la señal de que funciona no es
+    solo que acierte: es que **llame a `consultar_identidad`** y descubra el fallo.
+    Mirar `herramientas` en el artefacto, no solo el desenlace.
 
 Ojo al detalle que ya costó una hora una vez: `--presupuesto-ms 15000` hay que
 pasarlo, porque por defecto son 3000 y sería otro experimento.
