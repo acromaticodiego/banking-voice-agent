@@ -32,6 +32,14 @@ from pathlib import Path
 
 import httpx
 
+# La expresión que distingue «le paso con un asesor» —una afirmación— de «si lo
+# desea, le puedo pasar» —un ofrecimiento válido—. Vive en `fundamento.py`
+# porque allí nació para DETECTAR la promesa incumplida; desde el 2026-09-27 el
+# bucle la usa para CUMPLIRLA. Tener dos versiones de esa distinción sería tener
+# dos ideas de qué cuenta como prometer, y el detector y el guardia dejarían de
+# hablar del mismo fallo.
+from app.agent.fundamento import PASAR_CON_HUMANO  # noqa: E402
+
 # `numeros_es` vive con las sondas: es la misma pieza que normaliza los
 # numeros dichos en voz alta, y duplicarla seria tener dos verdades.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "probe"))
@@ -279,6 +287,7 @@ class Turno:
     puente: str = ""              # lo que se dijo mientras la herramienta corría
     adelantada: bool = False      # se disparó una consulta antes de que el modelo la pidiera
     adelantos_usados: int = 0     # cuántas de esas consultas acabó usando el modelo
+    escalada_forzada: bool = False  # el modelo prometió transferir y no lo hizo
     ms_puente: float | None = None
     clave: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
@@ -735,6 +744,54 @@ class Agente:
                                      error=resultado.get("error")))
             turno.texto = ("Disculpe, no pude completar la consulta. "
                            "Le paso con un asesor.")
+
+        # ------------------------------------- el guardia de la transferencia
+        #
+        # Si el agente AFIRMA que pasa la llamada y no la ha pasado, se pasa
+        # aquí. Decidido el 2026-09-27, y el motivo es que el fallo aparecía en
+        # tres casos del conjunto: `tarjeta-falla-tras-verificar` (0 de 5 en el
+        # reservado), `core-caido-a-mitad` y `pide-algo-fuera-de-alcance`. En el
+        # segundo el agente dice *«hay un problema técnico con el sistema. Voy a
+        # transferir su llamada a un asesor humano»* —lo que hay que decir,
+        # palabra por palabra— y no llama a nadie. En una llamada de verdad eso
+        # cuelga al cliente con una promesa.
+        #
+        # Tres cosas que hacen que esto no sea un parche:
+        #
+        #   · **Solo se puede hacer con esta promesa.** De todas las acciones que
+        #     el detector vigila —bloquear, cancelar, reversar, congelar…— la
+        #     transferencia es la ÚNICA que tiene herramienta detrás. Hay
+        #     promesas que se pueden hacer verdad y promesas que solo se pueden
+        #     prohibir; el guardia va sobre las primeras y el prompt sigue
+        #     encargándose de las segundas.
+        #   · **Lleva la clave del turno** (ADR 0007), así que un reintento no
+        #     abre dos tickets.
+        #   · **Queda marcado como forzado**, no como pedido por el modelo, y el
+        #     expediente lo distingue. El motivo del ticket lo dice también, para
+        #     que el asesor que lo lea sepa que el agente lo prometió sin
+        #     ejecutarlo. Ejecutar una acción con efecto que el modelo no pidió
+        #     tiene que ser auditable o no vale.
+        #
+        # El precedente está justo arriba: el texto de respaldo de este mismo
+        # fichero ya escalaba de verdad antes de decirlo, desde el 24/09. Esto es
+        # lo mismo aplicado a lo que dice el modelo.
+        if not turno.silencio and PASAR_CON_HUMANO.search(turno.texto):
+            ya_escalado = any(p.tipo == "herramienta"
+                              and p.detalle.split(" ")[0] == "escalar_a_humano"
+                              for p in turno.rastro)
+            if not ya_escalado:
+                resultado, ms = self._llamar(
+                    "escalar_a_humano",
+                    {"motivo": "el agente dijo que pasaba la llamada y no llamó "
+                               "a la herramienta; lo ejecuta el guardia"},
+                    turno.clave)
+                turno.rastro.append(Paso(
+                    "herramienta", "escalar_a_humano (forzada por el guardia)",
+                    ms, argumentos={"motivo": "promesa de transferencia sin "
+                                              "ejecutar"},
+                    resultado=resultado, error=resultado.get("error")))
+                turno.escalada_forzada = True
+
         self.historia.append({"role": "assistant", "content": turno.texto})
         turno.ms_total = (time.perf_counter() - arranque) * 1000
         return turno
