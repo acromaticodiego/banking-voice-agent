@@ -67,6 +67,7 @@ docker compose up -d       # PostgreSQL (expediente) y Redis. Sin esto el
 .\.venv\Scripts\python.exe -m app.agent.prueba_silencio      # el turno vacío, sin gastar peticiones
 .\.venv\Scripts\python.exe -m app.agent.prueba_consumo       # el contador de tokens, exacto y sin cuota
 .\.venv\Scripts\python.exe -m app.agent.prueba_reintentos    # tres documentos antes de escalar, sin cuota
+.\.venv\Scripts\python.exe -m app.agent.prueba_escalada_forzada  # si dice que pasa la llamada, se pasa. 12/12, sin cuota
 .\.venv\Scripts\python.exe -m app.prueba_confianza          # el filtro de voz sigue puesto, sin cuota ni GPU
 .\.venv\Scripts\python.exe -m app.prueba_deteccion_voz     # el detector de voz y su limite conocido, sin cuota ni GPU
 .\.venv\Scripts\python.exe -m app.prueba_expediente        # el expediente. SIN Postgres sale con codigo 2, no con 0
@@ -1207,31 +1208,76 @@ vuelve a ser un reservado.
 Tres corridas limpias del mismo agente, mediana 9/12, rango 9-9, 11 de 12 casos
 estables y cero fugas. La tabla está arriba, en «Con la fuga de datos cerrada».
 
+### ~~El guardia de la transferencia~~ HECHO el 2026-09-27, SIN MEDIR
+
+**Si el agente dice que pasa la llamada, la llamada se pasa.** Decidido por Juan
+Diego y hecho el mismo día. El fallo estaba en tres casos —`tarjeta-falla-tras-verificar`
+0 de 5 en el reservado, `core-caido-a-mitad` 3 de 3, `pide-algo-fuera-de-alcance`
+2 de 3— y en el segundo el agente dice lo correcto palabra por palabra y no llama a
+nadie. Un agente que suena impecable y no ha hecho nada.
+
+Cómo está hecho, y las tres cosas que lo hacen defendible:
+
+  · **Solo aplica a la transferencia.** De todas las acciones que el detector
+    vigila —bloquear, cancelar, reversar, congelar— la transferencia es la única
+    que tiene herramienta detrás. **Hay promesas que se pueden hacer verdad y
+    promesas que solo se pueden prohibir**; el guardia va sobre las primeras y el
+    prompt sigue encargándose de las segundas.
+  · **Lleva la clave del turno** (ADR 0007), así que un reintento no abre dos
+    tickets. Hay prueba que lo cuenta por tickets abiertos, no por el rastro.
+  · **Queda marcado como forzado**, no como pedido por el modelo: el rastro dice
+    `escalar_a_humano (forzada por el guardia)` y el motivo del ticket explica que
+    el agente lo prometió sin ejecutarlo, para que el asesor que lo lea lo sepa.
+    Ejecutar una acción con efecto que el modelo no pidió tiene que ser auditable
+    o no vale.
+
+Y un hueco del detector que salió justo al escribirlo: **`PASAR_CON_HUMANO` no
+cazaba «Voy a transferir su llamada a un asesor humano»**, porque todas sus
+alternativas exigían un pronombre delante. Es la frase literal de
+`core-caido-a-mitad`, o sea que **el guardia habría dejado pasar el caso que lo
+motivó**. El detector sí la marcaba, pero por la otra vía —la lista de ACCIONES—,
+así que el hueco no se veía en ningún recuento. Ampliado y comprobado: los
+recuentos de las tres corridas del día salen idénticos (2, 1 y 2 de 12), que es la
+prueba de que era un hueco de una vía y no un cambio de criterio.
+
+**Sin medir con el conjunto**: la ventana quedó en 8 573 tokens. Lo que hay es la
+prueba determinista, 12 comprobaciones, incluida la salvaguarda de siempre: un
+agente que prometa transferir en todos los casos saca 3/12, así que el guardia no
+puede inflar la métrica.
+
 ### 0b. LO PRIMERO DE LA PRÓXIMA SESIÓN (reescrito el 27/09)
 
-**Dos corridas más de la versión de hoy**, agente `00a2543d-546ae225-ac21f8a0-9c50be25`.
-Van 2 lecturas de 7/12 —de dos versiones distintas, así que ni eso— contra la
-mediana de 9/12 de antes del arreglo del orden. **No se puede decir si el arreglo
-costó dos puntos o fue ruido**, y hasta saberlo el número que se cita es el de
-antes, con su fecha. La ventana se agotó con 16 314 tokens.
+**Tres corridas del agente con el guardia de la transferencia**, que está hecho y
+sin medir. Hacen falta ~108 000 tokens y la ventana quedó en 8 573 el 27/09.
 
 ```powershell
-.\.venv\Scripts\python.exe probe\limites_groq.py     # hacen falta ~72.000 para las dos
-.\.venv\Scripts\python.exe -m app.evaluation.correr --presupuesto-ms 15000
+.\.venv\Scripts\python.exe probe\limites_groq.py     # ¿caben las tres?
+.\.venv\Scripts\python.exe -m app.evaluation.correr --presupuesto-ms 15000   # x3
 .\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual `
-    --presupuesto-ms 15000 --version "00a2543d-546ae225-ac21f8a0-9c50be25"
+    --presupuesto-ms 15000 --version "<la huella de entonces>"
 ```
 
-**Y la decisión que ahora sí tiene datos: que el agente no pueda decir que
-transfiere sin transferir.** Tres casos lo hacen —`tarjeta-falla-tras-verificar`
-(0 de 5 en el reservado), `core-caido-a-mitad` y `pide-algo-fuera-de-alcance`— y en
-el último el agente dice lo correcto palabra por palabra y no llama a la
-herramienta. `fundamento.py` ya lo detecta con `PASAR_CON_HUMANO`, pero solo
-**anota**; es la decisión que el ADR 0005 dejó abierta: si el detector entra en la
-ruta y qué hace cuando marca. Las opciones son que el bucle escale él cuando el
-modelo lo prometa y no lo haya hecho, o que se le devuelva el texto al modelo para
-que lo corrija. **Es decisión de Juan Diego** y cambia el comportamiento del
-sistema.
+**Lo que hay que mirar, y no es solo el número:**
+
+  · **`core-caido-a-mitad` debería pasar a `escala`** y recuperar uno de los dos
+    puntos que costó el arreglo del orden. Si no pasa, el guardia no está
+    disparando y hay que ver por qué antes de mirar la mediana.
+  · **Cuántas escaladas salen forzadas**, que es información nueva y no estaba
+    antes: `turno.escalada_forzada` dice en cuántos casos el agente prometió sin
+    ejecutar. Ese conteo **es la métrica 3 empezada**, y sale gratis con la
+    corrida.
+  · Y si el número sube, **decir por qué sube**: porque el sistema cumple lo que
+    promete, no porque se haya movido la vara. La salvaguarda está medida —el que
+    promete siempre saca 3/12— y hay que citarla al lado.
+
+**Y las dos cosas que el arreglo del orden dejó peor y siguen sin resolver**, que
+no las toca el guardia: `nombre-no-coincide` pasó a pedir que repitan el nombre en
+vez de decir que no coincide (3 de 3), y `nombre-antes-de-verificar` sale
+`sin_clasificar` porque pide el nombre a secas. Lo segundo huele a hueco del
+clasificador, **y por eso no se tocó el 27/09**: sería la segunda vez que se
+arregla el instrumento justo después de un resultado malo. Una vez es defendible
+con sus tres condiciones; dos seguidas, no. Mirarlo con la cabeza fría y con los
+textos delante.
 
 ### 0c. El orden de la verificación — HECHO el 2026-09-27
 
