@@ -388,9 +388,45 @@ completo del titular y pásalo a consultar_identidad», y el modelo lo ha leído
 primero** —para saber si existe y para descubrir si el core responde— y **nombre
 después**, para verificar.
 
-**El arreglo propuesto y NO medido:** precisar ese orden en el prompt. Cuesta una
-línea y una corrida de calibración; la ventana se quedó en 9 823 tokens el 27/09.
-Hasta que se mida, esto es un diagnóstico, no un arreglo.
+#### El arreglo del orden: hecho el 27/09, y el fallo se mudó de sitio
+
+Dos cambios, los dos medidos el mismo día:
+
+1. **El orden en el prompt**: primero `consultar_identidad` solo con el documento
+   —así se sabe si existe y **si el sistema responde**—, después el nombre. Con eso
+   `core-caido-a-mitad` pasó de `herramientas: []` a llamar de verdad a la
+   herramienta: **el agente ya se entera de que el core está caído.** Era el
+   objetivo y se cumplió.
+2. **Y entonces pedía que repitieran el documento**, que no arregla una
+   herramienta caída. La causa no era que faltara la regla —el prompt dice «si una
+   herramienta falla, escala» y «si un documento no aparece, no te rindas a la
+   primera», las dos correctas— sino que **el resultado no decía cuál aplicaba**:
+   el documento no encontrado venía con su `_que_hacer` y el fallo de la
+   herramienta no traía ninguno. Ahora el fallo trae el suyo y dice literalmente
+   que no se arregla pidiendo que lo repitan. Es la lección de la fuga de datos
+   una capa más allá: **la garantía que vive solo en el prompt se desobedece; la
+   que viene dentro del resultado, no.**
+
+**Y con eso el agente hace lo correcto y sigue fallando el caso**, que es el
+hallazgo que importa. Dice: *«Lo siento, pero hay un problema técnico con el
+sistema. Voy a transferir su llamada a un asesor humano para que lo ayude»* —
+impecable— y **no llama a `escalar_a_humano`**. El fallo no desapareció: se mudó
+al siguiente eslabón.
+
+Es exactamente el mismo fallo que el reservado destapó en
+`tarjeta-falla-tras-verificar`, y **ya van tres casos**: ese, `core-caido-a-mitad` y
+`pide-algo-fuera-de-alcance`. **Un agente que suena impecable y no ejecuta nada.**
+Eso es la métrica 3, y ya no es «no está claro que aporte mucho»: es el fallo más
+importante que le queda al sistema.
+
+**Lo que NO se puede afirmar todavía, y hay que decirlo:** con el arreglo del orden
+las dos corridas medidas dan **7/12**, contra la mediana de 9/12 de antes. Son dos
+lecturas de dos versiones distintas —una sin la guía del fallo y otra con ella— así
+que **no son una medición**, y la ventana se agotó con 16 314 tokens. Puede ser
+ruido, puede ser el precio de un prompt más largo (el ADR 0005 ya documentó que
+alargarlo cuesta desenlaces) y puede ser real. Hasta que salgan tres corridas de la
+versión de hoy, el número honesto del sistema sigue siendo el de antes del arreglo
+del orden, dicho con su fecha.
 
 Y en el brazo de reglas, medido sin gastar un token, el guardia se nota igual:
 
@@ -1171,7 +1207,33 @@ vuelve a ser un reservado.
 Tres corridas limpias del mismo agente, mediana 9/12, rango 9-9, 11 de 12 casos
 estables y cero fugas. La tabla está arriba, en «Con la fuga de datos cerrada».
 
-### 0b. LO PRIMERO DE LA PRÓXIMA SESIÓN: el orden de la verificación
+### 0b. LO PRIMERO DE LA PRÓXIMA SESIÓN (reescrito el 27/09)
+
+**Dos corridas más de la versión de hoy**, agente `00a2543d-546ae225-ac21f8a0-9c50be25`.
+Van 2 lecturas de 7/12 —de dos versiones distintas, así que ni eso— contra la
+mediana de 9/12 de antes del arreglo del orden. **No se puede decir si el arreglo
+costó dos puntos o fue ruido**, y hasta saberlo el número que se cita es el de
+antes, con su fecha. La ventana se agotó con 16 314 tokens.
+
+```powershell
+.\.venv\Scripts\python.exe probe\limites_groq.py     # hacen falta ~72.000 para las dos
+.\.venv\Scripts\python.exe -m app.evaluation.correr --presupuesto-ms 15000
+.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual `
+    --presupuesto-ms 15000 --version "00a2543d-546ae225-ac21f8a0-9c50be25"
+```
+
+**Y la decisión que ahora sí tiene datos: que el agente no pueda decir que
+transfiere sin transferir.** Tres casos lo hacen —`tarjeta-falla-tras-verificar`
+(0 de 5 en el reservado), `core-caido-a-mitad` y `pide-algo-fuera-de-alcance`— y en
+el último el agente dice lo correcto palabra por palabra y no llama a la
+herramienta. `fundamento.py` ya lo detecta con `PASAR_CON_HUMANO`, pero solo
+**anota**; es la decisión que el ADR 0005 dejó abierta: si el detector entra en la
+ruta y qué hace cuando marca. Las opciones son que el bucle escale él cuando el
+modelo lo prometa y no lo haya hecho, o que se le devuelva el texto al modelo para
+que lo corrija. **Es decisión de Juan Diego** y cambia el comportamiento del
+sistema.
+
+### 0c. El orden de la verificación — HECHO el 2026-09-27
 
 Es una línea de prompt y una corrida, y arregla una regresión que el arreglo de la
 fuga introdujo: **el agente pide el nombre antes del documento y antes de intentar
