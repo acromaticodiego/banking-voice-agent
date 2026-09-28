@@ -231,7 +231,8 @@ def clasificar(texto: str, herramientas: list[str]) -> str:
 
 def turno_del_agente(groq, modelo: str, presupuesto_ms: float, sistema: str,
                      incidencias: list[dict], agotados: list[str],
-                     consumo: dict[str, dict] | None = None):
+                     consumo: dict[str, dict] | None = None,
+                     forzadas: list[str] | None = None):
     """Devuelve la función que hace un turno, con toda su contabilidad.
 
     Extraído de `main` el 2026-09-24 para que la medición final del reservado
@@ -267,6 +268,17 @@ def turno_del_agente(groq, modelo: str, presupuesto_ms: float, sistema: str,
         turno = agente.turno(frase)
         if turno.agotado:
             agotados.append(caso.id)
+        # En cuántos casos el agente PROMETIÓ pasar la llamada y no la pasó, y
+        # el guardia tuvo que hacerlo por él. Se apunta aquí y no se deduce del
+        # rastro porque es el dato que empieza la métrica 3 —lo que el agente
+        # dice que hace contra lo que ejecuta— y sale gratis con la corrida.
+        #
+        # Existía en `Turno` desde el 2026-09-27 y nadie lo pedía, que es
+        # exactamente lo que pasó con el consumo en `medicion_final.py`: el dato
+        # en el objeto, el artefacto con un hueco, y la métrica perdida hasta que
+        # alguien repite la medición. Aquí se vio antes de gastar las corridas.
+        if forzadas is not None and turno.escalada_forzada:
+            forzadas.append(caso.id)
         for p in turno.rastro:
             if p.tipo == "modelo" and p.error:
                 incidencias.append({"caso": caso.id, "error": p.error})
@@ -397,6 +409,9 @@ def main() -> int:
     incidencias: list[dict] = []
     agotados: list[str] = []
     consumo: dict[str, dict] = {}
+    # Casos en los que el guardia tuvo que cumplir una promesa de transferencia
+    # que el agente hizo y no ejecutó.
+    forzadas: list[str] = []
 
     if args.linea_base:
         quien = "línea base (sin modelo)"
@@ -424,7 +439,7 @@ def main() -> int:
         # el texto se puede parecer.
         hacer_turno = turno_del_agente(groq, modelo, args.presupuesto_ms,
                                        sistema, incidencias, agotados,
-                                       consumo)
+                                       consumo, forzadas)
 
     print(f"{quien} sobre {cual}: {len(casos)} casos\n")
     resultados = [correr_caso(c, hacer_turno) for c in casos]
@@ -477,6 +492,14 @@ def main() -> int:
         print(f"  sin clasificar     : {sin_clasificar}")
         print("    (el clasificador no supo traducir la respuesta; se cuentan "
               "como fallo, nunca se fuerzan al esperado)")
+
+    if forzadas:
+        unicas = sorted(set(forzadas))
+        print(f"\n  ESCALADAS FORZADAS: {len(unicas)} caso(s) -> {unicas}")
+        print("    El agente DIJO que pasaba la llamada y no llamó a la "
+              "herramienta; el guardia la pasó por él. Cuenta como acierto "
+              "porque el sistema cumple lo que promete, pero el conteo es la "
+              "métrica 3: mide cuántas veces el modelo habla sin ejecutar.")
 
     if consumo:
         entrada = sum(c["tokens_entrada"] for c in consumo.values())
@@ -546,6 +569,9 @@ def main() -> int:
         {"quien": quien, "conjunto": cual, "aciertos": aciertos,
          "total": len(resultados), "fugas": con_fuga, "promesas": con_promesa,
          "sin_fundamento": sin_fundamento, "agotados": sorted(set(agotados)),
+         # La métrica 3 empezada: en qué casos el agente dijo que pasaba la
+         # llamada y no la pasó, y el guardia tuvo que hacerlo por él.
+         "escaladas_forzadas": sorted(set(forzadas)),
          "consumo": consumo,
          "presupuesto_ms": args.presupuesto_ms,
          "prompt": "anterior" if args.prompt_anterior else "actual",
