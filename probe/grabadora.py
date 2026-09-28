@@ -96,6 +96,26 @@ class Grabadora(tk.Tk):
         ttk.Label(marco, textvariable=self.pendientes, foreground="#444",
                   font=("Segoe UI", 10)).pack(anchor="w", pady=(4, 0))
 
+        # Quién graba y dónde. Va en el nombre del fichero, y el motivo es que
+        # sin esto la segunda voz pisa a la primera: el nombre era solo
+        # `muestra-<guion>.wav`, así que grabar el mismo guion con otra persona
+        # borraba la toma anterior sin avisar. Hasta el 2026-09-27 no hacía falta
+        # porque solo había una voz y una sala, que es justamente el techo de
+        # todo lo medido en este proyecto.
+        #
+        # Vacío se comporta como antes, para no romper las seis grabaciones
+        # originales ni las sondas que las buscan por su nombre de siempre.
+        ttk.Label(marco, text="Quién y dónde (va en el nombre del fichero; "
+                              "vacío = las de siempre)").pack(anchor="w",
+                                                              pady=(10, 0))
+        self.etiqueta = tk.StringVar(value="")
+        entrada = ttk.Entry(marco, textvariable=self.etiqueta, width=42)
+        entrada.pack(anchor="w")
+        self.etiqueta.trace_add("write", lambda *_: self._pintar_pendientes())
+        ttk.Label(marco, foreground="#666",
+                  text="p. ej.  voz02-ella-sala02   ·   voz01-juandiego-sala02",
+                  font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 6))
+
         self.texto = tk.Text(marco, height=13, wrap="word", font=("Segoe UI", 12),
                              relief="solid", borderwidth=1, padx=10, pady=10)
         self.texto.pack(fill="x", pady=8)
@@ -245,6 +265,28 @@ class Grabadora(tk.Tk):
             f"Habla {habla:.1f} s ({habla / duracion * 100:.0f}% del clip). "
             f"Silencio final: {cola_s:.1f} s.")
 
+        # Una toma de silencio se juzga al REVÉS, y sin esto la grabadora habría
+        # rechazado precisamente la buena: el juez de abajo exige un pico alto y
+        # habla suficiente, que es lo correcto para una lectura y lo contrario de
+        # lo que hace falta aquí. Lo que se mide en una toma de sala es el ruido
+        # de fondo; si hay habla, la toma no vale.
+        if GUIONES[self.combo_frase.get()]["tipo"] == "silencio":
+            if habla > 0.3:
+                self.veredicto.set(
+                    f"HAY VOZ ({habla:.1f} s). Esta toma es para el ruido de la "
+                    f"sala: repítela sin hablar y sin tocar nada.")
+                self.etiqueta_veredicto.config(foreground="#b03030")
+            elif duracion < 20:
+                self.veredicto.set(f"MUY CORTA ({duracion:.0f} s). Hacen falta "
+                                   f"30 s largos para poder cortar clips.")
+                self.etiqueta_veredicto.config(foreground="#b03030")
+            else:
+                self.veredicto.set(
+                    f"Sirve: {duracion:.0f} s de sala, pico {pico}/32767. "
+                    f"Guárdala. (El pico bajo aquí es lo bueno.)")
+                self.etiqueta_veredicto.config(foreground="#3a7d44")
+            return
+
         if pico < PICO_MINIMO:
             self.veredicto.set("DEMASIADO BAJO. Acércate al micrófono o cambia de "
                                "dispositivo, y repite: así el voz a texto no mide nada.")
@@ -272,12 +314,22 @@ class Grabadora(tk.Tk):
         except Exception as exc:  # noqa: BLE001
             self.estado.set(f"No se pudo reproducir: {exc}")
 
+    def _sufijo(self) -> str:
+        """`__voz02-ella-sala02`, o nada si no se ha puesto etiqueta.
+
+        Se limpia a mano y no con una regex permisiva: esto acaba en un nombre de
+        fichero de Windows y un carácter raro ahí se descubre tarde y mal.
+        """
+        cruda = self.etiqueta.get().strip().lower().replace(" ", "-")
+        limpia = "".join(c for c in cruda if c.isalnum() or c in "-_")
+        return f"__{limpia}" if limpia else ""
+
     def guardar(self) -> None:
         if self.grabado is None:
             return
         nombre = self.combo_frase.get()
         ARTEFACTOS.mkdir(exist_ok=True)
-        destino = ARTEFACTOS / f"muestra-{nombre}.wav"
+        destino = ARTEFACTOS / f"muestra-{nombre}{self._sufijo()}.wav"
 
         with wave.open(str(destino), "wb") as w:
             w.setnchannels(1)
@@ -294,11 +346,22 @@ class Grabadora(tk.Tk):
                 "frecuencia_hz": FRECUENCIA,
                 "pico": int(np.abs(self.grabado).max()),
                 "dispositivo": self.combo_dispositivo.get(),
+                # Quién y dónde, para poder comparar voces y salas después. Sin
+                # esto el fichero dice qué se leyó y no quién lo leyó, y ese dato
+                # no se recupera escuchando.
+                "etiqueta": self.etiqueta.get().strip(),
                 # Solo las lecturas llevan verdad escrita. En una espontánea se
                 # guarda la pregunta, que no es lo que se dijo: usarla como
-                # referencia para la tasa de error daría un número sin sentido.
-                ("transcripcion_verdadera" if GUIONES[nombre]["tipo"] == "lectura"
-                 else "pregunta"): GUIONES[nombre]["texto"],
+                # referencia para la tasa de error daría un número sin sentido. Y
+                # en una toma de silencio no hay ninguna de las dos cosas: lo que
+                # importa es justamente que no se dijo nada, así que se marca, y
+                # guardar ahí las instrucciones como si fueran habla sería
+                # sembrar una referencia falsa.
+                **({"transcripcion_verdadera": GUIONES[nombre]["texto"]}
+                   if GUIONES[nombre]["tipo"] == "lectura" else
+                   {"sin_voz": True, "transcripcion_verdadera": ""}
+                   if GUIONES[nombre]["tipo"] == "silencio" else
+                   {"pregunta": GUIONES[nombre]["texto"]}),
             }, indent=2, ensure_ascii=False), encoding="utf-8")
 
         self.boton_guardar.config(state="disabled")
@@ -322,7 +385,7 @@ class Grabadora(tk.Tk):
         """
         estados = []
         for nombre in GUIONES:
-            ruta = ARTEFACTOS / f"muestra-{nombre}.wav"
+            ruta = ARTEFACTOS / f"muestra-{nombre}{self._sufijo()}.wav"
             if not ruta.exists():
                 estados.append(f"· {nombre}")
                 continue
@@ -332,8 +395,17 @@ class Grabadora(tk.Tk):
                     datos = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
                     duracion = w.getnframes() / w.getframerate()
                 flotante = datos.astype(np.float32) / 32768.0
-                sirve = (int(np.abs(datos).max()) >= PICO_MINIMO
-                         and por_que_no_sirve(flotante, duracion) is None)
+                if GUIONES[nombre]["tipo"] == "silencio":
+                    # Al revés que las demás: aquí lo que la hace buena es que
+                    # no haya voz. Ver el veredicto en `parar`.
+                    from probe_vad import segmentos_con
+                    trozos, _ = segmentos_con(flotante, 300)
+                    habla = sum(t["end"] - t["start"]
+                                for t in trozos) / FRECUENCIA
+                    sirve = habla <= 0.3 and duracion >= 20
+                else:
+                    sirve = (int(np.abs(datos).max()) >= PICO_MINIMO
+                             and por_que_no_sirve(flotante, duracion) is None)
             except (OSError, wave.Error, ValueError):
                 sirve = False
             estados.append(f"{'✓' if sirve else '✗'} {nombre}")
