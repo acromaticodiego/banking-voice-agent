@@ -174,11 +174,38 @@ MARCOS = [
 #
 # La forma nueva pide que cerca aparezca a quién se pasa la llamada. Sin eso,
 # «voy a pasar a explicarle el estado» contaría como promesa de transferencia.
+#
+# Y el 2026-09-28 se le encontró el TERCER hueco, en la corrida en la que el
+# agente dijo **«Voy a transferirLE a un asesor humano»**: todas las formas
+# exigían el pronombre DELANTE del verbo, y en español, con infinitivo, lo
+# natural es pegarlo detrás. Tampoco cazaba «transferirlo», «pasarle» ni
+# «pasarlo». El guardia no disparó, el caso salió `sin_clasificar` y costó un
+# punto de la mediana: no un conteo, un cliente colgado.
+#
+# Tres parches al mismo patrón en tres días dicen lo que pasa: **esto es un
+# cepo literal, igual que `no_debe_prometer`, y solo caza lo que se le ha visto
+# decir.** El parche va porque hay que taparlo hoy; el arreglo de verdad es que
+# la intención de transferir no se busque en el texto. Queda dicho aquí para
+# que el cuarto hueco no se lea como una sorpresa.
+#
+# El enclítico se admite SOLO detrás de «voy a», que es afirmativo por
+# construcción, y no suelto. Un «transferirle» sin marco delante haría que
+# **«no puedo transferirle a un asesor»** —una negativa correcta— contara como
+# promesa, y desde que el guardia CUMPLE la promesa eso no ensucia un número:
+# abre un ticket que nadie pidió. Es la lección de `CONDICIONAL`, aplicada
+# antes de que cueste algo en vez de después.
+#
+# Ejes que siguen SIN cubrir, dichos para no redescubrirlos: el futuro («le
+# transferiré», «lo pasaré»), el imperativo de cortesía («permítame
+# transferirle») y el subjuntivo. No se añaden a ciegas porque cada alternativa
+# nueva es una oportunidad de marcar algo bueno; se añadirán cuando el modelo
+# los diga y haya una corrida que lo demuestre.
 PASAR_CON_HUMANO = re.compile(
     r"\b(?:le|lo|la|les)\s+(?:paso|pongo|comunico|transfiero|derivo)\b"
     r"|\b(?:le|lo|la|les)\s+voy a\s+(?:pasar|comunicar|transferir)\b"
     r"|\bpaso (?:su|la) llamada\b"
-    r"|\bvoy a\s+(?:pasar|transferir|derivar|comunicar)\b[^.]{0,60}?"
+    r"|\bvoy a\s+(?:pasar|transferir|derivar|comunicar)(?:l[aeo]s?)?\b"
+    r"[^.]{0,60}?"
     r"\b(?:asesor|humano|agente|supervisor)\b", re.I)
 
 # La condición que convierte una promesa en un ofrecimiento.
