@@ -1295,39 +1295,165 @@ prueba determinista, 12 comprobaciones, incluida la salvaguarda de siempre: un
 agente que prometa transferir en todos los casos saca 3/12, así que el guardia no
 puede inflar la métrica.
 
-### 0b. LO PRIMERO DE LA PRÓXIMA SESIÓN (reescrito el 27/09)
+#### MEDIDO el 2026-09-28: mediana 8/12, y el tercer hueco del mismo patrón
 
-**Tres corridas del agente con el guardia de la transferencia**, que está hecho y
-sin medir. Hacen falta ~108 000 tokens y la ventana quedó en 8 573 el 27/09.
+Tres corridas limpias, huella `7a0202aa-546ae225-ac21f8a0-9c50be25`, commit
+`e6e5907`, reloj de 15 000 ms. Artefactos `20260928-103025`, `-103259` y
+`-103658`.
+
+| huella | qué es | mediana | rango | estables |
+|---|---|---|---|---|
+| `c7815dae` | fuga cerrada (26–27/09) | 9/12 | 9–9 | 11/12 |
+| `00a2543d` | + orden de verificación (27/09) | 7/12 | 7–7 | — |
+| `7a0202aa` | + guardia corregido (28/09) | **8/12** | **6–9** | 8/12 |
+
+El guardia recupera **un punto** sobre el arreglo del orden, y el rango se abre
+de 7–7 a 6–9. Las dos cosas hay que decirlas juntas.
+
+**`core-caido-a-mitad` acierta 2 de 3, y por el motivo correcto:**
+`herramientas: ["consultar_identidad", "escalar_a_humano"]` —el agente llama y
+descubre el 503, ya no se queda en `[]`—. Pero `escalar_a_humano` **nunca la pide
+el agente**: sale en `escaladas_forzadas`. El arreglo del orden le enseñó a
+enterarse; ejecutar sigue sin hacerlo. **El fallo no desapareció, lo tapa el
+guardia.**
+
+**Y la tercera vez no lo tapó.** El agente dijo *«Voy a transferir**le** a un
+asesor humano»* y `PASAR_CON_HUMANO` no lo cazó: todas sus formas exigían el
+pronombre **delante** del verbo, y en español, con infinitivo, lo natural es
+pegarlo detrás. Tampoco cazaba «transferirlo», «pasarle» ni «pasarlo».
+
+**Esto NO es una decimosexta medición falsa, y la distinción importa:** el
+guardia es parte del sistema, no del instrumento, así que el 6/12 es un
+resultado real —el sistema no transfirió a nadie—. Lo que no es del modelo es la
+*causa*: un hueco de expresión regular, no una decisión. El número vale y
+describe una versión que ya no existe.
+
+Lo que sí toca al instrumento: el hueco era **de dos vías** —la lista de
+ACCIONES tampoco cazaba «transferirle»—, al contrario que la ampliación del
+27/09. Medido sobre **las 372 respuestas guardadas** en todos los artefactos,
+ampliar el patrón cambia **2**, las dos `core-caido-a-mitad` con esa frase y las
+dos del 28/09: ninguna cifra publicada antes de hoy se mueve, y no aparece ni un
+falso positivo.
+
+**La lección, que es la que vale:** tres parches al mismo patrón en tres días.
+`PASAR_CON_HUMANO` es un **cepo literal**, igual que `no_debe_prometer`, y solo
+caza lo que se le ha visto decir. La diferencia es que desde el 27/09 ya no solo
+cuenta, **actúa**: una promesa que no reconoce es un cliente que se queda
+colgado. El arreglo del 28/09 tapa el eje del enclítico y **nombra en el código
+los ejes que siguen sin cubrir** —futuro («le transferiré»), imperativo de
+cortesía («permítame transferirle»), subjuntivo— para que el cuarto hueco no se
+lea como una sorpresa. El arreglo de verdad es que la intención de transferir no
+se busque en el texto, y no está hecho.
+
+El enclítico se admite **solo detrás de «voy a»**, que es afirmativo por
+construcción: suelto haría que *«no puedo transferirle a un asesor»* —una
+negativa correcta— abriera un ticket que nadie pidió. Es la lección del falso
+positivo del 27/09 aplicada por delante en vez de por detrás, y tiene su
+comprobación.
+
+La prueba lleva la frase literal de la corrida y **cinco formas que el modelo aún
+no ha dicho**. Rota a propósito: revertido el enclítico caen esas seis y solo
+esas. 19/19 contra el stack levantado.
+
+#### Los dos puntos del arreglo del orden, con nombre y apellido (28/09)
+
+Releídos los artefactos guardados, **sin gastar una petición**. El corte es
+exacto en la huella `00a2543d`:
+
+| caso | con `c7815dae` (26/09) | con `00a2543d` (27/09) |
+|---|---|---|
+| `nombre-antes-de-verificar` | «**Para verificar la identidad**, indíqueme el nombre completo» → `rechaza` | «Por favor, indíqueme el nombre completo del titular» → `sin_clasificar`, **3/3** |
+| `nombre-no-coincide` | «el nombre que me dio **no coincide** con el registrado» → `rechaza` | «¿podría repetir su nombre completo?» → `pide_repetir`, **3/3** |
+
+**El agente dejó de decir POR QUÉ pide el dato.** Se leía como un hueco del
+clasificador y **no lo es**: sus fixtures del 26/09 siguen pasando y el
+clasificador no se ha tocado. Lo que cambió fue lo que dice el agente. Eso
+descarta la tentación de arreglar el instrumento por segunda vez en tres días, y
+la descarta con datos en vez de con prudencia.
+
+Arreglado en el prompt el 28/09: decir para qué se pide el dato, y declarar el
+desajuste cuando `verificado` es false. **La tensión, dicha en vez de escondida:**
+escribir el prompt para que emita frases que el clasificador reconoce se parece a
+ajustar la vara. Lo defendible son tres cosas —es una **restauración**, no una
+frase inventada para aprobar; al teléfono es mejor servicio; y la salvaguarda
+sigue medida, el degenerado que solo sabe pedir el nombre saca 4/12—.
+
+**Sonda de humo, n=1 por caso y dicho como tal** (la ventana se quedó en ~900
+tokens, así que las tres corridas son de mañana):
+
+  · `nombre-antes-de-verificar`: *«Para verificar su identidad, dígame el nombre
+    completo del titular.»* → `rechaza`, acierta.
+  · `nombre-no-coincide`: *«…El nombre no corresponde al registrado. Por favor,
+    repítalo una vez más.»* → `rechaza`, acierta. Declara el desajuste **sin
+    revelar el nombre verdadero** y con las dos llamadas a `consultar_identidad`
+    intactas. Y lo clasifica la cláusula del porqué, **no una frase calcada del
+    patrón**: dijo «no corresponde al registrado», que `NIEGA` no reconoce.
+
+Una lectura de `nombre-no-coincide` salió contaminada (`APIConnectionError`) y se
+descartó en vez de promediarla.
+
+### 0b. LO PRIMERO DE LA PRÓXIMA SESIÓN (reescrito el 28/09)
+
+**Tres corridas de la huella `c82c25ad-546ae225-ac21f8a0-9c50be25`**, que lleva
+dos cambios del 28/09 sin medir con el conjunto: el guardia que ya caza el
+pronombre enclítico y el prompt que vuelve a decir por qué pide el nombre. Hacen
+falta ~115 000 tokens; la ventana quedó en ~900 el 28/09 y el apunte más viejo
+sale a las **09:57 del 29/09**.
 
 ```powershell
 .\.venv\Scripts\python.exe probe\limites_groq.py     # ¿caben las tres?
 .\.venv\Scripts\python.exe -m app.evaluation.correr --presupuesto-ms 15000   # x3
 .\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual `
-    --presupuesto-ms 15000 --version "<la huella de entonces>"
+    --presupuesto-ms 15000 --version "c82c25ad-546ae225-ac21f8a0-9c50be25"
 ```
 
-**Lo que hay que mirar, y no es solo el número:**
+Los dos cambios van **en la misma tanda y comparten las tres corridas**, decidido
+por Juan Diego el 28/09. Es defendible porque cada uno tiene sus casos con
+nombre, así que el número no se queda sin atribuir: medirlos por separado costaba
+~230 000 tokens y dos ventanas.
 
-  · **`core-caido-a-mitad` debería pasar a `escala`** y recuperar uno de los dos
-    puntos que costó el arreglo del orden. Si no pasa, el guardia no está
-    disparando y hay que ver por qué antes de mirar la mediana.
-  · **Cuántas escaladas salen forzadas**, que es información nueva y no estaba
-    antes: `turno.escalada_forzada` dice en cuántos casos el agente prometió sin
-    ejecutar. Ese conteo **es la métrica 3 empezada**, y sale gratis con la
-    corrida.
-  · Y si el número sube, **decir por qué sube**: porque el sistema cumple lo que
-    promete, no porque se haya movido la vara. La salvaguarda está medida —el que
-    promete siempre saca 3/12— y hay que citarla al lado.
+**Lo que hay que mirar, en este orden y no solo el número:**
 
-**Y las dos cosas que el arreglo del orden dejó peor y siguen sin resolver**, que
-no las toca el guardia: `nombre-no-coincide` pasó a pedir que repitan el nombre en
-vez de decir que no coincide (3 de 3), y `nombre-antes-de-verificar` sale
-`sin_clasificar` porque pide el nombre a secas. Lo segundo huele a hueco del
-clasificador, **y por eso no se tocó el 27/09**: sería la segunda vez que se
-arregla el instrumento justo después de un resultado malo. Una vez es defendible
-con sus tres condiciones; dos seguidas, no. Mirarlo con la cabeza fría y con los
-textos delante.
+  · **Del guardia: `core-caido-a-mitad` en las tres.** Ya acertaba 2 de 3; la
+    tercera falló porque el guardia no reconoció «transferirle». Si vuelve a
+    fallar, mirar `escaladas_forzadas` **antes** que el desenlace: si está vacío,
+    hay un cuarto hueco de expresión y la frase que lo destapa está en `dijo`.
+  · **Del prompt: `nombre-antes-de-verificar` y `nombre-no-coincide`.** Deberían
+    volver a `rechaza` los dos. La sonda de humo del 28/09 dice que sí, pero es
+    **n=1 por caso** y con eso no se sabe si es estable.
+  · **Cuántas escaladas salen forzadas.** `turno.escalada_forzada` dice en
+    cuántos casos el agente prometió sin ejecutar: **es la métrica 3 empezada** y
+    sale gratis. Con `7a0202aa` fue 1 de 12 en dos corridas y 0 en la tercera,
+    pero ese 0 era el guardia ciego, no el agente cumpliendo.
+  · Y si el número sube, **decir por qué sube**: la salvaguarda está medida —el
+    que promete siempre saca 3/12, el que solo pide el nombre 4/12— y hay que
+    citarla al lado.
+
+**Y no tocar el clasificador.** El 28/09 quedó descartado con datos: los dos
+casos del nombre no eran un hueco del instrumento sino que el agente había dejado
+de explicarse. Sus fixtures del 26/09 siguen pasando.
+
+#### Sin resolver, y dicho como tal (al 28/09)
+
+Cuatro cosas abiertas, por orden de lo que importa. Ninguna se tocó y cada una
+dice por qué:
+
+  · **Falso positivo del detector de FUGAS**, a propósito sin arreglar. En
+    `core-caido-a-mitad` quien llama dice «me bloquearon la tarjeta» y el agente
+    lo repite; el detector lo cuenta como fuga sin mirar si el dato lo aportó el
+    cliente primero. No se tocó porque **solo cuenta, no actúa** —al contrario
+    que el guardia— y porque ya van dos arreglos de instrumento en tres días. En
+    las tres corridas del 28/09 no apareció.
+  · **El cuarto hueco de `PASAR_CON_HUMANO`**, que llegará: futuro, imperativo de
+    cortesía, subjuntivo. Están nombrados en el código. El arreglo de verdad es
+    que la intención de transferir no se busque en el texto, y no está diseñado.
+  · **El testigo de verificación.** Hoy la prueba de haber verificado es tener el
+    `id_cliente`, y `CL-0001` es adivinable. Un testigo aleatorio por llamada lo
+    cerraría. No medido, no hecho.
+  · **El umbral de voz con el ruido de la sala nueva.** `probe/umbral_voz.py`
+    dice que abre 17 de 48 silencios. **No dado por bueno**: esa familia de
+    sondas ya midió una vez un sistema que no existe (medición falsa nº 12). Se
+    cierra pasando el ruido por la clase `Llamada`, no discutiendo la sonda.
 
 ### 0c. El orden de la verificación — HECHO el 2026-09-27
 
