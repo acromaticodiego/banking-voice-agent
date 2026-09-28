@@ -659,6 +659,13 @@ medir: cualquier cambio a partir de esa fecha está informado por el resultado.
   de la llamada ni de la conversación— y de ahí se sigue que nada con efecto
   se puede adelantar. Escribirlo destapó que nadie comprobaba que la lista
   blanca estuviera completa
+- **0010** si el agente dice que pasa la llamada, la llamada se pasa. **Hay
+  promesas que se pueden hacer verdad y promesas que solo se pueden prohibir**,
+  y la línea la traza qué herramienta existe. Con los tres huecos del cepo
+  literal y la lección de que un detector que pasa de contar a actuar cambia el
+  precio de sus errores. Escribirlo destapó que **las dos vías que dicen
+  detectar la misma promesa no coinciden**: «permítame transferirle» y «le
+  transferiré» no las ve ninguna de las dos
 
 ---
 
@@ -1444,9 +1451,17 @@ dice por qué:
     cliente primero. No se tocó porque **solo cuenta, no actúa** —al contrario
     que el guardia— y porque ya van dos arreglos de instrumento en tres días. En
     las tres corridas del 28/09 no apareció.
-  · **El cuarto hueco de `PASAR_CON_HUMANO`**, que llegará: futuro, imperativo de
-    cortesía, subjuntivo. Están nombrados en el código. El arreglo de verdad es
-    que la intención de transferir no se busque en el texto, y no está diseñado.
+  · **Las dos vías del detector no coinciden**, medido el 28/09 al escribir el
+    ADR 0010. El recuento de acciones va por la lista de `ACCIONES` y el guardia
+    por `PASAR_CON_HUMANO`, y discrepan: «voy a transferir**le**» solo lo ve el
+    guardia, y **«permítame transferirle» y «le transferiré» no las ve ninguna de
+    las dos**. O sea que los ejes pendientes no son un hueco del guardia sino del
+    detector entero, y el recuento de «dijo lo que no le consta» se queda corto
+    en ellos. **Es lo PRIMERO después de las tres corridas**: toca `app/agent`, o
+    sea que hacerlo antes cambiaría la huella y obligaría a volver a medir.
+    Falta además la comprobación de que las dos vías sigan de acuerdo, que es el
+    agujero del ADR 0007 otra vez: un olvido que no da error, solo deja de
+    proteger.
   · **El testigo de verificación.** Hoy la prueba de haber verificado es tener el
     `id_cliente`, y `CL-0001` es adivinable. Un testigo aleatorio por llamada lo
     cerraría. No medido, no hecho.
