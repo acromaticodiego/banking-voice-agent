@@ -1,0 +1,12 @@
+{
+  "fichero": "muestra-silencio-sala__sala02.wav",
+  "frase": "silencio-sala",
+  "tipo": "silencio",
+  "segundos": 33.34,
+  "frecuencia_hz": 16000,
+  "pico": 5738,
+  "dispositivo": "[1] Varios micrófonos (2- Realtek(R",
+  "etiqueta": "sala02",
+  "sin_voz": true,
+  "transcripcion_verdadera": ""
+}

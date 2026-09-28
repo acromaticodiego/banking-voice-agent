@@ -139,6 +139,32 @@ puesto está más abajo, en "El turno, vuelto a medir".*
 | con números normalizados, p50 | 0,0% | **0,0%** |
 | números críticos recuperados | 3/3 | **3/3** |
 
+### Y con OTRA VOZ el 0,0% se cae (2026-09-27, segunda voz, segunda sala)
+
+Es lo primero que se mide con material grabado fuera de la habitación de siempre,
+y era el techo declarado del proyecto. Una voz de mujer, guion `documento`, mismo
+micrófono y misma distancia:
+
+| | tu voz (la de siempre) | otra voz |
+|---|---|---|
+| error normalizado, sin filtro | 0,0% | **27,3%** |
+| error normalizado, con `vad_filter` | 0,0% | **18,2%** |
+| **números críticos recuperados** | 3/3 | **1/1** |
+
+**El 0,0% describía una voz, no el sistema.** Con otra persona el error normalizado
+se va al 18–27%, y eso no es un matiz: es el número que este documento publicaba
+como la métrica 4.
+
+**Y lo que sí se sostiene es justo lo que importa: el documento sale entero.**
+Whisper destroza las palabras —*«ya amo porque me lo quedan a la tarjeta»* por
+*«llamo porque me bloquearon la tarjeta»*— y acierta las cifras. Para un agente que
+tiene que verificar una identidad, la cifra es el dato y la palabra es el envoltorio,
+así que la conclusión operativa no cambia; la cifra publicable, sí.
+
+Aquí el filtro **mejora** la transcripción (18,2% contra 27,3%), al contrario que en
+las degradaciones de voz lejana. `probe/sordera_asr.py`, n=1 por voz: con una sola
+grabación por persona esto es orden de magnitud, no una tasa.
+
 La segunda columna es el mismo audio pasado por el canal de una llamada:
 banda de 300–3400 Hz, muestreo a 8 kHz y cuantización µ-law de 8 bits (G.711),
 y de vuelta a 16 kHz para el modelo. `probe/linea_telefonica.py`.
@@ -179,6 +205,30 @@ Whisper, que es aleatorio por dentro.
 
 Decidido en el ADR 0008: el filtro va puesto y las señales del ASR se anotan
 sin actuar. `probe/confianza_asr.py`.
+
+#### Y en otra habitación el filtro deja de dejarlo en cero (2026-09-27)
+
+Medido con 33 s de ruido grabados a propósito en otra sala —196 tramos, contra los
+142 reciclados de la sala de siempre—:
+
+| | tu sala (24/09) | sala nueva (27/09) |
+|---|---|---|
+| clips sin voz que producen texto, **sin filtro** | 16 de 64 | 8 de 64 |
+| **con `vad_filter=True`** | **0 de 64** | **1 de 64** |
+| por línea telefónica | 0 de 24 | 0 de 24 |
+| coste del filtro | +24 ms | +19 ms |
+
+**«Con el filtro, 0 de 64» describía esa habitación.** Se cuela una, y es del tipo
+peligroso: *«¡Muy bien!»* —igual que el *«¿Qué pasa?»* de la otra sala— porque no
+delata nada y un agente bancario se la traga como turno del cliente. El ADR 0008 no
+cambia de decisión: el filtro sigue valiendo la pena, pasa de 8 a 1. Lo que cambia
+es la frase con la que se cuenta, que ya no puede ser «lo elimina» sino «lo reduce
+casi del todo, y lo que queda es lo que menos se nota».
+
+Dos cosas más de esa sala, y la primera tranquiliza: **el ruido de fondo tiene picos
+más altos que la voz de ella** (5 738 contra 4 505) y aun así **no abre turno**,
+mientras las dos grabaciones de voz sí lo abren. Y el filtro **no deja muda ninguna
+grabación** (`sorderas_por_el_filtro: []`).
 
 ### El turno, vuelto a medir con el filtro puesto (2026-09-24, n=6)
 
@@ -1362,10 +1412,12 @@ exactamente eso. Y ya hay dos casos conocidos para comprobarlo.
 
 Esto no lo puede avanzar un agente solo, y es casi todo lo que queda:
 
-1. **Grabar voz y ruido en otra habitación.** Sigue siendo el techo de todo lo
-   medido: una sala, un micrófono, un hablante. `probe/confianza_asr.py`,
-   `probe/sordera_asr.py` y `probe/umbral_voz.py` miden con lo que haya, sin
-   escribir una línea ni gastar cuota.
+1. ~~**Grabar voz y ruido en otra habitación.**~~ HECHO el 2026-09-27: segunda voz
+   (mujer), segunda sala, y 33 s de ruido de esa sala grabados a propósito. Las dos
+   cosas que destapó están arriba —el 0,0% de transcripción era de una voz, y el
+   filtro no deja la alucinación en cero— y las dos se midieron **sin gastar un
+   token**. Lo que queda de este punto es **más voces**: con una grabación por
+   persona esto es orden de magnitud, no una tasa, y sigue siendo n=1 por voz.
 2. **La llamada real por Twilio.** El canal está comprobado entero; faltan cuenta,
    número y túnel. Los pasos y las trampas en `docs/telefonia.md`, y antes de
    marcar `probe\check_telefonia.py`.

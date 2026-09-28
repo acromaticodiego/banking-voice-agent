@@ -252,7 +252,16 @@ def main() -> int:
     print("LA CIFRA QUE DECIDE: tasa de error contra la verdad escrita (n=3 por fila)")
     print("  Comparar cuánto texto sale no vale: el filtro quita texto INVENTADO y")
     print("  eso también es 'perder palabras'. Contra la verdad no hay esa duda.")
-    print(f"\n  {'degradación':<22} {'abre turno':<11} {'sin filtro':>12} {'con filtro':>12}")
+    # La columna del medio NO dice si el sistema abriría turno, y titularla
+    # "abre turno" es como se cometió el error del 2026-09-24: compara el nivel
+    # MEDIO del clip entero contra el umbral, mientras `app/vivo.py` acumula
+    # `voz_ms` trozo a trozo y no lo reinicia en los silencios de en medio. Con
+    # la voz a la mitad esta columna da 0 y el sistema de verdad, medido con la
+    # clase `Llamada`, da 6 de 6 (ADR 0009). El docstring de este fichero ya lo
+    # advertía y la tabla lo desmentía: quien lee una tabla no lee el docstring.
+    print(f"\n  {'degradación':<22} {'nivel medio>umbral':<19} "
+          f"{'sin filtro':>12} {'con filtro':>12}")
+    print(f"  {'':<22} {'(NO es abrir turno)':<19}")
     resumen = {}
     for nombre, *_ in DEGRADACIONES:
         fila = {}

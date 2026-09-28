@@ -1,0 +1,11 @@
+{
+  "fichero": "muestra-documento__voz02-ella-sala02.wav",
+  "frase": "documento",
+  "tipo": "lectura",
+  "segundos": 20.93,
+  "frecuencia_hz": 16000,
+  "pico": 5121,
+  "dispositivo": "[1] Varios micrófonos (2- Realtek(R",
+  "etiqueta": "voz02-ella-sala02",
+  "transcripcion_verdadera": "Buenas tardes, llamo porque me bloquearon la tarjeta esta mañana y necesito saber por qué. Mi número de documento es el uno cero siete cero dos tres cuatro cinco seis siete."
+}
