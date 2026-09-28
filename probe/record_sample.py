@@ -123,9 +123,33 @@ PREGUNTAS = {
 # saca la tasa de error de transcripción, porque hay verdad escrita contra la
 # que comparar; de una espontánea se saca el fin de habla, porque las pausas
 # son reales. Cada una sirve para una cosa y no para la otra.
+# Y el ruido de la sala, que no es un guion pero se graba igual y hacía falta.
+#
+# Todo lo que este proyecto sabe de la alucinación de Whisper sobre el silencio
+# —16 de 64 clips inventando frases— sale del ruido de UNA habitación, y además
+# reciclado: los tramos se recortaban de las propias grabaciones de voz. Con un
+# minuto de sala grabado a propósito se puede saber si ese 16 describe a Whisper
+# o describe esa habitación.
+#
+# No entra en `FRASES` ni en `PREGUNTAS` a propósito: `main()` recorre `FRASES`,
+# y meterlo ahí haría que el modo de consola pidiera "lee esto en voz alta" para
+# una toma en la que hay que callarse.
+SILENCIOS = {
+    "silencio-sala": "\n".join([
+        "NO HABLES. Esta toma es el ruido de fondo de la habitación.",
+        "",
+        "   · deja el micrófono donde estaba en las otras tomas",
+        "   · no lo toques, no te muevas de la silla, no escribas",
+        "   · si hay nevera, ventilador o tráfico, MEJOR: eso es lo que se mide",
+        "",
+        "Treinta segundos largos. Dale a Grabar y espera en silencio.",
+    ]),
+}
+
 GUIONES = {
     **{n: {"tipo": "lectura", "texto": t} for n, t in FRASES.items()},
     **{n: {"tipo": "espontanea", "texto": t} for n, t in PREGUNTAS.items()},
+    **{n: {"tipo": "silencio", "texto": t} for n, t in SILENCIOS.items()},
 }
 
 

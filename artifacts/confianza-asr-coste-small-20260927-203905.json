@@ -1,0 +1,55 @@
+{
+  "fecha": "2026-09-27T20:39:05.787409-05:00",
+  "host": {
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python": "3.12.0",
+    "gpu": "NVIDIA GeForce RTX 3050 6GB Laptop GPU"
+  },
+  "mediciones": [
+    {
+      "etapa": "asr",
+      "implementacion": "faster-whisper small (cuda/float16) vad=False",
+      "que_mide": "transcribir el clip entero de habla, de llamada a resultado",
+      "muestras_ms": [
+        256.9034999996802,
+        246.82219999886001,
+        244.9177000016789,
+        161.838699999862
+      ],
+      "unidad": "ms",
+      "notas": "Clips: documento__voz01-juandiego-sala02~turno, documento__voz02-ella-sala02~turno, libre-bloqueo__voz02-ella-sala02~turno, silencio-sala__sala02~turno. Va en la ruta crítica del turno.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 4,
+        "p50": 245.9,
+        "p95": 255.4,
+        "min": 161.8,
+        "max": 256.9
+      }
+    },
+    {
+      "etapa": "asr",
+      "implementacion": "faster-whisper small (cuda/float16) vad=True",
+      "que_mide": "transcribir el clip entero de habla, de llamada a resultado",
+      "muestras_ms": [
+        263.8676000005944,
+        266.9805000004999,
+        265.46789999883913,
+        22.005799999533338
+      ],
+      "unidad": "ms",
+      "notas": "Clips: documento__voz01-juandiego-sala02~turno, documento__voz02-ella-sala02~turno, libre-bloqueo__voz02-ella-sala02~turno, silencio-sala__sala02~turno. Va en la ruta crítica del turno.",
+      "coste_usd": null,
+      "error": null,
+      "resumen": {
+        "n": 4,
+        "p50": 264.7,
+        "p95": 266.8,
+        "min": 22.0,
+        "max": 267.0
+      }
+    }
+  ]
+}

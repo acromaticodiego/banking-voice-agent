@@ -11,6 +11,14 @@ __pycache__/
 artifacts/*.wav
 artifacts/*.mp3
 artifacts/*.raw
+# Y en subcarpetas, que es donde van los respaldos de cada voz y cada sala. El
+# patrón de arriba solo cubre el primer nivel: el 2026-09-27, al respaldar las
+# grabaciones originales antes de grabar otra voz, los WAV de la subcarpeta
+# aparecieron como versionables. La regla del proyecto es que la voz no entra al
+# repositorio, y una subcarpeta no es una excepción.
+artifacts/**/*.wav
+artifacts/**/*.mp3
+artifacts/**/*.raw
 
 # El libro de la cuota de Groq (app/evaluation/cuota.py). Se ignora porque es
 # estado operativo de UNA cuenta y cambia en cada corrida: versionarlo llenaría

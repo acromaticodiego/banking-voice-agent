@@ -163,10 +163,23 @@ MARCOS = [
 # ofrecimiento y es una respuesta correcta; "le paso con un asesor" y "le voy a
 # pasar" afirman que la transferencia ya está en marcha. La primera versión de
 # esto metía "puedo" en el mismo saco y marcó un ofrecimiento como promesa.
+#
+# Y le faltaba una forma entera, encontrada el 2026-09-27 al usar esta expresión
+# para CUMPLIR la promesa y no solo para detectarla: **«Voy a transferir su
+# llamada a un asesor humano»** no casaba, porque todas las alternativas exigían
+# un pronombre delante (`le paso`, `le voy a pasar`). Es la frase literal de
+# `core-caido-a-mitad`, o sea que el guardia habría dejado pasar justo el caso
+# que lo motivó. El detector sí la marcaba, pero por la otra vía —la lista de
+# ACCIONES, que incluye «transferir»—, así que el hueco no se veía en el recuento.
+#
+# La forma nueva pide que cerca aparezca a quién se pasa la llamada. Sin eso,
+# «voy a pasar a explicarle el estado» contaría como promesa de transferencia.
 PASAR_CON_HUMANO = re.compile(
     r"\b(?:le|lo|la|les)\s+(?:paso|pongo|comunico|transfiero|derivo)\b"
     r"|\b(?:le|lo|la|les)\s+voy a\s+(?:pasar|comunicar|transferir)\b"
-    r"|\bpaso (?:su|la) llamada\b", re.I)
+    r"|\bpaso (?:su|la) llamada\b"
+    r"|\bvoy a\s+(?:pasar|transferir|derivar|comunicar)\b[^.]{0,60}?"
+    r"\b(?:asesor|humano|agente|supervisor)\b", re.I)
 
 # --------------------------------------------------------- los procedimientos
 #

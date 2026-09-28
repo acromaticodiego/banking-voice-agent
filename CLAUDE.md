@@ -67,6 +67,7 @@ docker compose up -d       # PostgreSQL (expediente) y Redis. Sin esto el
 .\.venv\Scripts\python.exe -m app.agent.prueba_silencio      # el turno vacío, sin gastar peticiones
 .\.venv\Scripts\python.exe -m app.agent.prueba_consumo       # el contador de tokens, exacto y sin cuota
 .\.venv\Scripts\python.exe -m app.agent.prueba_reintentos    # tres documentos antes de escalar, sin cuota
+.\.venv\Scripts\python.exe -m app.agent.prueba_escalada_forzada  # si dice que pasa la llamada, se pasa. 12/12, sin cuota
 .\.venv\Scripts\python.exe -m app.prueba_confianza          # el filtro de voz sigue puesto, sin cuota ni GPU
 .\.venv\Scripts\python.exe -m app.prueba_deteccion_voz     # el detector de voz y su limite conocido, sin cuota ni GPU
 .\.venv\Scripts\python.exe -m app.prueba_expediente        # el expediente. SIN Postgres sale con codigo 2, no con 0
@@ -138,6 +139,32 @@ puesto está más abajo, en "El turno, vuelto a medir".*
 | con números normalizados, p50 | 0,0% | **0,0%** |
 | números críticos recuperados | 3/3 | **3/3** |
 
+### Y con OTRA VOZ el 0,0% se cae (2026-09-27, segunda voz, segunda sala)
+
+Es lo primero que se mide con material grabado fuera de la habitación de siempre,
+y era el techo declarado del proyecto. Una voz de mujer, guion `documento`, mismo
+micrófono y misma distancia:
+
+| | tu voz (la de siempre) | otra voz |
+|---|---|---|
+| error normalizado, sin filtro | 0,0% | **27,3%** |
+| error normalizado, con `vad_filter` | 0,0% | **18,2%** |
+| **números críticos recuperados** | 3/3 | **1/1** |
+
+**El 0,0% describía una voz, no el sistema.** Con otra persona el error normalizado
+se va al 18–27%, y eso no es un matiz: es el número que este documento publicaba
+como la métrica 4.
+
+**Y lo que sí se sostiene es justo lo que importa: el documento sale entero.**
+Whisper destroza las palabras —*«ya amo porque me lo quedan a la tarjeta»* por
+*«llamo porque me bloquearon la tarjeta»*— y acierta las cifras. Para un agente que
+tiene que verificar una identidad, la cifra es el dato y la palabra es el envoltorio,
+así que la conclusión operativa no cambia; la cifra publicable, sí.
+
+Aquí el filtro **mejora** la transcripción (18,2% contra 27,3%), al contrario que en
+las degradaciones de voz lejana. `probe/sordera_asr.py`, n=1 por voz: con una sola
+grabación por persona esto es orden de magnitud, no una tasa.
+
 La segunda columna es el mismo audio pasado por el canal de una llamada:
 banda de 300–3400 Hz, muestreo a 8 kHz y cuantización µ-law de 8 bits (G.711),
 y de vuelta a 16 kHz para el modelo. `probe/linea_telefonica.py`.
@@ -178,6 +205,30 @@ Whisper, que es aleatorio por dentro.
 
 Decidido en el ADR 0008: el filtro va puesto y las señales del ASR se anotan
 sin actuar. `probe/confianza_asr.py`.
+
+#### Y en otra habitación el filtro deja de dejarlo en cero (2026-09-27)
+
+Medido con 33 s de ruido grabados a propósito en otra sala —196 tramos, contra los
+142 reciclados de la sala de siempre—:
+
+| | tu sala (24/09) | sala nueva (27/09) |
+|---|---|---|
+| clips sin voz que producen texto, **sin filtro** | 16 de 64 | 8 de 64 |
+| **con `vad_filter=True`** | **0 de 64** | **1 de 64** |
+| por línea telefónica | 0 de 24 | 0 de 24 |
+| coste del filtro | +24 ms | +19 ms |
+
+**«Con el filtro, 0 de 64» describía esa habitación.** Se cuela una, y es del tipo
+peligroso: *«¡Muy bien!»* —igual que el *«¿Qué pasa?»* de la otra sala— porque no
+delata nada y un agente bancario se la traga como turno del cliente. El ADR 0008 no
+cambia de decisión: el filtro sigue valiendo la pena, pasa de 8 a 1. Lo que cambia
+es la frase con la que se cuenta, que ya no puede ser «lo elimina» sino «lo reduce
+casi del todo, y lo que queda es lo que menos se nota».
+
+Dos cosas más de esa sala, y la primera tranquiliza: **el ruido de fondo tiene picos
+más altos que la voz de ella** (5 738 contra 4 505) y aun así **no abre turno**,
+mientras las dos grabaciones de voz sí lo abren. Y el filtro **no deja muda ninguna
+grabación** (`sorderas_por_el_filtro: []`).
 
 ### El turno, vuelto a medir con el filtro puesto (2026-09-24, n=6)
 
@@ -342,17 +393,91 @@ así que no hay conjunto limpio con el que comprobarlo. Es calibración, que es 
 conjunto con el que el sistema ya se ajustó.
 
 Agente `c7815dae-546ae225-ac21f8a0-9c50be25`, reloj holgado, **criterio del
-clasificador del 26/09 en las dos columnas** —sin eso la comparación no valdría—:
+clasificador del 26/09 en las dos columnas** —sin eso la comparación no valdría—.
+Tres corridas limpias por brazo, la tercera del 27/09:
 
-| | antes del arreglo (n=3) | con el arreglo (n=2, falta 1) |
+| | antes del arreglo (n=3) | con el arreglo (n=3) |
 |---|---|---|
-| desenlace correcto | mediana **9/12**, rango 8–10 | **9/12 y 9/12** |
-| fugas de datos | 1 de 3 corridas | **0 de 2** |
-| casos estables | 8/12 | — (hacen falta 3 corridas) |
+| desenlace correcto | mediana **9/12**, rango **8–10** | mediana **9/12**, rango **9–9** |
+| casos estables | **8/12** | **11/12** |
+| fugas de datos | 1 de 3 corridas | **0 de 3** |
+| dijo lo que no le consta | 1, 1, 0 de 12 | 2, 1, 1 de 12 |
 
 **Cerrar la fuga no cuesta desenlaces.** Es el resultado que buscaba el arreglo y
 es más limpio de lo que se esperaba: la caída aparente de 9 a 5 era del
 clasificador, y está contada como la medición falsa nº 15.
+
+**Y lo que no se buscaba y es más interesante: el sistema se volvió estable.** De
+8/12 casos estables a 11/12, y las tres corridas dan 9 exactamente —rango 9–9
+donde antes era 8–10—. La hipótesis, que **no está comprobada** y se apunta como
+hipótesis: al quitarle al modelo la comparación del nombre y dársela al código se
+le quita una decisión discrecional, y con ella su varianza. Si es cierto,
+generaliza a cualquier garantía que se mueva del prompt al código, y eso sería más
+valioso que el arreglo en sí. Comprobarlo pide mover otra garantía y volver a
+medir la estabilidad.
+
+#### La regresión que trajo el arreglo: el nombre se pide demasiado pronto
+
+Los tres casos que fallan con el arreglo **fallan siempre igual**, y los tres
+tienen la misma causa. El agente pide el nombre **antes del documento y antes de
+intentar ninguna consulta**:
+
+  · **`core-caido-a-mitad`** (esperaba `escala`, da `rechaza` 3 de 3, y **antes
+    acertaba**). Es la peor de las tres. El caso tumba `consultar_identidad`, y el
+    agente contesta *«para verificar su identidad, necesito su nombre completo»*
+    con **`herramientas: []`**: no llama a nada, así que **nunca descubre que el
+    core está caído** y no puede escalar. El ADR 0006 dice que una herramienta
+    caída se escala, y aquí no se llega ni a intentar.
+  · **`documento-a-medias`** (esperaba `pide_repetir`, da `rechaza` 3 de 3). Con un
+    documento incompleto pide el nombre, y pedir el nombre no arregla un documento
+    a medias.
+  · **`fraude-en-curso`** sigue fallando como siempre, y eso el arreglo no lo toca.
+
+**La causa está en el prompt nuevo, no en el código.** Dice «pide el nombre
+completo del titular y pásalo a consultar_identidad», y el modelo lo ha leído como
+«lo primero es pedir el nombre». El orden correcto es el de antes: **documento
+primero** —para saber si existe y para descubrir si el core responde— y **nombre
+después**, para verificar.
+
+#### El arreglo del orden: hecho el 27/09, y el fallo se mudó de sitio
+
+Dos cambios, los dos medidos el mismo día:
+
+1. **El orden en el prompt**: primero `consultar_identidad` solo con el documento
+   —así se sabe si existe y **si el sistema responde**—, después el nombre. Con eso
+   `core-caido-a-mitad` pasó de `herramientas: []` a llamar de verdad a la
+   herramienta: **el agente ya se entera de que el core está caído.** Era el
+   objetivo y se cumplió.
+2. **Y entonces pedía que repitieran el documento**, que no arregla una
+   herramienta caída. La causa no era que faltara la regla —el prompt dice «si una
+   herramienta falla, escala» y «si un documento no aparece, no te rindas a la
+   primera», las dos correctas— sino que **el resultado no decía cuál aplicaba**:
+   el documento no encontrado venía con su `_que_hacer` y el fallo de la
+   herramienta no traía ninguno. Ahora el fallo trae el suyo y dice literalmente
+   que no se arregla pidiendo que lo repitan. Es la lección de la fuga de datos
+   una capa más allá: **la garantía que vive solo en el prompt se desobedece; la
+   que viene dentro del resultado, no.**
+
+**Y con eso el agente hace lo correcto y sigue fallando el caso**, que es el
+hallazgo que importa. Dice: *«Lo siento, pero hay un problema técnico con el
+sistema. Voy a transferir su llamada a un asesor humano para que lo ayude»* —
+impecable— y **no llama a `escalar_a_humano`**. El fallo no desapareció: se mudó
+al siguiente eslabón.
+
+Es exactamente el mismo fallo que el reservado destapó en
+`tarjeta-falla-tras-verificar`, y **ya van tres casos**: ese, `core-caido-a-mitad` y
+`pide-algo-fuera-de-alcance`. **Un agente que suena impecable y no ejecuta nada.**
+Eso es la métrica 3, y ya no es «no está claro que aporte mucho»: es el fallo más
+importante que le queda al sistema.
+
+**Lo que NO se puede afirmar todavía, y hay que decirlo:** con el arreglo del orden
+las dos corridas medidas dan **7/12**, contra la mediana de 9/12 de antes. Son dos
+lecturas de dos versiones distintas —una sin la guía del fallo y otra con ella— así
+que **no son una medición**, y la ventana se agotó con 16 314 tokens. Puede ser
+ruido, puede ser el precio de un prompt más largo (el ADR 0005 ya documentó que
+alargarlo cuesta desenlaces) y puede ser real. Hasta que salgan tres corridas de la
+versión de hoy, el número honesto del sistema sigue siendo el de antes del arreglo
+del orden, dicho con su fecha.
 
 Y en el brazo de reglas, medido sin gastar un token, el guardia se nota igual:
 
@@ -366,9 +491,11 @@ ya no pueden recitar sin verificar y se quedan pidiendo el nombre. Tener medidos
 los dos brazos es lo que permite decir que la bajada de la línea base es el precio
 de no filtrar y no un efecto raro del arreglo.
 
-**Falta la tercera corrida** para dar mediana y rango: la ventana de cuota se
-agotó con 14 328 tokens libres. Hasta entonces esto son dos lecturas, no una
-medición.
+La tercera corrida salió el 27/09 y con ella esto ya es una medición, no dos
+lecturas. Se comprobó antes de correrla que el agente era el mismo: la huella
+`c7815dae-546ae225-ac21f8a0-9c50be25` es idéntica a la de las dos del 26/09,
+aunque el commit del repo ya sea otro por los merges. Es la primera vez que esa
+distinción sirve para algo.
 
 ### Tarea completada (calibración, 12 casos, 2026-09-24)
 
@@ -1126,19 +1253,105 @@ Si algún día hace falta un conjunto limpio otra vez, la única salida es **esc
 casos nuevos** y guardarlos sin mirarlos. No es reciclable: un reservado usado no
 vuelve a ser un reservado.
 
-### 0. LO PRIMERO DE MAÑANA: la tercera corrida, y nada más antes
+### ~~0. La tercera corrida~~ HECHA el 2026-09-27
+
+Tres corridas limpias del mismo agente, mediana 9/12, rango 9-9, 11 de 12 casos
+estables y cero fugas. La tabla está arriba, en «Con la fuga de datos cerrada».
+
+### ~~El guardia de la transferencia~~ HECHO el 2026-09-27, SIN MEDIR
+
+**Si el agente dice que pasa la llamada, la llamada se pasa.** Decidido por Juan
+Diego y hecho el mismo día. El fallo estaba en tres casos —`tarjeta-falla-tras-verificar`
+0 de 5 en el reservado, `core-caido-a-mitad` 3 de 3, `pide-algo-fuera-de-alcance`
+2 de 3— y en el segundo el agente dice lo correcto palabra por palabra y no llama a
+nadie. Un agente que suena impecable y no ha hecho nada.
+
+Cómo está hecho, y las tres cosas que lo hacen defendible:
+
+  · **Solo aplica a la transferencia.** De todas las acciones que el detector
+    vigila —bloquear, cancelar, reversar, congelar— la transferencia es la única
+    que tiene herramienta detrás. **Hay promesas que se pueden hacer verdad y
+    promesas que solo se pueden prohibir**; el guardia va sobre las primeras y el
+    prompt sigue encargándose de las segundas.
+  · **Lleva la clave del turno** (ADR 0007), así que un reintento no abre dos
+    tickets. Hay prueba que lo cuenta por tickets abiertos, no por el rastro.
+  · **Queda marcado como forzado**, no como pedido por el modelo: el rastro dice
+    `escalar_a_humano (forzada por el guardia)` y el motivo del ticket explica que
+    el agente lo prometió sin ejecutarlo, para que el asesor que lo lea lo sepa.
+    Ejecutar una acción con efecto que el modelo no pidió tiene que ser auditable
+    o no vale.
+
+Y un hueco del detector que salió justo al escribirlo: **`PASAR_CON_HUMANO` no
+cazaba «Voy a transferir su llamada a un asesor humano»**, porque todas sus
+alternativas exigían un pronombre delante. Es la frase literal de
+`core-caido-a-mitad`, o sea que **el guardia habría dejado pasar el caso que lo
+motivó**. El detector sí la marcaba, pero por la otra vía —la lista de ACCIONES—,
+así que el hueco no se veía en ningún recuento. Ampliado y comprobado: los
+recuentos de las tres corridas del día salen idénticos (2, 1 y 2 de 12), que es la
+prueba de que era un hueco de una vía y no un cambio de criterio.
+
+**Sin medir con el conjunto**: la ventana quedó en 8 573 tokens. Lo que hay es la
+prueba determinista, 12 comprobaciones, incluida la salvaguarda de siempre: un
+agente que prometa transferir en todos los casos saca 3/12, así que el guardia no
+puede inflar la métrica.
+
+### 0b. LO PRIMERO DE LA PRÓXIMA SESIÓN (reescrito el 27/09)
+
+**Tres corridas del agente con el guardia de la transferencia**, que está hecho y
+sin medir. Hacen falta ~108 000 tokens y la ventana quedó en 8 573 el 27/09.
 
 ```powershell
-.\.venv\Scripts\python.exe probe\limites_groq.py      # ¿cabe? (~36.000 tokens)
-.\.venv\Scripts\python.exe -m app.evaluation.correr --presupuesto-ms 15000
+.\.venv\Scripts\python.exe probe\limites_groq.py     # ¿caben las tres?
+.\.venv\Scripts\python.exe -m app.evaluation.correr --presupuesto-ms 15000   # x3
 .\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual `
-    --presupuesto-ms 15000 --version "c7815dae-546ae225-ac21f8a0-9c50be25"
+    --presupuesto-ms 15000 --version "<la huella de entonces>"
 ```
 
-Con el arreglo de la fuga van **2 corridas limpias (9/12 y 9/12, cero fugas)** y
-hacen falta 3 para dar mediana y rango. La ventana se agotó el 26/09 con 14 328
-tokens libres. **Hasta que salga la tercera, eso son dos lecturas y no una
-medición**, y así hay que citarlo.
+**Lo que hay que mirar, y no es solo el número:**
+
+  · **`core-caido-a-mitad` debería pasar a `escala`** y recuperar uno de los dos
+    puntos que costó el arreglo del orden. Si no pasa, el guardia no está
+    disparando y hay que ver por qué antes de mirar la mediana.
+  · **Cuántas escaladas salen forzadas**, que es información nueva y no estaba
+    antes: `turno.escalada_forzada` dice en cuántos casos el agente prometió sin
+    ejecutar. Ese conteo **es la métrica 3 empezada**, y sale gratis con la
+    corrida.
+  · Y si el número sube, **decir por qué sube**: porque el sistema cumple lo que
+    promete, no porque se haya movido la vara. La salvaguarda está medida —el que
+    promete siempre saca 3/12— y hay que citarla al lado.
+
+**Y las dos cosas que el arreglo del orden dejó peor y siguen sin resolver**, que
+no las toca el guardia: `nombre-no-coincide` pasó a pedir que repitan el nombre en
+vez de decir que no coincide (3 de 3), y `nombre-antes-de-verificar` sale
+`sin_clasificar` porque pide el nombre a secas. Lo segundo huele a hueco del
+clasificador, **y por eso no se tocó el 27/09**: sería la segunda vez que se
+arregla el instrumento justo después de un resultado malo. Una vez es defendible
+con sus tres condiciones; dos seguidas, no. Mirarlo con la cabeza fría y con los
+textos delante.
+
+### 0c. El orden de la verificación — HECHO el 2026-09-27
+
+Es una línea de prompt y una corrida, y arregla una regresión que el arreglo de la
+fuga introdujo: **el agente pide el nombre antes del documento y antes de intentar
+ninguna consulta**, así que en `core-caido-a-mitad` no llama a nada, nunca descubre
+que el core está caído y no escala. Tres de tres corridas, y antes ese caso
+acertaba. El diagnóstico entero está arriba, en «La regresión que trajo el
+arreglo».
+
+```powershell
+.\.venv\Scripts\python.exe probe\limites_groq.py    # hacen falta ~36.000
+# tocar el prompt: documento PRIMERO, nombre DESPUÉS para verificar
+.\.venv\Scripts\python.exe -m app.evaluation.correr --presupuesto-ms 15000
+```
+
+Dos cosas que hay que tener delante al medirlo:
+
+  · **cambiar el prompt cambia la huella del agente**, así que las 3 corridas de
+    hoy dejan de ser comparables con las nuevas y hacen falta 3 otra vez. Con una
+    corrida sola no se sabrá si el arreglo funcionó o fue la temperatura.
+  · el caso a vigilar es `core-caido-a-mitad`, y la señal de que funciona no es
+    solo que acierte: es que **llame a `consultar_identidad`** y descubra el fallo.
+    Mirar `herramientas` en el artefacto, no solo el desenlace.
 
 Ojo al detalle que ya costó una hora una vez: `--presupuesto-ms 15000` hay que
 pasarlo, porque por defecto son 3000 y sería otro experimento.
@@ -1199,10 +1412,12 @@ exactamente eso. Y ya hay dos casos conocidos para comprobarlo.
 
 Esto no lo puede avanzar un agente solo, y es casi todo lo que queda:
 
-1. **Grabar voz y ruido en otra habitación.** Sigue siendo el techo de todo lo
-   medido: una sala, un micrófono, un hablante. `probe/confianza_asr.py`,
-   `probe/sordera_asr.py` y `probe/umbral_voz.py` miden con lo que haya, sin
-   escribir una línea ni gastar cuota.
+1. ~~**Grabar voz y ruido en otra habitación.**~~ HECHO el 2026-09-27: segunda voz
+   (mujer), segunda sala, y 33 s de ruido de esa sala grabados a propósito. Las dos
+   cosas que destapó están arriba —el 0,0% de transcripción era de una voz, y el
+   filtro no deja la alucinación en cero— y las dos se midieron **sin gastar un
+   token**. Lo que queda de este punto es **más voces**: con una grabación por
+   persona esto es orden de magnitud, no una tasa, y sigue siendo n=1 por voz.
 2. **La llamada real por Twilio.** El canal está comprobado entero; faltan cuenta,
    número y túnel. Los pasos y las trampas en `docs/telefonia.md`, y antes de
    marcar `probe\check_telefonia.py`.

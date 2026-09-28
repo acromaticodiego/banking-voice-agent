@@ -155,6 +155,29 @@ def main() -> int:
         comprobar("y no se apunta el documento",
                   agente5.documentos_intentados == [],
                   str(agente5.documentos_intentados))
+        # Y desde el 2026-09-27, lo que faltaba: el resultado del fallo LLEVA su
+        # propia guía. Sin ella, el modelo veía la guía del documento no
+        # encontrado y ninguna del fallo, así que aplicaba la del caso
+        # equivocado: con el core caído pedía que repitieran el documento en vez
+        # de escalar. Medido en `core-caido-a-mitad`, que llamaba a la
+        # herramienta, se enteraba del fallo y aun así pedía repetición.
+        comprobar("el fallo trae su propia guía",
+                  "_que_hacer" in caido, str(list(caido)))
+        comprobar("y esa guía manda escalar, no repetir",
+                  "asesor humano" in caido.get("_que_hacer", "")
+                  and "NO se arregla pidiendo que lo repitan"
+                  in caido.get("_que_hacer", ""),
+                  caido.get("_que_hacer", ""))
+        # El fallo de CUALQUIER herramienta, no solo de la identidad: el primer
+        # `if` de `_anotar_intentos` salía antes para las demás y se quedaban sin
+        # guía. `estado_tarjeta` cayéndose es justo el caso
+        # `tarjeta-falla-tras-verificar` del reservado, que se falla 0 de 5.
+        caido_tarjeta = agente5._anotar_intentos(
+            "estado_tarjeta", {"id_cliente": "CL-0001"},
+            {"error": "la herramienta respondió 503", "reintentable": True})
+        comprobar("y también cuando la que se cae es estado_tarjeta",
+                  "asesor humano" in caido_tarjeta.get("_que_hacer", ""),
+                  str(list(caido_tarjeta)))
 
         print("\n[6] Los campos del agente se ven como del agente")
         # Van con `_` delante a propósito: inventarse campos con pinta de
