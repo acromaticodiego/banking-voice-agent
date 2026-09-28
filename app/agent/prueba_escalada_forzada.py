@@ -166,6 +166,24 @@ def main() -> int:
                   and "escalar_a_humano" not in herramientas_de(turno3),
                   str(herramientas_de(turno3)))
 
+        print("\n[3b] El caso REAL que destapó el falso positivo (28/09)")
+        # Literal de `tarjeta-bloqueada-documento-bueno`, que el agente resuelve
+        # bien. Con el guardia del 27/09 esto abría un ticket que nadie pidió:
+        # ofrecer ayuda extra al terminar es lo correcto, no una promesa. Y el
+        # coste de equivocarse aquí no es un número en un informe, es el trabajo
+        # de la persona que atiende el ticket.
+        agente3b = Agente(ModeloQueDice(
+            "Su tarjeta de débito con los últimos 4 dígitos 4582 está bloqueada "
+            "desde el 15 de septiembre de 2026 por un movimiento inusual "
+            "detectado. Si necesita ayuda adicional, le paso la llamada a un "
+            "asesor humano."), "de mentira", BASE)
+        antes3b = len(TICKETS)
+        turno3b = agente3b.turno("¿Cómo está mi tarjeta?")
+        comprobar("ofrecer ayuda extra al final NO abre ticket",
+                  not turno3b.escalada_forzada and len(TICKETS) == antes3b,
+                  f"forzada={turno3b.escalada_forzada}, tickets {antes3b} -> "
+                  f"{len(TICKETS)}")
+
         print("\n[4] Una frase sin promesa tampoco escala")
         agente4 = Agente(ModeloQueDice(
             "Su tarjeta de débito está bloqueada desde el 15 de septiembre."),

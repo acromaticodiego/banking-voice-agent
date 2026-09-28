@@ -181,6 +181,47 @@ PASAR_CON_HUMANO = re.compile(
     r"|\bvoy a\s+(?:pasar|transferir|derivar|comunicar)\b[^.]{0,60}?"
     r"\b(?:asesor|humano|agente|supervisor)\b", re.I)
 
+# La condición que convierte una promesa en un ofrecimiento.
+#
+# `PASAR_CON_HUMANO` ya excluía «si lo desea, le PUEDO pasar», pero solo por el
+# «puedo»: la forma **«si necesita ayuda adicional, le paso la llamada»** sí
+# casaba. Como detector eso era un falso positivo que ensuciaba un conteo; desde
+# que el guardia CUMPLE la promesa, el 2026-09-28, pasó a **abrir un ticket que
+# nadie pidió** en `tarjeta-bloqueada-documento-bueno`, un caso que el agente
+# resuelve bien y donde ofrecer ayuda extra es lo correcto.
+#
+# Es la diferencia entre detectar y actuar: el mismo falso positivo cuesta un
+# número en un informe o cuesta el trabajo de una persona.
+CONDICIONAL = re.compile(
+    r"\bsi\s+(?:lo\s+|le\s+)?(?:desea|quiere|necesita|requiere|gusta|prefiere|"
+    r"hace falta|es necesario|hay algo|surge|tiene)"
+    r"|\ben caso de\b|\bcualquier (?:otra )?(?:cosa|duda)\b", re.I)
+
+
+def promete_transferir(texto: str) -> bool:
+    """¿AFIRMA que pasa la llamada, o solo lo ofrece?
+
+    Se decide por oración y por orden dentro de ella: si la condición aparece
+    ANTES de la promesa, lo que hay es un ofrecimiento. «Si necesita ayuda
+    adicional, le paso con un asesor» ofrece; «le paso con un asesor» promete; y
+    «le paso con un asesor, y si necesita algo más me avisa» promete, porque la
+    condición va detrás y no condiciona nada.
+
+    Vive aquí, junto al detector, para que el guardia del bucle y el recuento de
+    promesas incumplidas compartan UNA idea de qué es prometer. Con dos ideas, el
+    detector marcaría cosas que el guardia no cumple y al revés, y nadie sabría
+    cuál de las dos tiene razón.
+    """
+    for oracion in re.split(r"[.!?\n]", texto or ""):
+        promesa = PASAR_CON_HUMANO.search(oracion)
+        if not promesa:
+            continue
+        condicion = CONDICIONAL.search(oracion)
+        if condicion and condicion.start() < promesa.start():
+            continue
+        return True
+    return False
+
 # --------------------------------------------------------- los procedimientos
 #
 # Tres familias, y las tres comparten el mismo argumento: **no existe
@@ -314,7 +355,7 @@ def revisar(dicho_por_el_agente: str, resultados: list[dict],
                 break
 
     if ("escalar_a_humano" not in llamadas
-            and PASAR_CON_HUMANO.search(dicho_por_el_agente)):
+            and promete_transferir(dicho_por_el_agente)):
         hallado = PASAR_CON_HUMANO.search(dicho_por_el_agente)
         assert hallado is not None
         revision.acciones.append(hallado.group(0).strip().lower())

@@ -38,7 +38,7 @@ import httpx
 # bucle la usa para CUMPLIRLA. Tener dos versiones de esa distinción sería tener
 # dos ideas de qué cuenta como prometer, y el detector y el guardia dejarían de
 # hablar del mismo fallo.
-from app.agent.fundamento import PASAR_CON_HUMANO  # noqa: E402
+from app.agent.fundamento import promete_transferir  # noqa: E402
 
 # `numeros_es` vive con las sondas: es la misma pieza que normaliza los
 # numeros dichos en voz alta, y duplicarla seria tener dos verdades.
@@ -775,7 +775,7 @@ class Agente:
         # El precedente está justo arriba: el texto de respaldo de este mismo
         # fichero ya escalaba de verdad antes de decirlo, desde el 24/09. Esto es
         # lo mismo aplicado a lo que dice el modelo.
-        if not turno.silencio and PASAR_CON_HUMANO.search(turno.texto):
+        if not turno.silencio and promete_transferir(turno.texto):
             ya_escalado = any(p.tipo == "herramienta"
                               and p.detalle.split(" ")[0] == "escalar_a_humano"
                               for p in turno.rastro)
