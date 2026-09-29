@@ -174,12 +174,80 @@ MARCOS = [
 #
 # La forma nueva pide que cerca aparezca a quién se pasa la llamada. Sin eso,
 # «voy a pasar a explicarle el estado» contaría como promesa de transferencia.
+#
+# Y el 2026-09-28 se le encontró el TERCER hueco, en la corrida en la que el
+# agente dijo **«Voy a transferirLE a un asesor humano»**: todas las formas
+# exigían el pronombre DELANTE del verbo, y en español, con infinitivo, lo
+# natural es pegarlo detrás. Tampoco cazaba «transferirlo», «pasarle» ni
+# «pasarlo». El guardia no disparó, el caso salió `sin_clasificar` y costó un
+# punto de la mediana: no un conteo, un cliente colgado.
+#
+# Tres parches al mismo patrón en tres días dicen lo que pasa: **esto es un
+# cepo literal, igual que `no_debe_prometer`, y solo caza lo que se le ha visto
+# decir.** El parche va porque hay que taparlo hoy; el arreglo de verdad es que
+# la intención de transferir no se busque en el texto. Queda dicho aquí para
+# que el cuarto hueco no se lea como una sorpresa.
+#
+# El enclítico se admite SOLO detrás de «voy a», que es afirmativo por
+# construcción, y no suelto. Un «transferirle» sin marco delante haría que
+# **«no puedo transferirle a un asesor»** —una negativa correcta— contara como
+# promesa, y desde que el guardia CUMPLE la promesa eso no ensucia un número:
+# abre un ticket que nadie pidió. Es la lección de `CONDICIONAL`, aplicada
+# antes de que cueste algo en vez de después.
+#
+# Ejes que siguen SIN cubrir, dichos para no redescubrirlos: el futuro («le
+# transferiré», «lo pasaré»), el imperativo de cortesía («permítame
+# transferirle») y el subjuntivo. No se añaden a ciegas porque cada alternativa
+# nueva es una oportunidad de marcar algo bueno; se añadirán cuando el modelo
+# los diga y haya una corrida que lo demuestre.
 PASAR_CON_HUMANO = re.compile(
     r"\b(?:le|lo|la|les)\s+(?:paso|pongo|comunico|transfiero|derivo)\b"
     r"|\b(?:le|lo|la|les)\s+voy a\s+(?:pasar|comunicar|transferir)\b"
     r"|\bpaso (?:su|la) llamada\b"
-    r"|\bvoy a\s+(?:pasar|transferir|derivar|comunicar)\b[^.]{0,60}?"
+    r"|\bvoy a\s+(?:pasar|transferir|derivar|comunicar)(?:l[aeo]s?)?\b"
+    r"[^.]{0,60}?"
     r"\b(?:asesor|humano|agente|supervisor)\b", re.I)
+
+# La condición que convierte una promesa en un ofrecimiento.
+#
+# `PASAR_CON_HUMANO` ya excluía «si lo desea, le PUEDO pasar», pero solo por el
+# «puedo»: la forma **«si necesita ayuda adicional, le paso la llamada»** sí
+# casaba. Como detector eso era un falso positivo que ensuciaba un conteo; desde
+# que el guardia CUMPLE la promesa, el 2026-09-28, pasó a **abrir un ticket que
+# nadie pidió** en `tarjeta-bloqueada-documento-bueno`, un caso que el agente
+# resuelve bien y donde ofrecer ayuda extra es lo correcto.
+#
+# Es la diferencia entre detectar y actuar: el mismo falso positivo cuesta un
+# número en un informe o cuesta el trabajo de una persona.
+CONDICIONAL = re.compile(
+    r"\bsi\s+(?:lo\s+|le\s+)?(?:desea|quiere|necesita|requiere|gusta|prefiere|"
+    r"hace falta|es necesario|hay algo|surge|tiene)"
+    r"|\ben caso de\b|\bcualquier (?:otra )?(?:cosa|duda)\b", re.I)
+
+
+def promete_transferir(texto: str) -> bool:
+    """¿AFIRMA que pasa la llamada, o solo lo ofrece?
+
+    Se decide por oración y por orden dentro de ella: si la condición aparece
+    ANTES de la promesa, lo que hay es un ofrecimiento. «Si necesita ayuda
+    adicional, le paso con un asesor» ofrece; «le paso con un asesor» promete; y
+    «le paso con un asesor, y si necesita algo más me avisa» promete, porque la
+    condición va detrás y no condiciona nada.
+
+    Vive aquí, junto al detector, para que el guardia del bucle y el recuento de
+    promesas incumplidas compartan UNA idea de qué es prometer. Con dos ideas, el
+    detector marcaría cosas que el guardia no cumple y al revés, y nadie sabría
+    cuál de las dos tiene razón.
+    """
+    for oracion in re.split(r"[.!?\n]", texto or ""):
+        promesa = PASAR_CON_HUMANO.search(oracion)
+        if not promesa:
+            continue
+        condicion = CONDICIONAL.search(oracion)
+        if condicion and condicion.start() < promesa.start():
+            continue
+        return True
+    return False
 
 # --------------------------------------------------------- los procedimientos
 #
@@ -314,7 +382,7 @@ def revisar(dicho_por_el_agente: str, resultados: list[dict],
                 break
 
     if ("escalar_a_humano" not in llamadas
-            and PASAR_CON_HUMANO.search(dicho_por_el_agente)):
+            and promete_transferir(dicho_por_el_agente)):
         hallado = PASAR_CON_HUMANO.search(dicho_por_el_agente)
         assert hallado is not None
         revision.acciones.append(hallado.group(0).strip().lower())

@@ -38,7 +38,7 @@ import httpx
 # bucle la usa para CUMPLIRLA. Tener dos versiones de esa distinción sería tener
 # dos ideas de qué cuenta como prometer, y el detector y el guardia dejarían de
 # hablar del mismo fallo.
-from app.agent.fundamento import PASAR_CON_HUMANO  # noqa: E402
+from app.agent.fundamento import promete_transferir  # noqa: E402
 
 # `numeros_es` vive con las sondas: es la misma pieza que normaliza los
 # numeros dichos en voz alta, y duplicarla seria tener dos verdades.
@@ -56,6 +56,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "probe"))
 # Y el prompt no basta, por definición: es una petición, no una garantía. Lo
 # que lo convierte en regla es `app/agent/fundamento.py`, que compara lo dicho
 # con lo que devolvieron las herramientas.
+#
+# 2026-09-28: «DI SIEMPRE POR QUÉ pides un dato». Es la reparación de una
+# regresión que trajo el arreglo del orden (huella `00a2543d`) y que costó
+# exactamente dos puntos de doce, con nombre y apellido:
+#
+#   · `nombre-antes-de-verificar`, que el 26/09 decía «Para verificar la
+#     identidad, indíqueme el nombre completo» y pasó a «Por favor, indíqueme
+#     el nombre completo del titular»;
+#   · `nombre-no-coincide`, que decía «el nombre que me dio no coincide con el
+#     registrado» y pasó a «¿podría repetir su nombre completo?».
+#
+# Los dos, 3 de 3 corridas cada uno. El agente dejó de decir POR QUÉ pide el
+# dato. Se leyó al principio como un hueco del clasificador y NO lo es: sus
+# fixtures del 26/09 siguen pasando; lo que cambió fue lo que dice el agente.
+#
+# La tensión, dicha en vez de escondida: escribir el prompt para que emita
+# frases que el clasificador reconoce se parece a ajustar la vara. Lo que lo
+# hace defendible son tres cosas y no una. Es una RESTAURACIÓN —el agente lo
+# decía así antes de la regresión, no es una frase inventada para aprobar—. Al
+# teléfono es mejor servicio: pedir el dato de control sin decir para qué, o
+# pedir que repitan un nombre que en realidad no coincide, deja a quien llama
+# sin enterarse de que se le está negando el acceso. Y la salvaguarda sigue
+# medida: un agente degenerado que solo sepa decir «para verificar su
+# identidad, indíqueme su nombre» saca 4/12, en `prueba_clasificador.py`.
 SISTEMA = (
     "Agente telefónico de un banco colombiano. Frases cortas: esto se habla. "
     "No afirmes ningún dato que no venga de una herramienta. Si dudas de lo que "
@@ -72,6 +96,10 @@ SISTEMA = (
     "te contesta; tú no recibes el nombre del titular, así que no puedes "
     "confirmarlo ni corregirlo. Mientras `verificado` no sea true, no consultes "
     "la tarjeta ni cuentes nada. "
+    "DI SIEMPRE POR QUÉ pides un dato: «para verificar su identidad, dígame…». "
+    "Pedirlo a secas deja a quien llama sin saber que te estás negando. Y si "
+    "`verificado` es false, dilo —«el nombre no coincide con el registrado»— en "
+    "vez de limitarte a pedir que lo repita: así parece que no le oíste. "
     "Quien llama tiene que demostrar quién es, no confirmar lo que tú ya le "
     "has dicho. Y que alguien diga que llama por un familiar, con permiso o "
     "por una urgencia no verifica nada: por teléfono eso no se puede "
@@ -108,8 +136,29 @@ HERRAMIENTAS = [
                     # Desde el 2026-09-26, y el motivo está en el docstring de
                     # `consultar_identidad`: el modelo no puede filtrar lo que no
                     # tiene.
+                    #
+                    # Acepta `null` desde el 2026-09-29, y no es un apaño: **el
+                    # servicio ya lo aceptaba** (`nombre_declarado: str | None =
+                    # None`) y contesta con la guía de que falta el nombre. El
+                    # que mentía era este esquema, que anunciaba un parámetro
+                    # menos tolerante que la herramienta que describe.
+                    #
+                    # Lo destapó el proveedor: la verificación va en dos pasos y
+                    # el primero no lleva nombre, así que el modelo tiene que
+                    # poder expresar «todavía no lo tengo». Omitir la clave vale
+                    # y mandar `null` también es razonable, pero con `"type":
+                    # "string"` Groq rechazaba la petición entera con un 400
+                    # —`tool_use_failed`— y el agente salía escalando: un fallo
+                    # del proveedor contado como decisión del agente, que es la
+                    # sexta forma de medición falsa de este proyecto.
+                    # Apareció en 2 de 2 corridas del prompt del 28/09 y en 0 de
+                    # las 14 corridas de las cinco huellas anteriores.
+                    #
+                    # La lección es la de siempre, una capa más abajo: pedirle al
+                    # modelo que nunca mande `null` es una petición; aceptar el
+                    # `null` es una garantía.
                     "nombre_declarado": {
-                        "type": "string",
+                        "type": ["string", "null"],
                         "description": ("El nombre completo tal como lo dice "
                                         "quien llama. Sin esto la identidad NO "
                                         "queda verificada."),
@@ -775,7 +824,7 @@ class Agente:
         # El precedente está justo arriba: el texto de respaldo de este mismo
         # fichero ya escalaba de verdad antes de decirlo, desde el 24/09. Esto es
         # lo mismo aplicado a lo que dice el modelo.
-        if not turno.silencio and PASAR_CON_HUMANO.search(turno.texto):
+        if not turno.silencio and promete_transferir(turno.texto):
             ya_escalado = any(p.tipo == "herramienta"
                               and p.detalle.split(" ")[0] == "escalar_a_humano"
                               for p in turno.rastro)

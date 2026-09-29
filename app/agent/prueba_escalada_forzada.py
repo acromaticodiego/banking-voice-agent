@@ -152,6 +152,49 @@ def main() -> int:
         comprobar("también se escala", turno2.escalada_forzada,
                   str(herramientas_de(turno2)))
 
+        print("\n[2b] El pronombre DETRÁS del verbo, que es como se dice de "
+              "verdad")
+        # El tercer hueco del mismo patrón, del 2026-09-28. La primera frase es
+        # LITERAL de la corrida `20260928-103658`, donde el guardia no disparó y
+        # el caso costó un punto. Las demás NO se le han visto decir al modelo:
+        # están aquí a propósito, porque parchear solo lo ya visto es lo que ha
+        # hecho que este patrón tenga tres huecos en tres días.
+        enclíticos = [
+            ("transferirle, literal de la corrida del 28/09",
+             "Lo siento, pero hay un problema técnico con el sistema. Voy a "
+             "transferirle a un asesor humano para que lo ayude."),
+            ("transferirlo (nunca dicha)",
+             "Voy a transferirlo a un asesor humano."),
+            ("pasarle (nunca dicha)",
+             "Voy a pasarle con un asesor humano ahora mismo."),
+            ("pasarlos, en plural (nunca dicha)",
+             "Voy a pasarlos con un supervisor."),
+            ("comunicarle (nunca dicha)",
+             "Voy a comunicarle con un agente para que lo atienda."),
+            ("derivarlo (nunca dicha)",
+             "Voy a derivarlo a un asesor humano."),
+        ]
+        for nombre, frase in enclíticos:
+            t = Agente(ModeloQueDice(frase), "de mentira", BASE).turno("Ayuda")
+            comprobar(f"se escala con «{nombre}»", t.escalada_forzada,
+                      f"{frase!r} -> {herramientas_de(t)}")
+
+        print("\n[2c] Y el enclítico NEGADO no es una promesa")
+        # El límite del arreglo, y está puesto antes de que cueste algo: si el
+        # enclítico se admitiera suelto, «no puedo transferirle a un asesor»
+        # —que es una negativa correcta— abriría un ticket que nadie pidió. Por
+        # eso solo se admite detrás de «voy a», que es afirmativo. Es la lección
+        # del falso positivo del 27/09 aplicada por delante y no por detrás.
+        antes2c = len(TICKETS)
+        agente2c = Agente(ModeloQueDice(
+            "Lo siento, no puedo transferirle a un asesor humano por este "
+            "canal."), "de mentira", BASE)
+        turno2c = agente2c.turno("Páseme con alguien")
+        comprobar("negarse a transferir NO abre ticket",
+                  not turno2c.escalada_forzada and len(TICKETS) == antes2c,
+                  f"forzada={turno2c.escalada_forzada}, tickets {antes2c} -> "
+                  f"{len(TICKETS)}")
+
         print("\n[3] Un OFRECIMIENTO no es una promesa: no se escala")
         # "Si lo desea, le puedo pasar" es una respuesta correcta y escalar ahí
         # abriría un ticket que nadie pidió. La distinción ya estaba en
@@ -165,6 +208,24 @@ def main() -> int:
                   not turno3.escalada_forzada
                   and "escalar_a_humano" not in herramientas_de(turno3),
                   str(herramientas_de(turno3)))
+
+        print("\n[3b] El caso REAL que destapó el falso positivo (28/09)")
+        # Literal de `tarjeta-bloqueada-documento-bueno`, que el agente resuelve
+        # bien. Con el guardia del 27/09 esto abría un ticket que nadie pidió:
+        # ofrecer ayuda extra al terminar es lo correcto, no una promesa. Y el
+        # coste de equivocarse aquí no es un número en un informe, es el trabajo
+        # de la persona que atiende el ticket.
+        agente3b = Agente(ModeloQueDice(
+            "Su tarjeta de débito con los últimos 4 dígitos 4582 está bloqueada "
+            "desde el 15 de septiembre de 2026 por un movimiento inusual "
+            "detectado. Si necesita ayuda adicional, le paso la llamada a un "
+            "asesor humano."), "de mentira", BASE)
+        antes3b = len(TICKETS)
+        turno3b = agente3b.turno("¿Cómo está mi tarjeta?")
+        comprobar("ofrecer ayuda extra al final NO abre ticket",
+                  not turno3b.escalada_forzada and len(TICKETS) == antes3b,
+                  f"forzada={turno3b.escalada_forzada}, tickets {antes3b} -> "
+                  f"{len(TICKETS)}")
 
         print("\n[4] Una frase sin promesa tampoco escala")
         agente4 = Agente(ModeloQueDice(

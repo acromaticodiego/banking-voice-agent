@@ -128,11 +128,37 @@ def main() -> int:
 
     rutas = [r for r in sorted(ARTEFACTOS.glob("muestra-*.wav"))
              if "telefono" not in r.stem]
+    # Las tomas de SALA no son material de voz, y esto hacía falta desde que
+    # existen: el 2026-09-27 se grabaron 33 s de ruido de una habitación a
+    # propósito, y esta sonda los metió en el lote de «clips con voz que el ASR
+    # entiende». El resultado fue que el umbral parecía sordo por no oír un clip
+    # de ruido puro, que es exactamente lo que tiene que hacer. Con la toma
+    # dentro, «oye 54 de 120» cuenta como fallo cada vez que el sistema acierta.
+    #
+    # Se distinguen por el `sin_voz` del json que escribe la grabadora, no por el
+    # nombre del fichero: el nombre lo pone quien graba y se equivoca.
     grabaciones = []
+    de_sala = []
     for ruta in rutas:
         audio, frecuencia, _ = leer_wav(ruta)
-        if frecuencia == FRECUENCIA:
-            grabaciones.append((ruta.stem.replace("muestra-", ""), audio))
+        if frecuencia != FRECUENCIA:
+            continue
+        meta_json = ruta.with_suffix(".json")
+        sin_voz = False
+        if meta_json.exists():
+            try:
+                meta = json.loads(meta_json.read_text(encoding="utf-8"))
+                sin_voz = bool(meta.get("sin_voz")) or meta.get("tipo") == "silencio"
+            except (OSError, ValueError):
+                sin_voz = False
+        corto = ruta.stem.replace("muestra-", "")
+        if sin_voz:
+            de_sala.append(corto)
+            continue
+        grabaciones.append((corto, audio))
+    if de_sala:
+        print(f"Fuera del lote de voz por ser tomas de sala: {', '.join(de_sala)}")
+        print("  (siguen contando para el banco de silencio, que es su sitio)\n")
 
     # --- el material con voz: las grabaciones degradadas que el ASR entiende
     con_voz = []
