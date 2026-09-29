@@ -164,6 +164,11 @@ acento paisa, sin ruido de fondo.
 | con los números normalizados, p50 | **0,0%** | **0,0%** |
 | números críticos recuperados exactos | **3 / 3** | **3 / 3** |
 
+> **Este 0,0% describe una voz, no el sistema.** Con una segunda persona sube al
+> 18–27%, y está medido dos secciones más abajo. Se deja aquí porque es la cifra
+> que este documento llegó a publicar como la métrica del proyecto, y borrarla
+> sería esconder cómo se cayó.
+
 La diferencia entre las dos primeras filas es el asunto entero. La referencia
 dice *"uno cero siete cero dos tres cuatro cinco seis siete"* y el sistema
 devuelve `1070234567`: palabra por palabra son diez errores **por acertar el
@@ -184,7 +189,7 @@ no la cambia. Los 3,3 puntos del literal, con n=3, no se distinguen del ruido.
 Con n=3 y un solo hablante esto calibra el orden de magnitud. No es una tasa
 representativa: para eso hacen falta **varias voces y ruido de fondo**.
 
-#### Y con otra voz, ese 0,0% se cae (2026-09-27)
+### Y con otra voz, ese 0,0% se cae (2026-09-27)
 
 Es lo primero que se mide con material grabado fuera de la habitación de
 siempre. Una segunda persona, mismo guion, mismo micrófono:
@@ -228,6 +233,15 @@ propias grabaciones y no sintetizado:
 
 Ya inventa con un solo segundo de silencio, y cuanto más largo, más: 1 de 13 a
 1 s, 4 de 15 a 2 s, 5 de 15 a 4 s, 6 de 17 a 8 s.
+
+> **Y ese «0 de 64» también describía una habitación.** Repetido el 2026-09-27
+> con 33 segundos de ruido grabados a propósito en otra sala —196 tramos, contra
+> los 142 reciclados de la primera—, sin filtro alucina **8 de 64** y **con
+> filtro se cuela 1**. La decisión no cambia: el filtro sigue valiendo la pena,
+> pasa de 8 a 1 por +19 ms. Lo que cambia es la frase con la que se cuenta, que
+> ya no puede ser «lo elimina» sino «lo reduce casi del todo». Y lo que se cuela
+> es del tipo peligroso —*«¡Muy bien!»*—, que es el mismo caso que el *«¿Qué
+> pasa?»* de abajo: no delata nada.
 
 Lo que sale: *"¡Suscríbete!"*, *"Este es el canal de subtítulos en español de
 la Iglesia…"* y *"¿Qué pasa?"*. Las dos primeras delatan de dónde vienen. **La
