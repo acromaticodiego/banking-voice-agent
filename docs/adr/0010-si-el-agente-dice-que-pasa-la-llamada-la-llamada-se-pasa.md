@@ -238,10 +238,25 @@ volver a medir desde cero. Va inmediatamente después.
 
 ## Lo que queda abierto
 
-1. **El cuarto hueco del cepo literal llegará.** El arreglo de verdad es que la
-   intención de transferir **no se busque en el texto** —que el bucle la sepa
-   por otra vía—, y no está diseñado. Mientras tanto, cada frase nueva que el
-   modelo invente es una promesa que puede no reconocerse.
+1. ~~**El cuarto hueco del cepo literal llegará.**~~ **LLEGÓ AL DÍA SIGUIENTE,
+   2026-09-29, y por el eje que este documento había dejado nombrado.** En la
+   tercera corrida de la huella `acf3cbc7` el agente dijo *«Por favor,
+   **permítame transferirle** a un asesor humano»*: `escaladas_forzadas: []`,
+   guardia mudo, caso `sin_clasificar`. El comentario de `fundamento.py`, escrito
+   el 28/09, listaba como ejes sin cubrir «el futuro, **el imperativo de
+   cortesía** y el subjuntivo».
+
+   **Y no se ha parcheado, a propósito.** Es una decisión, no un olvido: van tres
+   parches a la misma expresión en tres días y el cuarto no arreglaría el
+   problema, lo aplazaría. El arreglo de verdad sigue siendo que la intención de
+   transferir **no se busque en el texto** —que el bucle la sepa por otra vía— y
+   no está diseñado.
+
+   Lo que este hueco aporta por no taparse es lo que un parche habría borrado:
+   **la debilidad del cepo literal dejó de ser una advertencia y pasó a ser un
+   dato con fecha.** Estaba escrita antes de ocurrir, ocurrió a la corrida
+   siguiente, y ocurrió por el eje previsto. Eso mide el enfoque; otra
+   alternativa en el regex solo habría medido esa frase.
 2. **Nadie comprueba que las dos vías sigan de acuerdo**, ni que la cuarta
    columna de `ACCIONES` siga describiendo las herramientas que existen de
    verdad. Es el mismo agujero que el ADR 0007 encontró en la lista blanca de
