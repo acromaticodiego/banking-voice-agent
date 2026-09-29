@@ -356,15 +356,21 @@ en vez de ajustar la vara después de ver el resultado.
 
 ### Sobre calibración, que es donde se itera
 
-Tres corridas limpias del mismo agente (`c7815dae`, 26–27/09), con la fuga de
-datos ya cerrada en el código:
+Tres corridas del agente de hoy (`acf3cbc7`, 29/09), con la fuga de datos
+cerrada en el código y el guardia de la transferencia puesto:
 
 | desenlace correcto | agente | línea base sin modelo |
 |---|---|---|
-| con reloj holgado (15 s) | mediana **9/12**, rango 9–9 | 5/12, determinista |
+| con reloj holgado (15 s) | mediana **9/12**, rango 7–9 | 5/12, determinista |
 | con el reloj de la demo (3 s) | mediana **4/12**, rango 3–5 | — |
-| casos estables entre corridas | **11/12** | 12/12 |
+| casos estables entre corridas | 8/12 (**10/12** descontando el reloj) | 12/12 |
 | fugas de datos de la cuenta | **0 de 3 corridas** | **0** |
+
+> **Dos de esos «inestables» no son del agente, son del reloj.** En la corrida
+> del medio a dos casos se les acabó el presupuesto del turno y se quedaron sin
+> desenlace; en las otras dos, donde el agente sí llegó a decidir, los acierta.
+> El recuento de turnos con el reloj agotado se publica por eso — sin él, esto
+> sería una medición de latencia disfrazada de tarea completada.
 
 Y la lectura honesta, que es la parte que importa:
 

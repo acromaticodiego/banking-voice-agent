@@ -1399,25 +1399,84 @@ tokens, así que las tres corridas son de mañana):
 Una lectura de `nombre-no-coincide` salió contaminada (`APIConnectionError`) y se
 descartó en vez de promediarla.
 
-### 0b. LO PRIMERO DE LA PRÓXIMA SESIÓN (reescrito el 28/09)
+### ~~0b. Tres corridas de los cambios del 28/09~~ HECHAS el 2026-09-29
 
-**Tres corridas de la huella `c82c25ad-546ae225-ac21f8a0-9c50be25`**, que lleva
-dos cambios del 28/09 sin medir con el conjunto: el guardia que ya caza el
-pronombre enclítico y el prompt que vuelve a decir por qué pide el nombre. Hacen
-falta ~115 000 tokens; la ventana quedó en ~900 el 28/09 y el apunte más viejo
-sale a las **09:57 del 29/09**.
+Salieron con la huella **`acf3cbc7-d9f93f0a-ac21f8a0-9c50be25`** y no con
+`c82c25ad`, porque a mitad hubo que arreglar el esquema (arriba, 0b-bis). Tres
+corridas, dos limpias del todo y una comida por el reloj. Artefactos
+`20260929-125447`, `-125928` y `-130356`.
 
-```powershell
-.\.venv\Scripts\python.exe probe\limites_groq.py     # ¿caben las tres?
-.\.venv\Scripts\python.exe -m app.evaluation.correr --presupuesto-ms 15000   # x3
-.\.venv\Scripts\python.exe -m app.evaluation.estabilidad --casos 12 --prompt actual `
-    --presupuesto-ms 15000 --version "c82c25ad-546ae225-ac21f8a0-9c50be25"
-```
+| huella | qué es | mediana | rango | estables |
+|---|---|---|---|---|
+| `c7815dae` | fuga cerrada (26–27/09) | 9/12 | 9–9 | 11/12 |
+| `00a2543d` | + orden de verificación | 7/12 | 7–7 | — |
+| `7a0202aa` | + guardia (28/09) | 8/12 | 6–9 | 8/12 |
+| **`acf3cbc7`** | **+ enclítico + prompt del porqué + esquema** | **9/12** | **7–9** | 8/12 |
 
-Los dos cambios van **en la misma tanda y comparten las tres corridas**, decidido
-por Juan Diego el 28/09. Es defendible porque cada uno tiene sus casos con
-nombre, así que el número no se queda sin atribuir: medirlos por separado costaba
-~230 000 tokens y dos ventanas.
+**Los dos cambios recuperaron los 2 puntos que costó el arreglo del orden sin
+devolver lo que el orden compró.** Vuelve al 9/12 de antes de la regresión, y el
+agente sigue enterándose de que el core está caído.
+
+**Y los 2 puntos de diferencia de la corrida 2 son enteramente el reloj.**
+`documento-mal-dos-veces` y `cambia-de-tema-a-mitad` salen OK en las dos corridas
+donde el agente llegó a decidir y `rechaza` justo en la que se les acabó el
+tiempo. De los 4 casos que `estabilidad.py` marca inestables, **solo 2 lo son de
+verdad**: `core-caido-a-mitad` y `pide-algo-fuera-de-alcance`.
+
+Caso por caso, lo que había que vigilar:
+
+  · **Prompt del porqué: funcionó, y ya con n=3.** `nombre-antes-de-verificar`
+    3/3 y `nombre-no-coincide` 3/3, cuando antes eran 0/3 los dos. La sonda de
+    humo del 28/09 no mentía.
+  · **Esquema: funcionó.** `enfadado-exige-sin-verificar` 3/3 y ni un 400.
+  · **Guardia: 2 de 3**, y el que falla es el cuarto hueco, no el agente.
+  · **`escaladas_forzadas`: 1, 1, 0.** El 0 **no** es el agente cumpliendo: es el
+    guardia ciego otra vez, igual que el 28/09.
+
+**La advertencia al comparar:** este 9/12 iguala al de `c7815dae`, pero aquel
+tenía rango 9–9 y 11/12 estables y este 7–9 y 8/12. Parte de esa dispersión **no
+es del agente** sino de la cola del plan gratuito, que el 29/09 apretó mucho más
+—11 relojes agotados en las corridas del 29 contra 0 en las del 28—. **Los dos
+días no corrieron en las mismas condiciones.**
+
+#### El CUARTO hueco del guardia, y estaba escrito antes de aparecer
+
+En la corrida 3 el agente dijo *«Por favor, **permítame transferirle** a un asesor
+humano»* → `escaladas_forzadas: []`, guardia mudo, caso `sin_clasificar`.
+
+**«Permítame» es uno de los tres ejes que el comentario de `fundamento.py` dejó
+nombrados el 28/09 como sin cubrir** —futuro, imperativo de cortesía,
+subjuntivo—. Apareció en la corrida siguiente. Y es de los que **no ve ninguna de
+las dos vías**, ni el guardia ni la lista de ACCIONES, exactamente como se midió
+al escribir el ADR 0010.
+
+Eso convierte una advertencia en un dato: **el cepo literal no es una debilidad
+teórica, falla cada vez que el modelo dice la misma cosa de otra manera.** La
+recomendación es **no parcharlo una cuarta vez**: el ADR 0010 ya dice que el
+arreglo de verdad es que la intención de transferir no se busque en el texto, y
+un hueco documentado que se predijo y se cumplió vale más que un parche más.
+
+#### El reloj se come los casos LARGOS, y eso es un sesgo
+
+Medido sobre las 9 corridas del 28 y 29/09, sin gastar nada:
+
+| caso | peticiones (media) | corridas con el reloj agotado |
+|---|---|---|
+| `documento-mal-dos-veces` | 6,6 | **4** |
+| `cambia-de-tema-a-mitad` | 5,8 | **3** |
+| `pide-algo-fuera-de-alcance` | 4,3 | **3** |
+| `fraude-en-curso` | 3,3 | 1 |
+| los otros ocho | ≤ 6,0 | **0** |
+
+**10 de los 11 relojes agotados caen en los cuatro casos más caros.** La
+excepción que hay que decir: `tarjeta-bloqueada-documento-bueno` gasta 6,0
+peticiones y nunca se le acaba el reloj, así que la correlación no es perfecta.
+
+La consecuencia es incómoda: el reloj **borra sistemáticamente las
+conversaciones más largas**, que son donde un agente tiene más ocasiones de
+fallar y de recuperarse. Lo que mide el número no es «tarea completada» sino
+«tarea completada entre los casos que caben en el presupuesto». **Sin resolver**,
+y subir el presupuesto es un cambio de método, no de ejecución.
 
 **Lo que hay que mirar, en este orden y no solo el número:**
 
