@@ -136,8 +136,29 @@ HERRAMIENTAS = [
                     # Desde el 2026-09-26, y el motivo está en el docstring de
                     # `consultar_identidad`: el modelo no puede filtrar lo que no
                     # tiene.
+                    #
+                    # Acepta `null` desde el 2026-09-29, y no es un apaño: **el
+                    # servicio ya lo aceptaba** (`nombre_declarado: str | None =
+                    # None`) y contesta con la guía de que falta el nombre. El
+                    # que mentía era este esquema, que anunciaba un parámetro
+                    # menos tolerante que la herramienta que describe.
+                    #
+                    # Lo destapó el proveedor: la verificación va en dos pasos y
+                    # el primero no lleva nombre, así que el modelo tiene que
+                    # poder expresar «todavía no lo tengo». Omitir la clave vale
+                    # y mandar `null` también es razonable, pero con `"type":
+                    # "string"` Groq rechazaba la petición entera con un 400
+                    # —`tool_use_failed`— y el agente salía escalando: un fallo
+                    # del proveedor contado como decisión del agente, que es la
+                    # sexta forma de medición falsa de este proyecto.
+                    # Apareció en 2 de 2 corridas del prompt del 28/09 y en 0 de
+                    # las 14 corridas de las cinco huellas anteriores.
+                    #
+                    # La lección es la de siempre, una capa más abajo: pedirle al
+                    # modelo que nunca mande `null` es una petición; aceptar el
+                    # `null` es una garantía.
                     "nombre_declarado": {
-                        "type": "string",
+                        "type": ["string", "null"],
                         "description": ("El nombre completo tal como lo dice "
                                         "quien llama. Sin esto la identidad NO "
                                         "queda verificada."),
