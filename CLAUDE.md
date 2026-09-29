@@ -1470,6 +1470,81 @@ dice por qué:
     sondas ya midió una vez un sistema que no existe (medición falsa nº 12). Se
     cierra pasando el ruido por la clase `Llamada`, no discutiendo la sonda.
 
+### 0b-bis. EL 29/09: EL ESQUEMA QUE MENTÍA SOBRE SU PROPIA HERRAMIENTA
+
+Las tres corridas de `c82c25ad` **no se pudieron hacer**: las dos primeras
+salieron contaminadas por el mismo 400, en el mismo caso y con los mismos
+argumentos.
+
+```
+enfadado-exige-sin-verificar
+{"name": "consultar_identidad", "arguments": {"documento":"?","nombre_declarado":null}}
+→ 400 tool_use_failed: `/nombre_declarado`: expected string, but got null
+```
+
+**El esquema que se le anuncia al modelo declaraba `nombre_declarado` como
+`"string"`, mientras el servicio ya aceptaba `null`** (`str | None = None`) y
+contestaba con la guía de que falta el nombre. La verificación va en dos pasos y
+el primero no lleva nombre, así que el modelo **tiene** que poder decir «todavía
+no lo tengo»; con ese esquema, Groq rechazaba la petición entera y el agente
+salía escalando.
+
+**Procedencia, releída de los artefactos y sin gastar nada:** 2 de 2 corridas de
+`c82c25ad`, 0 de las 14 corridas de las cinco huellas anteriores. El único 400
+previo, del 23/09, era otra cosa (un nombre de herramienta corrupto). El cambio
+de prompt del 28/09 —«DI SIEMPRE POR QUÉ pides un dato»— empujó al modelo a
+llamar antes de tener ningún dato. **2 de 2 contra 0 de 14 es fuerte, no es una
+prueba**, y así se dice.
+
+Arreglado aceptando `null`, que es una línea. **Y no es un apaño**: pedirle al
+modelo que nunca mande `null` es una petición; aceptarlo es una garantía. Es la
+lección de la fuga de datos y del `_que_hacer`, una capa más abajo.
+
+#### No es la decimosexta medición falsa, y por qué importa distinguirlo
+
+El 6/12 y el 9/12 de esas dos corridas eran números plausibles, y si se hubieran
+tomado al pie de la letra la conclusión habría sido «el cambio de prompt cuesta
+puntos» cuando lo que pasaba es que un caso de doce reventaba. Es exactamente la
+forma de la nº 15.
+
+**Pero el instrumento lo cazó**: el corredor imprime las incidencias y dice
+literalmente *«Esta corrida no es una medición: repítela»*. Esa protección
+existe por la nº 6 —el 429 contado como decisión del agente— y hoy se ha pagado
+sola. Un fallo cazado por una salvaguarda que ya estaba no es una medición
+falsa; es la salvaguarda funcionando, y contarlo como hallazgo nuevo inflaría la
+lista.
+
+#### Y la comprobación que faltaba: el agujero del ADR 0007, tercera vez
+
+**Nadie miraba si el esquema anunciado y la herramienta de detrás decían lo
+mismo.** `prueba_servicio` los compara ahora campo por campo contra el modelo de
+Pydantic: que todo campo esté, que lo obligatorio aquí lo sea allí, y que lo
+opcional se pueda expresar. Rota a propósito, cae esa comprobación y solo esa.
+
+**Y a la primera encontró un segundo desacuerdo, que este sí debe existir:**
+`clave_idempotencia` está en la herramienta y **no** en el esquema, porque la
+inyecta el bucle. Para esos campos la comprobación se invierte y exige que el
+modelo **no** pueda ponerla: si pudiera, reutilizaría la clave de otro turno
+para quedarse con un ticket ajeno, o forzaría que su escalada saliera marcada
+como `repetida` sin abrir ninguna. **La protección del ADR 0007 dependía de eso
+y nadie lo comprobaba.** Los campos que pone el bucle se declaran en una lista,
+para que el próximo haya que clasificarlo en vez de dejarlo sin protección.
+
+#### Lo que hay que tener delante al comparar los números de hoy
+
+  · **Huella nueva: `acf3cbc7-d9f93f0a-ac21f8a0-9c50be25`.** Lleva el guardia
+    del enclítico, el prompt del porqué **y** el esquema arreglado.
+  · **Hoy hay más cola de peticiones que ayer.** Las tres corridas del 28/09
+    salieron con `agotados: []`; las de hoy llevan 1 o 2 turnos con el reloj
+    agotado pese a los 15 000 ms. Es el límite de 8 000 tokens por minuto
+    apretando más, no el agente pensando más. **Ayer y hoy no corren en las
+    mismas condiciones**, y eso se dice al comparar.
+  · **Conducta nueva sin medir:** con el esquema arreglado, en
+    `enfadado-exige-sin-verificar` el agente **llama de verdad** con
+    `documento: "?"` en vez de reventar. Debería recibir un «no encontrado» y
+    pedir el documento, pero eso hay que mirarlo en el artefacto, no darlo por
+    hecho.
+
 ### 0c. El orden de la verificación — HECHO el 2026-09-27
 
 Es una línea de prompt y una corrida, y arregla una regresión que el arreglo de la
